@@ -1,0 +1,92 @@
+Round 2. I (Claude) independently re-verified your critical source claims before conceding:
+- DatabaseIdManager.java:67 deletes items whose owner_id is not a character/clan (except -1); EXTRACT_USED_OBJECT_ID_QUERIES
+  (lines 122-128) only scans characters/items/clan_data/itemsonground/messages -> confirmed, escrow would be destroyed/reused.
+- Item.updateInDb (Item.java:1656-1684) opens its own connection and swallows exceptions with a log -> confirmed.
+- Party.distributeItem (Party.java ~677-686) assigns the looter and adds the item immediately -> confirmed.
+- Creature.updateSeenCreatures (Creature.java:7465-7484) is range+invisibility only, no LoS -> confirmed.
+- Server.ini: PacketEncryption = False by default ("Retail: True") -> confirmed.
+Good review. Below: concessions, the points I still contest, and my additions. Constraints in 00_CONSTRAINTS.md still bind.
+
+CONCESSIONS (I adopt your counter-proposal as written unless I add a precision):
+C1 (P1) "Non-functional" was an overstated absolute; the real issue is market depth, simultaneous role availability and
+   political scale. Population is specified as distributions (level band x role x geography x session overlap x
+   supply-chain coverage x competing political principals); 300-800 concurrency becomes a benchmark, not a requirement.
+   Economic and political decisions of citizens use deterministic utility policies; the LLM is limited to
+   fact-constrained dialogue and narration. Progression of residents happens through recorded ordinary gameplay.
+C2 (P2) Your protocol-library design, differential references (l2js-client, l2py), static-geometry navigation with
+   observed dynamic doors/fences, per-citizen observation store, and the full fault matrix are adopted. Precision:
+   each citizen also has a PERCEPTION BUDGET (attention limits: how many objects it may track, reaction latency,
+   what it "notices"), so packet-level knowledge is not converted into superhuman awareness.
+C3 (P3) Separate immutable dimensions: origin, authenticated account, activity mode, simulation profile, synthetic
+   economic principal. Competing synthetic principals with isolated budgets/information policies. Signal reports
+   human/synthetic/mixed separately and humans choose whether synthetic candidates are offered.
+C4 (P4, CRITICAL) The one-line seam is withdrawn. The core seam includes: transaction-aware asset service (single
+   connection, documented lock order, optimistic versions, operation IDs, outbox in the same InnoDB transaction),
+   an ESCROW ItemLocation with custody reference recognised by DatabaseIdManager cleanup and used-ID extraction,
+   pre-distribution loot routing for signed charters, an authoritative crafting operation boundary sharing retail
+   validation/outcome code with escrow-backed sources/destinations and persisted outcomes (no reroll on recovery),
+   immutable primitive event snapshots captured at the owning operation, and post-commit cache/client publication.
+   LazyItemsUpdate stays False (General.ini warns it loses items on crash) and becomes an asserted invariant.
+C5 (P5) My defences were overstated. Design target: every clue stays balanced when relayed instantly to an enemy
+   alliance. Server ACTIONS are protected (capabilities, authorization, presence, exact expiry); learned CONTENT is
+   assumed shareable. Disclosure is priced/limited per contract, target, witness, window, with diminishing returns.
+   Disputed informant proceeds are frozen before payment; equivalent sightings deduplicated; behavioural linkage with
+   explicit false-positive handling; never refund by minting. Published guarantee: bounded disclosure and
+   economically unattractive farming, not controller identification.
+C6 (P6) The ±5% "global cap" premise was wrong (§25.1 scopes it to resource pressure). Authority table per native
+   system adopted; the Director never overwrites earned ownership/scores/periods; it acts only through each system's
+   own lawful inputs (e.g. creating situations in which players can earn Hellbound trust), plus complementary NPC and
+   economic consequences. Incomplete native paths are implemented as part of the project (SoD defense state,
+   Seven Signs Festival gaps) — they are H5 content, not optional. Detectability tested mechanically, comprehension
+   with humans; promise "no direct hidden-state API", not resistance to statistical inference.
+C7 (P7) Every §31 interaction must be fully achievable with the server-driven UI framework (paginated Community Board,
+   institutional NPC pages, one-use bound confirmations: character + terms hash + contract version + deadline +
+   proximity). Interface.u work is an enhancement only where human UX tests show a need, with a pinned, proven
+   toolchain as a DAG dependency; no required interaction depends on it. Client hashes pinned; XDAT via acmi tooling
+   in a separate pinned legacy environment.
+C8 (P9) Two independent artifacts: behaviour-regression baseline vs evidence-backed Retail Truth cases; expected
+   results derived independently of the code under test; unsupported exactness stays UNKNOWN; DESIGN_OVERRIDE is
+   scoped and never blanket-approves changed goldens.
+C9 (P10) Per-item/per-currency conservation against authorised source/sink/transform ledger entries; fault injection
+   before/after each SQL mutation, commit, cache application, acknowledgement, ambiguous commits, DB restarts;
+   deterministic Living Chronicle reducers (versioned immutable events, logical time, recorded random outcomes);
+   controlled clocks/schedulers and keyed RNG streams for scenario simulation; no promise of full live replay.
+   Pinned Java 27 + Ant >=1.10.14 + ant-junitlauncher + JUnit + MariaDB + Testcontainers; process-isolated tests.
+C10 (P11) Capacity is unproven until measured; benchmark matrix incl. an 800-citizen siege under simultaneous CI+LLM
+   load; dedicated CPU sets for game+DB, hard caps on CI, explicit pool sizing, bounded queues, packet pacing.
+C11 (P12, P13, P14) Traceability matrix; added DAG nodes (H5 specs/coverage, asset-transaction design, client/tool
+   provenance, geodata); risk register entries carry invariant/trigger/metric/remedy/recovery/evidence.
+C12 ALL missed items adopted: escrow ID/cleanup, DB-to-memory commit protocol, loot/craft execution interception,
+   login admission queue + per-category action pacing + explicit runner dualbox policy, split durable financial
+   facts vs aggregated telemetry with quantified storage budgets, replay contract, geodata validation with fail-on-
+   missing-region (see D1 for sourcing), unified information-access service (website/narrator via allowlisted DTOs,
+   separate DB credentials, expiry across caches/projections/backups), synthetic faucet/concentration controls with
+   adversarial concentration runs, calling-card anonymity redefined (Ledger-record confidentiality; deliberate
+   signature placement can burn secrecy; delayed Broker delivery option), and sighting eligibility with instance,
+   distance, geodata LoS, visibility, minimum observation duration, server-side snapshot and dedup.
+
+STILL CONTESTED:
+D1 Geodata "documented authorization for the input maps" as an acceptance gate. Every artefact of this project has the
+   same legal basis: the H5 client itself, the Mobius datapack (NPC/skill/drop data reconstructed from retail), the
+   .dat patches you accepted in C7, and the geodata. Requiring publisher authorization specifically for geodata
+   while accepting client use and client .dat modification is inconsistent; applied consistently it forbids the
+   whole project, which contradicts constraint 1-3. Proposal: legality is ONE owner-level register item covering all
+   NCSoft-derived artefacts (client, dat edits, datapack, geodata), decided by the owner before going live; the
+   engineering requirement for geodata is provenance and reproducibility: generated locally from the exact pinned
+   client the testers use, with a pinned generator (l2mapconv, MIT), recorded settings/hashes/correction patches,
+   full-region coverage validation that fails on NullRegion fallback, and no third-party pack downloads.
+D2 (P8) Endpoint concealment. With ≤10 personally invited testers, Tailscale peers learning the office public endpoint
+   is an accepted, owner-visible risk, not a defect; an external ingress gateway is the LIVE topology, built when the
+   live ingress is built (it is infrastructure for a different audience, not a deferred feature). The hobby topology
+   = isolated network namespace + persistent node + node share to individual accounts + grants autogroup:shared ->
+   tcp:2106,7777,443 only; 9014/DB/runner/metrics/LLM private; allowed/denied port tests from a real sharee.
+   I concede my claim that this "removes legal exposure" was wrong.
+
+ADDITIONS:
+A1 PacketEncryption=True (retail) in our world; the runner protocol library implements the encrypted path and is also
+   tested against the unencrypted path; KeyPacket negotiation covered by tests.
+A2 Behaviour-lock and Retail Truth suites run in the upstream-intake gate together with migration and client-
+   compatibility checks (your P4 counter), so intake cannot silently change retail formulas.
+
+For each of C1-C12, D1, D2, A1, A2 answer accept/reject/counter with evidence. Add new objections only if they are
+critical/major and evidenced. Set consensus_reached=true only if nothing critical/major remains.

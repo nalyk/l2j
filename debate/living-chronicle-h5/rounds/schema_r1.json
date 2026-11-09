@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fact_check", "per_proposition", "prior_review_assessment", "missed_items", "research", "overall_verdict", "consensus_ready"],
+  "properties": {
+    "fact_check": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["claim", "status", "evidence"],
+        "properties": {
+          "claim": {"type": "string"},
+          "status": {"type": "string", "enum": ["confirmed", "wrong", "partially_wrong", "unverifiable"]},
+          "evidence": {"type": "string"}
+        }
+      }
+    },
+    "per_proposition": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "verdict", "severity", "argument", "evidence", "counter_proposal"],
+        "properties": {
+          "id": {"type": "string"},
+          "verdict": {"type": "string", "enum": ["agree", "disagree", "modify"]},
+          "severity": {"type": "string", "enum": ["critical", "major", "minor", "none"]},
+          "argument": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "counter_proposal": {"type": "string"}
+        }
+      }
+    },
+    "prior_review_assessment": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "still_valid_under_constraints", "comment"],
+        "properties": {
+          "id": {"type": "string"},
+          "still_valid_under_constraints": {"type": "string", "enum": ["yes", "no", "partially"]},
+          "comment": {"type": "string"}
+        }
+      }
+    },
+    "missed_items": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["title", "severity", "argument", "evidence", "proposal"],
+        "properties": {
+          "title": {"type": "string"},
+          "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
+          "argument": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "proposal": {"type": "string"}
+        }
+      }
+    },
+    "research": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["question", "finding", "sources", "confidence"],
+        "properties": {
+          "question": {"type": "string"},
+          "finding": {"type": "string"},
+          "sources": {"type": "array", "items": {"type": "string"}},
+          "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "overall_verdict": {"type": "string"},
+    "consensus_ready": {"type": "boolean"}
+  }
+}

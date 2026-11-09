@@ -1,0 +1,92 @@
+{
+  "faithful": false,
+  "discrepancies": [
+    {
+      "section": "§1.5–1.6, lines 20–26",
+      "problem": "Unqualified 'No minting' contradicts the accepted distinction between ordinary gameplay faucets and artificial asset creation. The adopted concentration tests also included newcomer access and modeled maintenance. Evidence: rounds/round1.json, missed item 'Synthetic ordinary gameplay still creates economic faucets and concentrated power'.",
+      "correction": "Replace 'No minting, no GM items.' with 'No artificial asset grants or GM-spawned items; ordinary gameplay faucets and crafting transformations remain permitted and accounted for.' In §1.6 replace 'modelled consumption/losses/commercial risk' with 'modelled consumption, maintenance, losses and commercial risk', and replace 'human newcomer margins' with 'human newcomer margins and access'."
+    },
+    {
+      "section": "§2.1, lines 29–31",
+      "problem": "'They know only what packets tell them' excludes the explicitly permitted static geometry and authorized shared observations described in §2.4–2.5. The agreed restriction concerns privileged world-state access, with perception filtering before decisions. Evidence: rounds/round1.json P2; rounds/round2.json C2.",
+      "correction": "Replace the parenthetical with '(no privileged server-world access: dynamic observations come from perceived protocol traffic and the authorized communication channel; validated static navigation geometry is permitted)'."
+    },
+    {
+      "section": "§3.1–3.4, lines 52–60",
+      "problem": "The draft omits server assignment of origin, immutability of event snapshots, the explicit SYNTHETIC_CITIZEN classification, and actor-split reporting beyond Signal. Human-only history filtering is also absent. Evidence: rounds/round1.json P3; rounds/round2.json C3; 04_CLAUDE_POSITION.md P3.",
+      "correction": "Replace 'immutable origin' with 'immutable server-assigned origin'. Append to §3: 'Each event carries an immutable snapshot of these dimensions, including origin=SYNTHETIC_CITIZEN where applicable. Resident citizens participate in economy, Aden Remembers, opted-in Signal matching, PACT, Black Ledger and Chronicle history under the agreed policies; NPC Fake Players retain their exclusions. Metrics are reported separately by actor class, and history supports a humans-only filter.'"
+    },
+    {
+      "section": "§4.2(a), lines 68–71",
+      "problem": "The atomic transaction no longer explicitly includes the contract version and settlement uniqueness key. An operation ID alone does not express the separately agreed settlement uniqueness requirement. Evidence: rounds/round1.json P4 counter_proposal.",
+      "correction": "Replace 'postings and outbox facts in one InnoDB transaction' with 'postings, contract version, settlement uniqueness key and outbox facts in one InnoDB transaction'."
+    },
+    {
+      "section": "§4.2(c), lines 76–77",
+      "problem": "Pre-distribution interception is retained, but atomic routing of reserved and auctioned assets into charter escrow is omitted. Evidence: rounds/round1.json, missed item 'Post-event observation cannot enforce loot charters or fully escrowed crafting'; adopted by C12.",
+      "correction": "Append to §4.2(c): 'Reserved and auctioned assets are routed atomically to charter escrow before ordinary inventory assignment.'"
+    },
+    {
+      "section": "§4.3, lines 86–87",
+      "problem": "Restart recovery is retained, but reconciliation of live in-memory inventories before releasing mutation locks is omitted. Post-commit publication alone does not state that ordering. Evidence: rounds/round1.json, missed item 'Financial operations need a recoverable database-to-memory commit protocol'; adopted by C12.",
+      "correction": "Append to §4.3: 'Reconcile affected in-memory inventories from committed rows before releasing mutation locks or accepting affected reconnect actions.'"
+    },
+    {
+      "section": "§5.2–5.3, lines 94–99",
+      "problem": "The adopted restoration/replay benchmark against retained volume is absent. Per-stream sequencing is retained, but the deterministic reducer requirement no longer explicitly states stable processing order. Evidence: rounds/round1.json P10 and missed item 'The semantic journal needs a quantified write and durability design'.",
+      "correction": "Append to §5: 'Reducers use a specified stable processing order. Restoration and replay are benchmarked against the retained data volume.'"
+    },
+    {
+      "section": "§6.4, lines 109–111",
+      "problem": "The sighting eligibility rules are faithful, but the adopted requirement to keep disclosed clues coarse despite precise private eligibility evidence is omitted. Evidence: rounds/round1.json, missed item 'Verified sightings need stronger semantics than nearby-object events'.",
+      "correction": "Append to §6.4: 'The disclosed clue remains coarse even when its private eligibility evidence is precise.'"
+    },
+    {
+      "section": "§6.6, lines 116–118",
+      "problem": "Expiry coverage is retained, but separate retention of non-sensitive financial audit and the named sealed-contract/actor-filtered-history privacy tests are omitted. Evidence: rounds/round1.json, missed item 'Privacy must cover journal replay, website, narration, and cross-module joins'.",
+      "correction": "Append to §6.6: 'Retain non-sensitive financial audit separately from expiring intelligence payloads. Cross-module inference and replay-after-expiry tests explicitly include sealed contracts and actor-filtered history.'"
+    },
+    {
+      "section": "§8.1 and N6, lines 134–136 and 175",
+      "problem": "The draft assigns .dat patching and icons to acmi XDAT tooling. The researched XDAT editor handles interface.xdat layouts; no such .dat/resource pipeline was established. Evidence: rounds/round1.json research (a), which identifies the H5 XDAT reader/writer and layout schema.",
+      "correction": "Replace §8.1 with: '8.1 Living Chronicle client package: pinned client hashes; a separately pinned and validated client-data/resource patch pipeline for the required item .dat entries, system messages, NpcStrings and icons. Acmi XDAT tooling handles interface.xdat layout editing in a separate pinned legacy environment; it is not the asserted .dat/resource editor. Custom NPCs reuse models via displayId/usingServerSideName (NpcTemplate.java:137-144; AbstractNpcInfo.java:106,163-200).' Replace N6 with: 'N6  client/tool provenance: pinned client, separate validated .dat/resource patch pipeline and legacy XDAT environment [N1]'."
+    },
+    {
+      "section": "§8.2, lines 137–142",
+      "problem": "NPC proximity is made unconditional for confirmations, whereas the agreed wording was required NPC proximity, preserving remote drafting. The Community Board size statement also omits the separate multiedit path. Layout and item-use validation were expressly adopted but are not named. Evidence: rounds/round1.json P7; blueprint §12.4; Mobius java/org/l2jmobius/gameserver/util/HtmlUtil.java:425-453.",
+      "correction": "Replace 'HtmlUtil.java:411-453: 3 chunks × 16250, reject ≥48750' with 'HtmlUtil.java:411-453: ordinary non-multiedit HTML uses up to three 16250-Java-character chunks and rejects length ≥48750; multiedit uses a separate path'. Replace 'deadline + NPC proximity' with 'deadline + required NPC proximity where the interaction requires physical presence'. Replace 'Validated in the pinned client incl. Cyrillic/localised text and size bounds.' with 'Validate layouts, item use, Cyrillic/localised text and size bounds in the pinned client.'"
+    },
+    {
+      "section": "§8.3, lines 143–145",
+      "problem": "The absolute final sentence weakens the round-2 precision: a native widget demonstrated necessary for an acceptance requirement becomes a required dependency. The adopted compiler alternative and semantic round-trip qualification are also lost. Evidence: rounds/round1.json P7; rounds/round2.json C7.",
+      "correction": "Replace §8.3 with: '8.3 Every required gameplay interaction has a complete server-driven flow. If human UX tests establish that a native widget is necessary to satisfy an acceptance requirement, that widget and its pinned, proven toolchain become required acceptance dependencies. Use a licensed compiler pipeline or an implemented H5 bytecode/package toolchain, with pinned input/compiler/dependency manifests, a controlled build environment, a no-op semantic round trip and a changed-window runtime test. An enhancement is not treated as validated merely because it is offered.'"
+    },
+    {
+      "section": "§8, omitted client-distribution commitment",
+      "problem": "The client-distribution commitment disappears: hobby ZIP distribution and a signed updater before public operation were not withdrawn. Evidence: 04_CLAUDE_POSITION.md P7, line 115; the P7 amendments in rounds 1–2 do not remove it.",
+      "correction": "Append: '8.4 Hobby client distribution uses a ZIP package; a signed updater is a required client-package deliverable before public activation.'"
+    },
+    {
+      "section": "§10.4 and N1, lines 163–164 and 170",
+      "problem": "The traceability matrix omits retained appendix behaviors. The agreed concrete contents of per-module specifications are also reduced to the generic label 'specs'. Evidence: rounds/round1.json P12; 04_CLAUDE_POSITION.md P10.",
+      "correction": "Replace §10.4 with: '10.4 Traceability matrix: every §31 sub-feature, retained blueprint appendix behavior and §14 cross-module behavior → H5 spec, authoritative subsystem, schema, UI flow, hooks, tests and acceptance evidence. Per-module specs contain DDL, state machines, event lists, invariants, configuration keys, UI pages/action contracts and acceptance tests. Coverage is per sub-feature, not per module.'"
+    },
+    {
+      "section": "N7, lines 176–177",
+      "problem": "The geodata summary omits adopted dependency hashes and explicit cross-region, multilevel-floor, stair and instance tests. The accepted D1 sourcing proposal also expressly excludes third-party geodata packs. Evidence: rounds/round1.json geodata missed-item proposal; round-2 D1 proposal and acceptance.",
+      "correction": "Replace N7 with: 'N7  geodata: local generation from the exact pinned client used by testers, with pinned l2mapconv, generator/dependency hashes, recorded settings and correction patches; no third-party geodata pack downloads; full required-region coverage failing on NullRegion fallback; cross-region routes, multilevel floors, stairs, doors, water, siege structures, LoS and instance tests [N6]'."
+    },
+    {
+      "section": "§11 dependency semantics, lines 169–187",
+      "problem": "Whole-node dependencies add completion barriers not established as hard dependencies: notably the entire N1 rewrite before fork/build or client provenance, and completed N13 deployment before specifying N14. The agreement permits only actual artifact dependencies. Evidence: rounds/round1.json P13; rounds/round2.json C11 and D2.",
+      "correction": "Append below N14: 'Bracketed dependencies identify required input artifacts, not blanket whole-node completion barriers. Fork/build/harness work and client/tool provenance may proceed without waiting for the entire N1 rewrite. Per-feature implementation requires its applicable specification. N14 topology specification may run in parallel with N13 implementation once its deployment contracts are known. Other independent subtasks likewise proceed concurrently.'"
+    },
+    {
+      "section": "§14 O3–O4, lines 216–217",
+      "problem": "These introduce owner-only approval gates for resource allocation and client-build selection that were not agreed. The consensus requires resource controls and a pinned client, but assigns explicit owner decisions only for retained risk acceptance and the rights position. Evidence: rounds/round2.json C7, C10, D1 and D2.",
+      "correction": "Delete O3 and O4. Append to §12.3: 'CPU-set/cap allocation and selection/validation of the pinned H5 client build are engineering implementation tasks; this consensus does not add owner-only approval gates for them.'"
+    }
+  ],
+  "sign_off": true,
+  "statement": "I endorse the document conditional on applying these corrections verbatim. The cited Mobius line ranges were checked against commit 2b0758e97d5a097127b7330ee59e82d4b1d69b3b; no incorrect numerical source citation was found. The corrections restore agreed requirements and remove unsupported wording or gates. They have not been applied to the file."
+}

@@ -1,0 +1,521 @@
+{
+  "fact_check": [
+    {
+      "claim": "The checkout is Mobius H5 commit 2b0758e97d5a097127b7330ee59e82d4b1d69b3b.",
+      "status": "confirmed",
+      "evidence": "git rev-parse HEAD returned that hash. All Mobius file references below are relative to /tmp/claude-1000/-home-ubuntu-gits-l2j/602dbef7-23ab-4d0b-a677-10a4a756e60c/scratchpad/mobius-src/L2J_Mobius_CT_2.6_HighFive at this commit."
+    },
+    {
+      "claim": "The build requires Java 27, uses Ant, and contains no established JUnit test infrastructure.",
+      "status": "confirmed",
+      "evidence": "build.xml:47-70 checks Java >=27 and compiles source/target 27. Its targets contain no JUnit execution. Keeping Ant is feasible; adding junitlauncher requires a newer Ant baseline than the currently permitted 1.9.10 and explicit dependencies. [Ant JUnitLauncher documentation](https://ant.apache.org/manual/Tasks/junitlauncher.html)."
+    },
+    {
+      "claim": "There are 315 implemented client opcodes whose readImpl methods can mechanically become client writers.",
+      "status": "partially_wrong",
+      "evidence": "The enumeration counts are correct: 170 ClientPackets entries and 145 ExClientPackets entries. However, 13 and 32 respectively have null handlers, including dispatch/sentinel entries. Thus 315 is not a count of implemented readable packet classes. Examples: java/org/l2jmobius/gameserver/network/ClientPackets.java:76-81, 205-206; ExClientPackets.java:164-181. There are 389 Java files under serverpackets, which likewise does not establish 389 independent wire messages or complete protocol coverage."
+    },
+    {
+      "claim": "The event enumeration has 89 entries and lacks dedicated economic transaction, party, Territory War, fortress ownership, and world-state transition events.",
+      "status": "confirmed",
+      "evidence": "Counted 89 ON_* entries in java/org/l2jmobius/gameserver/mechanics/events/EventType.java:118-241. Generic inventory events and NPC_MANOR_BYPASS exist, but they do not encode completed crafting, a complete trade, Manor settlement, party membership transitions, or the other claimed domain outcomes. Two NPC entries also have null event classes at lines 166 and 170."
+    },
+    {
+      "claim": "Mobius Fake Players are NPC-backed and cannot substitute for ordinary Player clients across the proposed social systems.",
+      "status": "confirmed",
+      "evidence": "java/org/l2jmobius/gameserver/data/xml/FakePlayerData.java:37-38, 60-64 maps fake names to NPC IDs; entity/actor/templates/NpcTemplate.java:92-93 contains their template metadata. This does not supply Player inventory, account, party, clan, and protocol semantics. Custom scripting can add individual interactions, but that would not make the existing subsystem equivalent to a real Player."
+    },
+    {
+      "claim": "The listed H5 world-state systems are present and therefore ready-made Director actuators.",
+      "status": "partially_wrong",
+      "evidence": "Presence is confirmed, readiness is not. java/org/l2jmobius/gameserver/managers/SeedOfDestructionManager.java:110-132 explicitly skips the unimplemented defense state and resets state 3 to attack. mechanics/sevensigns/SevenSignsFestival.java:62-68 lists unfinished behavior. HellboundEngine.java:165-183 stores a level, but correct progression also depends on its update loop, trust thresholds, and spawn processing. dist/game/config/Custom/HellboundStatus.ini:5-8 controls a status command, not the engine."
+    },
+    {
+      "claim": "RequestHardWareInfo ex 0x96 exists, so hardware identity is available from stock H5 clients.",
+      "status": "partially_wrong",
+      "evidence": "The packet existence and disabled default are confirmed: java/org/l2jmobius/gameserver/network/ExClientPackets.java:180; dist/game/config/Server.ini:108-137. The same configuration explicitly requires a modified client system. Packet presence does not demonstrate stock-client transmission. RequestHardWareInfo.java:51-81 accepts client-supplied fields; ClientHardwareInfoHolder.java:297-300 compares MAC strings. Neither establishes trustworthy machine identity."
+    },
+    {
+      "claim": "Custom H5 NPCs can reuse existing models through displayId and server-side names.",
+      "status": "confirmed",
+      "evidence": "The complete server path exists: entity/actor/templates/NpcTemplate.java:137-144 reads displayId and name flags; network/serverpackets/AbstractNpcInfo.java:106, 163-165 writes the display template ID plus 1000000; lines 194-200 write the server-side name. Existing examples include dist/game/data/stats/npcs/custom/SchemeBuffer.xml:3. This establishes implementation support, not a runtime visual test on an unspecified client package."
+    },
+    {
+      "claim": "The Community Board is available for the UI layer.",
+      "status": "confirmed",
+      "evidence": "dist/game/config/General.ini:416-422 enables it by default. handler/CommunityBoardHandler.java:102-122 dispatches registered commands. Actual HTML delivery is util/HtmlUtil.java:411-453: ordinary pages are split into up to three 16250-character chunks and rejected at length >=48750. The handler's 16383-character comment is stale. The multiedit path is separate."
+    },
+    {
+      "claim": "A global ±5% cap makes Aden Remembers imperceptible.",
+      "status": "wrong",
+      "evidence": "Blueprint §25.1 defines ResourcePressureMaxDeviationPercent=5, not a universal cap on all consequences. §8.19 already requires separate bounds for every actuator. NPC dialogue, political records, monuments, and other visible channels do not have a global ±5% limit. Whether a particular resource change is perceptible requires testing."
+    },
+    {
+      "claim": "The latest H5 commit was 2026-11-08 and 18 H5 commits occurred in the previous 30 days.",
+      "status": "partially_wrong",
+      "evidence": "The checked-out commit itself is dated 2026-11-09T11:21:30+02:00. The repository reports is-shallow-repository=true, so its available history cannot independently establish the 30-day count. The count remains unverified."
+    },
+    {
+      "claim": "The build-host hardware and proposed memory allocations establish capacity for the complete workload.",
+      "status": "unverifiable",
+      "evidence": "No build-host runtime inspection or workload benchmark was performed in this review. The supplied infrastructure inventory is an input, not measured capacity evidence. The review environment has Java 17 and no ant command; I did not compile, launch, or load-test this Java 27 project."
+    }
+  ],
+  "per_proposition": [
+    {
+      "id": "P1",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "A synthetic society is a defensible density solution. Calling every system non-functional with ten humans is an unsupported absolute: two people can execute a crafting pact or a hunt. The real problems are market depth, simultaneous role availability, and political scale. Neither 1500 accounts nor 300–800 online proves those properties. Also, software-controlled clan leaders do not escape the blueprint's narrator-only LLM restriction merely by being called players. Choosing wars and contract terms materially shapes this operator-created world.",
+      "evidence": [
+        "Blueprint §11.4 and §13.30 describe interactions requiring a few participants; §9.3-9.5 establishes simultaneous compatibility requirements.",
+        "Blueprint §1.3 restricts LLM use to narration; §30 requires preserving human social dependence.",
+        "java/org/l2jmobius/gameserver/data/xml/FakePlayerData.java:60-64 confirms the existing NPC subsystem is insufficient."
+      ],
+      "counter_proposal": "Keep the complete synthetic society. Specify population by level band, role, geography, session overlap, supply-chain coverage, and competing political principals. Treat 300–800 as benchmark scenarios, not a demonstrated requirement. Use deterministic utility policies for economic and political decisions; limit LLM output to fact-constrained dialogue and narration. Generate resident progression through recorded ordinary gameplay, including class changes, recipes, clan development, and resource acquisition. Bound efficiency through decision latency, schedules, imperfect knowledge, and spending preferences rather than changing combat or reward formulas."
+    },
+    {
+      "id": "P2",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "An external protocol runner is feasible, but neither packet-count inversion nor a separate JVM establishes human-equivalent knowledge. Generated codecs can share the same mistake as their server oracle. A network client receives coordinates and identities beyond what a person consciously notices. Loading the full GeoEngine also imports dynamic server dependencies and gives exact navigation knowledge unless deliberately constrained. Protocol correctness, permitted information, navigation, and persona competence are separate proof obligations.",
+      "evidence": [
+        "network/ClientPackets.java:76-81 and network/ExClientPackets.java:164-181 include null handlers.",
+        "network/serverpackets/CharInfo.java:130-137 sends position, object ID, and visible name.",
+        "geoengine/GeoEngine.java:470-477, 695-702 consults DoorData and FenceData in addition to static geodata.",
+        "network/Encryption.java:26-35 implements stateful XOR; dist/game/config/Server.ini:34-39 disables game packet encryption by default.",
+        "[MIT-licensed H5 client library](https://github.com/npetrovski/l2js-client), [Mobius-oriented Python client](https://github.com/gigabelka/l2py-highfive-client-l2jmobius)."
+      ],
+      "counter_proposal": "Build a versioned JVM protocol library with explicit connection states, framing, encryption negotiation, conditional fields, retries, and packet-to-domain mappings. Use existing independently implemented clients and permitted captured traffic as differential references. Isolate navigation into a static geometry library; learn door and obstacle state from received observations and movement failures. Give each citizen its own observation store and an allowlisted, logged communication channel. Test fragmented/coalesced TCP frames, reconnects, malformed lengths, cipher state, packet loss at disconnect, stale objects, and every persona's complete workflows. A 24-hour soak is one acceptance test, not the whole proof."
+    },
+    {
+      "id": "P3",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "Adding SYNTHETIC_CITIZEN is necessary but insufficient. Actor origin, current activity mode, account identity, and common controller are different dimensions. A synthetic merchant can be online, offline trading, or disconnected. Every synthetic citizen is ultimately operator-controlled; naïve IP/controller anti-collusion blocks the entire society, while exempting it creates an abuse backdoor. Counting synthetic matches as human discovery also falsifies Signal's stated success criterion.",
+      "evidence": [
+        "Blueprint §7.2 distinguishes origin/activity concerns; §9.8 and §27.2 require privacy and compatible human discovery.",
+        "Blueprint §13.25 explicitly addresses controlled actors and suspicious relationships.",
+        "dist/game/config/Custom/DualboxCheck.ini:5-37 provides IP limits and whitelists, not economic independence."
+      ],
+      "counter_proposal": "Store immutable server-assigned origin, authenticated account, activity mode, simulation profile, and synthetic economic principal separately. Persist these across reconnects and journal replay. Define distinct competing synthetic principals with isolated budgets and information policies; permit their ordinary funded transfers while enforcing repeat-pair and reciprocal farming controls. Keep malicious collusion scenarios explicitly separate from resident policies. Report human, synthetic, and mixed Signal outcomes separately; let humans choose whether synthetic party candidates are included, without requiring overhead world markers."
+    },
+    {
+      "id": "P4",
+      "verdict": "modify",
+      "severity": "critical",
+      "argument": "Pinning the fork and recording patches is correct. The proposed core boundary is not. Post-validation one-line dispatches cannot implement atomic escrow, contract-aware crafting, loot reservations, or crash-safe journal publication. Packet handlers are often entry points rather than the location of the actual completed operation. Existing item events are asynchronous and carry mutable objects. Restricting core edits to this seam would make the advertised financial guarantees unattainable.",
+      "evidence": [
+        "entity/item/instance/Item.java:1656-1727 opens separate connections for updates/inserts and logs persistence exceptions.",
+        "managers/RecipeManager.java:388-429 independently transfers the fee, consumes materials, rolls success, and grants output.",
+        "entity/groups/Party.java:639-686 selects a looter and grants loot before a later observer could enforce a reservation.",
+        "entity/itemcontainer/PlayerInventory.java:539-556 asynchronously dispatches an event holding an Item reference.",
+        "Blueprint §12.8 and §22.4 require transactional assets, version checks, and explicit recovery."
+      ],
+      "counter_proposal": "Expand the documented core seam to include transaction-aware asset persistence, escrow location/ownership support, ID lifecycle integration, contract-aware pre-distribution loot routing, and an authoritative crafting operation boundary. Keep retail formulas intact. Capture immutable primitive event snapshots at the owning operation. For financial mutations, commit assets, contract version, settlement uniqueness key, and outbox record in one InnoDB transaction under defined inventory/row lock ordering. Publish to caches and clients only after commit; recover committed operations before accepting affected inventory actions after restart. Keep the upstream intake gate, but require semantic, migration, and client-compatibility checks as well as regression tests."
+    },
+    {
+      "id": "P5",
+      "verdict": "disagree",
+      "severity": "major",
+      "argument": "The defenses are overstated. A recipient can relay a certified clue's content immediately even if its server object is non-transferable. Minute-scale TTL does not beat second-scale Discord forwarding. Account-scoped identity does not stop free additional accounts. IP and self-reported MAC signals do not identify a human controller. Colluding informants can also steal a third party's intelligence budget; that is not necessarily the colluders draining their own money, and a refund requires recovering funds or an explicitly funded reserve.",
+      "evidence": [
+        "Blueprint §10.8 expressly permits knowledge sharing, with provenance.",
+        "Blueprint §13.7 defines trace aging, not protection against instantaneous forwarding.",
+        "network/clientpackets/RequestHardWareInfo.java:51-81 accepts client fields; network/holders/ClientHardwareInfoHolder.java:297-300 compares MAC strings.",
+        "dist/game/config/Server.ini:111-115 requires a modified client for hardware information.",
+        "Blueprint §13.9-13.10 funds informants from the contract depositor's budget."
+      ],
+      "counter_proposal": "Design clues to remain balanced when immediately relayed to an enemy alliance. Protect server actions with per-character capabilities, contract authorization, presence checks, and exact expiry; do not claim to prevent sharing learned content. Price and limit disclosure by contract, target, witness, and time window, with diminishing marginal information from repeated queries. Freeze disputed informant proceeds before payment, deduplicate equivalent sightings, and use behavioral linkage with explicit false-positive handling. Never refund by minting Adena. Publish the achievable guarantee: bounded disclosure and economically unattractive farming, not perfect controller identification."
+    },
+    {
+      "id": "P6",
+      "verdict": "disagree",
+      "severity": "major",
+      "argument": "The global-cap premise is false, and making the Director an independent writer of retail competition outcomes is dangerous. Seven Signs periods and seals, castle ownership, Manor settings, and Hellbound progression have their own authoritative rules and player rights. A public rumor does not legitimize overriding them. A synthetic observer detecting a change proves visibility, not meaningful human perception. The requirement that no observer can recover a Director value is also unprovable when outputs reveal thresholds.",
+      "evidence": [
+        "Blueprint §25.1 scopes the illustrative 5% setting to resource pressure; §8.19 already requires per-actuator bounds.",
+        "mechanics/sevensigns/SevenSigns.java:1514-1616 performs period progression and result processing.",
+        "managers/SeedOfDestructionManager.java:110-132 contains an unimplemented defense state.",
+        "dist/game/data/scripts/ai/areas/Hellbound/HellboundEngine.java:165-183 and 342-362 manages level/trust state.",
+        "Blueprint §2.2, §8.5, and §15.3 preserve existing content and bounded resource behavior."
+      ],
+      "counter_proposal": "Create an authority table for every native system: state owner, allowed commands, legal preconditions, transition effects, persistence, and emitted facts. Observe and connect every named H5 system; implement the missing SoD defense behavior and validate incomplete native paths. Let citizens influence competitions through ordinary participation. Let the Director issue only specified, lawful situation commands and complementary NPC/economic consequences; never overwrite earned ownership or scores. Retain supply budgets and per-actuator bounds. Test detectability mechanically and comprehension with humans; promise no direct hidden-state API rather than impossible resistance to statistical inference."
+    },
+    {
+      "id": "P7",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "The server-driven UI split is technically sound, and displayId is genuinely wired through the packet serializer. However, listing packet classes does not establish a complete usable UI. Community Board command dispatch, form handling, pagination, HTML-action caching, confirmation correlation, and permissions need one implemented framework. XDAT editing is evidenced; a reliable, licensed, reproducible Interface.u compilation pipeline for this exact client is not yet demonstrated. No required interaction may remain conditional on that discovery.",
+      "evidence": [
+        "handler/CommunityBoardHandler.java:65-78 matches command prefixes; lines 135-191 has restricted write routing and an unimplemented Post route.",
+        "util/HtmlUtil.java:411-453 implements HTML action caching and three-chunk delivery.",
+        "network/serverpackets/AbstractHtmlPacket.java:73-78 truncates NPC HTML above 17200 characters.",
+        "network/clientpackets/DlgAnswer.java:50-73 exposes a usable synchronous dialog-answer event.",
+        "network/serverpackets/AbstractNpcInfo.java:163-200 proves model/name serialization.",
+        "[XDAT build instructions](https://github.com/acmi/xdat_editor/blob/master/README.md), [H5 schema](https://raw.githubusercontent.com/acmi/xdat_editor_schema/master/src/main/groovy/ct26/XDAT.groovy)."
+      ],
+      "counter_proposal": "Specify every §31 interaction as an actual page/action flow, including search, notes, inbox, partial orders, loans, auctions, and reverse investigation. Use paginated Community Board views and institutional NPC pages with shared server-side services. Bind confirmation to a one-use request, authenticated character, terms hash, contract version, deadline, and required NPC proximity. Validate layouts, Cyrillic/localized text, item use, and boundary sizes in the pinned client. Pin client hashes and tool dependencies. Where native widgets are required by tested UX, include a licensed compiler pipeline or an implemented H5 bytecode/package toolchain as a dependency, with no-op and modified-window runtime proofs."
+    },
+    {
+      "id": "P8",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "Shared-node Tailscale access with TCP restrictions is supported. The claim that it removes legal and office-IP DDoS exposure is false. Access control is not legal permission, and direct peer connectivity does not conceal the underlying endpoint. The topology also needs explicit container networking and separate private connectivity for citizens. A sidecar name alone proves none of those properties.",
+      "evidence": [
+        "[Tailscale sharing](https://tailscale.com/docs/features/sharing) supports external user shares and access restrictions.",
+        "[Tailscale grants](https://tailscale.com/docs/features/access-control/grants) supports protocol-specific TCP port capabilities.",
+        "[Connection types](https://tailscale.com/docs/reference/connection-types) documents direct connections and relay fallback.",
+        "dist/game/config/Server.ini:15-32 distinguishes login registration and game listener ports.",
+        "[Official publisher agreement](https://eu.4game.com/legal/lineage2/21/archive/945/) contains client-use and modification restrictions; network privacy does not change them."
+      ],
+      "counter_proposal": "Use an isolated network namespace with a persistent Tailscale node and only login/game/web listeners exposed. Grant autogroup:shared access to the node's exact IP on tcp:2106, tcp:7777, and tcp:443; remove overlapping allow-all rules. Keep 9014, MariaDB, runner controls, metrics, and LLM private. Test allowed and denied ports from an external sharee and verify advertised addresses for both testers and private runners. Keep ten testers as node-share recipients rather than tailnet members. If concealing the office endpoint is required, place the shared ingress on an external gateway and carry traffic to the office over a separate outbound-only authenticated tunnel whose origin is absent from testers' tailnet maps. Resolve asset permissions independently."
+    },
+    {
+      "id": "P9",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "Evidence hierarchy plus behavior locking is useful, but a snapshot of Mobius behavior does not prove FUNCTIONAL or retail correctness. Client data proves what that client contains or displays; it does not establish server-side drop rates, land rates, AI, or transaction semantics. Golden tests generated from the implementation can preserve defects perfectly.",
+      "evidence": [
+        "Blueprint §6.1 distinguishes UNKNOWN, FUNCTIONAL, EXACT, APPROXIMATE, BROKEN, and MISSING.",
+        "Blueprint §6.2 requires preconditions, expected behavior, tolerance, source, and chronicle.",
+        "Blueprint §6.4 requires statistical trials for probabilistic mechanics.",
+        "managers/SeedOfDestructionManager.java:110-132 demonstrates why implementation presence cannot imply functional completeness."
+      ],
+      "counter_proposal": "Maintain two independent artifacts: a behavior-regression baseline and evidence-backed Retail Truth cases. Scope every source to client build, region, update, and observable property. Derive expected results independently of the tested code. Cover every class and feature through equivalence partitions, boundaries, known interactions, and targeted combinatorial cases, with confidence intervals for probabilities. Leave unsupported exactness UNKNOWN. A DESIGN_OVERRIDE must specify its domain and intended change; it must not automatically approve every changed golden output."
+    },
+    {
+      "id": "P10",
+      "verdict": "modify",
+      "severity": "major",
+      "argument": "The proof system is necessary. Several proposed proofs are currently invalid. A seed alone cannot make a concurrent, wall-clock-driven server deterministic. Adding Adena and item counts into one conservation total mixes units and fails on legitimate crafting consumption, output creation, and fees. Killing the process once per lifecycle state misses failures between individual persistence steps. AI-generated tests and a second model are not independent correctness oracles.",
+      "evidence": [
+        "commons/util/Rnd.java:41-166 delegates to ThreadLocalRandom.",
+        "commons/threads/ThreadPool.java:75-86 uses concurrent scheduled and instant pools.",
+        "mechanics/sevensigns/SevenSigns.java:507-547 uses Calendar scheduling.",
+        "managers/RecipeManager.java:388-429 contains several distinct failure boundaries within one craft outcome.",
+        "[Ant JUnitLauncher](https://ant.apache.org/manual/Tasks/junitlauncher.html) requires explicit launcher/engine libraries and supports forked JVMs.",
+        "[JUnit 5.13.4 guide](https://docs.junit.org/5.13.4/user-guide/index.html) supports Java 8 or higher; exact Java 27 dependency compatibility still needs execution."
+      ],
+      "counter_proposal": "Pin Java 27, Ant 1.10.14 or newer, matching ant-junitlauncher, JUnit Platform/Jupiter, MariaDB, and Testcontainers artifacts by version and digest. Run singleton-heavy integration tests in isolated JVMs. Check conservation separately per item/currency against authorized source, sink, and transformation entries, plus unique ownership and metadata preservation. Inject failures before/after each SQL mutation, commit, cache application, and acknowledgment, including ambiguous commit outcomes and database restarts. Make Living Chronicle reducers deterministic through versioned immutable events, logical time, stable ordering, and recorded random outcomes. Use controlled clocks/schedulers and per-domain RNG streams for simulation tests; do not promise full live-Mobius replay from semantic history."
+    },
+    {
+      "id": "P11",
+      "verdict": "disagree",
+      "severity": "major",
+      "argument": "The machine may be sufficient; the proposition has not proved it. Heap allocations are not process RSS, geodata mappings are outside the heap, and average population says little about a dense siege. There is no single game tick that CPU weights protect. Multiple task pools, packet queues, movement batches, AI, database writes, and packet fanout compete. CPU weights provide relative entitlement under contention, not a latency guarantee.",
+      "evidence": [
+        "taskmanagers/MovementTaskManager.java:40-45, 100-147 batches players in groups of 500 at 50 ms and other creatures at 100 ms.",
+        "commons/config/ThreadConfig.java:44-58 derives scheduled/instant/high-priority pools from available processors.",
+        "commons/network/packet/PacketExecutor.java:50-52 uses an unbounded LinkedBlockingQueue.",
+        "geoengine/GeoEngine.java:142-147 memory-maps region files.",
+        "Blueprint §20.2 requires latency, pool, query, and ingestion measurements."
+      ],
+      "counter_proposal": "Keep the proposed hardware as the deployment candidate. Establish capacity with dispersed farming, dense stores, crafting/trade bursts, instance transitions, and an 800-citizen siege under simultaneous CI and LLM load. Measure scheduler lateness, packet queue age, combat acknowledgment latency, pathfinding, DB commit latency, journal lag, RSS, mapped memory, disk growth, and GC. Use dedicated CPU sets/reservations for game and database work, hard caps on CI, explicit pool sizing, bounded custom queues, and measured packet pacing. Fix the identified bottleneck or allocate the required resources; do not lower feature coverage to make the benchmark pass."
+    },
+    {
+      "id": "P12",
+      "verdict": "agree",
+      "severity": "none",
+      "argument": "The H5 rewrite and explicit native-system mapping are required. Removing incorrect Kamael platform assertions is consistent with the owner's target change. Removing the old MissingQuests filename must be accompanied by a real H5 content inventory; absence of that file establishes nothing about completeness.",
+      "evidence": [
+        "00_CONSTRAINTS.md constraints 2, 3, and 5 require full feature coverage on H5.",
+        "Blueprint §1.1 explicitly requires branch-specific revalidation; §31 is the coverage inventory.",
+        "mechanics/sevensigns/SevenSignsFestival.java:62-68 and managers/SeedOfDestructionManager.java:110-132 identify H5-specific validation and implementation work."
+      ],
+      "counter_proposal": "Accept P12. Produce a traceability matrix linking every §31 feature and retained appendix behavior to its H5 specification, authoritative subsystem, schema, UI, hooks, tests, and acceptance evidence. Replace stale platform inventories with verified H5 inventories. Keep all gameplay systems and sub-features."
+    },
+    {
+      "id": "P13",
+      "verdict": "modify",
+      "severity": "minor",
+      "argument": "A dependency DAG is the correct organizing mechanism. This DAG omits dependencies discovered by the source review: transaction design must precede financial hooks; reproducible geodata is required by navigation and world correctness; custom UI actions must be specified before citizens can exercise contracts; and H5 acceptance specifications must exist before their implementation.",
+      "evidence": [
+        "Blueprint §12.8, §19.3, §21.2, and §31.3 establish those required capabilities.",
+        "managers/RecipeManager.java:388-429 requires an operation design beyond packet entry hooks.",
+        "util/HtmlUtil.java:411-453 defines transport behavior that both the client runner and UI framework must understand."
+      ],
+      "counter_proposal": "Add explicit specification/coverage, asset-transaction, client/tool provenance, and geodata nodes. Make durable financial hooks depend on the asset-transaction design; make citizen institutional behaviors depend on shared action schemas; make navigation depend on validated geodata. Allow independent nodes to proceed concurrently. Acceptance depends on complete feature coverage, migration/restore proofs, operational benchmarks, and human evaluation."
+    },
+    {
+      "id": "P14",
+      "verdict": "modify",
+      "severity": "minor",
+      "argument": "The residual risks are real, but 'low legal exposure' is an unsupported risk estimate, and efficiency caps alone do not establish a credible society. The register must distinguish known implementation gaps, unverified dependencies, and irreducible uncertainty. Otherwise concrete blockers are being relabeled residual risk.",
+      "evidence": [
+        "Blueprint §20.3, §21.4, §27, and §30 supply audit, recovery, acceptance, and design obligations.",
+        "managers/SeedOfDestructionManager.java:116-132 is a known missing implementation, not an uncertain residual.",
+        "[Publisher agreement](https://eu.4game.com/legal/lineage2/21/archive/945/) does not grant a hobby-server exception."
+      ],
+      "counter_proposal": "For every risk, record the affected invariant, failure trigger, detection metric, technical remedy, recovery procedure, and acceptance evidence. Include correlated test-oracle errors, synthetic economic dominance, compiler provenance, geodata coverage, privacy leakage, and shared-host interference. Retain explicit human judgment for social credibility and fairness. Do not substitute an exposure adjective for a rights analysis."
+    }
+  ],
+  "prior_review_assessment": [
+    {
+      "id": "R1",
+      "still_valid_under_constraints": "partially",
+      "comment": "Density and simultaneous-role scarcity remain valid; universal non-functionality does not. Blueprint §9.3-9.5 needs compatible concurrent actors, while §11.4 can work with a pair. A specified synthetic society addresses density, but its account count alone does not prove economic or political depth."
+    },
+    {
+      "id": "R2",
+      "still_valid_under_constraints": "no",
+      "comment": "The scope/time objection and personnel estimates are withdrawn by 00_CONSTRAINTS.md constraints 2-3. Full coverage is fixed. Discuss dependency, correctness, and resource requirements instead."
+    },
+    {
+      "id": "R3",
+      "still_valid_under_constraints": "partially",
+      "comment": "Alts and external communication defeat attempts to keep learned content unshareable. They do not eliminate useful dynamic intelligence. Blueprint §10.8 explicitly supports shared knowledge, and §13.7 supports aging clues. Design for immediate forwarding; P5's certification and TTL arguments do not neutralize it."
+    },
+    {
+      "id": "R4",
+      "still_valid_under_constraints": "partially",
+      "comment": "The stock-client UI ceiling remains, but mandatory client patching changes the available options. Community Board is implemented and enabled: General.ini:416-422; HtmlUtil.java:411-453. XDAT tooling exists. A reproducible Interface.u toolchain is still an unproven dependency, not grounds for cutting UI features."
+    },
+    {
+      "id": "R5",
+      "still_valid_under_constraints": "partially",
+      "comment": "Perception and opaque-admin-intervention concerns remain legitimate acceptance questions. The numerical premise was wrong: §25.1 limits resource-pressure deviation, while §8.19 already requires actuator-specific bounds. Preserve bounded supply and test visible consequences; larger hidden changes are not automatically better design."
+    },
+    {
+      "id": "R6",
+      "still_valid_under_constraints": "yes",
+      "comment": "Source changes are required, and P4 still understates them. EventType.java:118-241 lacks necessary domain outcomes. Item.java:1656-1727, RecipeManager.java:388-429, and Party.java:639-686 additionally require transaction and interception seams. Blueprint §15.1 says prefer isolated integration; it is not an absolute prohibition on justified core changes."
+    },
+    {
+      "id": "R7",
+      "still_valid_under_constraints": "yes",
+      "comment": "FakePlayerData.java:60-64 associates names with NPC IDs. Blueprint §19.3 requires account, clan, trade, craft, contract, and travel workflows. Real Player protocol clients are appropriate; ordinary NPC fakes remain useful only for scenarios where their semantics actually match."
+    },
+    {
+      "id": "R8",
+      "still_valid_under_constraints": "partially",
+      "comment": "A complete historical retail reference is not supplied. This justifies evidence-scoped truth labels, not abandonment of correctness work. Blueprint §6.1-6.4 already supports UNKNOWN and statistical validation. Client display files and current Mobius goldens must not be treated as independent proofs of server behavior."
+    },
+    {
+      "id": "R9",
+      "still_valid_under_constraints": "partially",
+      "comment": "The claimed public router exposure is addressed by private authenticated ingress. Legal permissions and office-endpoint risk are not erased. Tailscale supports direct connections: https://tailscale.com/docs/reference/connection-types. Publisher restrictions still require separate analysis: https://eu.4game.com/legal/lineage2/21/archive/945/."
+    },
+    {
+      "id": "R10",
+      "still_valid_under_constraints": "yes",
+      "comment": "H5 adaptation remains mandatory under constraint 5. The audit must inspect behavior rather than count references: SeedOfDestructionManager.java:110-132 has a missing defense state; SevenSignsFestival.java:62-68 documents unfinished behavior. Integrate all named H5 systems through their actual authority and lifecycle rules."
+    },
+    {
+      "id": "R11",
+      "still_valid_under_constraints": "yes",
+      "comment": "The original document remains a product/design baseline rather than an executable specification. P10/P12 move in the right direction but still lack actual DDL, lock order, durable operation boundaries, policy numbers, packet/action contracts, and measurable acceptance bands. Blueprint §12.8, §21-23, §27, and §31 provide obligations that concrete specifications must satisfy."
+    }
+  ],
+  "missed_items": [
+    {
+      "title": "Escrow storage can be deleted at startup or have its object IDs reused",
+      "severity": "critical",
+      "argument": "The allocator loads used IDs from a fixed query list. An item moved exclusively into a custom escrow table disappears from that list. Keeping it in items under a contract owner also fails unless cleanup recognizes that owner. This can corrupt assets on the first restart even when the live transaction appears correct. The large ID range is not a population bottleneck; ownership and reservation are the actual hazards.",
+      "evidence": [
+        "managers/DatabaseIdManager.java:67 deletes items whose owners are absent from characters/clans, except owner -1.",
+        "managers/DatabaseIdManager.java:122-128 enumerates used IDs from characters, items, clans, ground items, and messages only.",
+        "managers/IdManager.java:48-69 cleans the database before registering used IDs.",
+        "entity/item/enums/ItemLocation.java:23-35 has no escrow location.",
+        "dist/game/config/IdManager.ini:11-22 enables cleanup and defines the large 32-bit allocation range."
+      ],
+      "proposal": "Keep canonical item rows and all item metadata in core storage with an explicit escrow location and custody reference, while preserving an owner recognized by cleanup or extending cleanup for escrow custody. Prevent ordinary inventory restoration from loading escrow rows. Reserve every live escrow object ID before normal allocation, and never release it during a custody transfer. Use independent contract/event identifiers. Give historical item provenance a lifecycle identifier because released game object IDs can later be reused."
+    },
+    {
+      "title": "Financial operations need a recoverable database-to-memory commit protocol",
+      "severity": "critical",
+      "argument": "A transaction around new pact_* tables does not include inventory writes performed through existing primitives. A crash can leave debited assets without a funded contract or a paid contract without a durable debit. Logging an SQL error and returning normally makes post-handler events especially unsafe as evidence of persistence.",
+      "evidence": [
+        "entity/item/instance/Item.java:1663-1683 and 1696-1727 obtains connections internally and catches persistence failures.",
+        "managers/RecipeManager.java:388-429 performs separate fee, material, random-outcome, and reward operations.",
+        "Blueprint §12.8 and §22.4 requires atomicity, idempotency, and recovery."
+      ],
+      "proposal": "Implement a transaction-aware asset service that uses one connection for all affected core rows, metadata, contract state, ledger postings, and outbox facts. Serialize mutations with a documented lock order and optimistic versions. On uncertain commit, resolve by operation ID before retrying. Reconcile in-memory inventories from committed rows before releasing locks or accepting reconnect actions. Preserve overflow deliveries in durable escrow when inventory capacity is insufficient."
+    },
+    {
+      "title": "Post-event observation cannot enforce loot charters or fully escrowed crafting",
+      "severity": "major",
+      "argument": "A reservation applied after loot has entered an inventory cannot prevent the recipient spending it. Escrowed materials are also unavailable to a crafting routine that reads and consumes the player's ordinary inventory. These are execution integrations, not additional telemetry events.",
+      "evidence": [
+        "entity/groups/Party.java:648-649 and 685-686 immediately assigns and adds loot.",
+        "managers/RecipeManager.java:396 consumes inventory materials; lines 399-402 chooses the outcome and grants the reward.",
+        "Blueprint §11.4-11.5 includes crafting guarantees, reservations, auctions, and deterministic splits."
+      ],
+      "proposal": "Insert a signed-charter resolver before ordinary loot assignment, with frozen participants and explicit rules for joins, leaves, death, disconnects, spoil, and command channels. Route reserved/auctioned assets to charter escrow atomically. Refactor crafting to share the retail validation and outcome calculation with an authorized escrow-backed asset source and result destination. Persist the attempt outcome so recovery cannot reroll it."
+    },
+    {
+      "title": "Login admission and action pacing are absent from the population design",
+      "severity": "major",
+      "argument": "One-IP login bursts can be rejected. MaxConnectionPerIP limits outstanding login connections, not all characters already online; claiming it imposes a fifty-player server cap would also be wrong. Game action flood controls are per client, whereas dualbox policy is IP-based. Each requires a different solution.",
+      "evidence": [
+        "dist/login/config/Server.ini:53-65 enables flood protection with 350 ms fast interval, 700 ms normal interval, fast limit 15, and connection limit 50.",
+        "loginserver/util/FloodProtectorListener.java:98-112 rejects connections; lines 189-204 decrements active counts.",
+        "dist/game/config/FloodProtector.ini:5-8 defines action intervals in 100 ms ticks.",
+        "gameserver/util/FloodProtectorAction.java:63-81 binds state to a GameClient.",
+        "dist/game/config/Custom/DualboxCheck.ini:5-37 defaults limits to unlimited and supplies a localhost whitelist."
+      ],
+      "proposal": "Implement a runner-wide login admission queue with conservative spacing beyond the normal interval, bounded outstanding logins, and jittered reconnect backoff. Pace each citizen's actions using the actual configured protection categories. Set explicit private-runner dualbox policy and verify Olympiad/event limits as well as world entry. Test simultaneous crash recovery of all runners while preserving human login access; do not disable protections globally."
+    },
+    {
+      "title": "The semantic journal needs a quantified write and durability design",
+      "severity": "major",
+      "argument": "An append-first architecture can overwhelm storage if implemented as one JSON row per low-level event. Illustratively, 800 actors producing one 500-byte event per second generate 69.12 million events and 34.56 GB of raw payload per day, before indexes, redo, binlogs, and backups. This is arithmetic, not a measured workload. Conversely, aggregating financial evidence loses identity and settlement safety.",
+      "evidence": [
+        "Blueprint §7.3-7.4 and §23.2 explicitly require semantic retention and hot-stream aggregation.",
+        "entity/itemcontainer/PlayerInventory.java:464-466, 518-520, 554-556 emits granular asynchronous item events.",
+        "dist/game/config/General.ini:189-193 warns that lazy item updates can lose items during crashes."
+      ],
+      "proposal": "Separate durable financial/audit facts from regional telemetry. Use transactional outboxes and immutable IDs for contract-relevant facts; aggregate ecological kills/material flows in bounded windows. Version schemas and reducers, partition retention, batch projector writes, and checkpoint consumers idempotently. Define queue bounds and storage budgets from measured rates. Pause new financial operations when their durable store is unavailable; freeze Director changes with explicit gap/watermark handling rather than silently dropping inputs. Benchmark restoration and replay against retained volume."
+    },
+    {
+      "title": "Seeded RNG does not establish deterministic replay",
+      "severity": "major",
+      "argument": "Concurrent execution changes which operation consumes the next random value, while wall-clock timers and asynchronous events change ordering. A replay that re-applies live actuators can also duplicate consequences. Semantic-history replay and full game simulation replay must have separate contracts.",
+      "evidence": [
+        "commons/util/Rnd.java:41-166 uses ThreadLocalRandom.",
+        "mechanics/events/EventDispatcher.java:144-181 submits asynchronous and delayed events.",
+        "mechanics/sevensigns/SevenSigns.java:507-547 uses real calendar state.",
+        "Blueprint §32.12 asks to reproduce derived state, not reconstruct every combat tick."
+      ],
+      "proposal": "Replay versioned immutable facts into isolated derived-state stores with a recorded logical clock, per-stream sequence, configuration version, and random outcomes. Record actuator decisions and idempotent application IDs; replay must not reissue economic transfers. For deterministic scenario simulation, inject controlled clocks/schedulers and independently keyed RNG streams. Test concurrency separately with stress and linearizability checks."
+    },
+    {
+      "title": "Geodata is neither bundled nor safely validated by successful startup",
+      "severity": "major",
+      "argument": "The checkout contains a geodata readme, not the required world dataset. Missing regions are represented by permissive NullRegion behavior. A running server can therefore produce false movement, line-of-sight, and witness results. A generator's open-source license does not grant rights to its input client maps or derived distributions.",
+      "evidence": [
+        "dist/game/data/geodata/Readme.txt requires separately unpacked files.",
+        "geoengine/GeoEngine.java:89-131 initializes NullRegions and disables pathfinding when no regions load.",
+        "geoengine/geodata/regions/NullRegion.java:33-69 permits NSWE checks and returns supplied heights.",
+        "[HF-capable geodata generator](https://github.com/m49n/l2mapconv-public), [generator MIT license](https://raw.githubusercontent.com/m49n/l2mapconv-public/master/LICENSE)."
+      ],
+      "proposal": "Build a reproducible full-world dataset from documented, appropriately authorized H5 inputs using a pinned generator, settings, dependency hashes, and retained correction patches. Obtain the required map/client permissions or a dataset license with documented provenance; availability on a download site is insufficient. Validate every required region and fail acceptance on missing coverage. Add cross-region routes, multilevel floors, stairs, doors, water, siege structures, LoS, and instance tests. Share the validated static dataset with runners while keeping dynamic state observation-based."
+    },
+    {
+      "title": "Privacy must cover journal replay, website, narration, and cross-module joins",
+      "severity": "major",
+      "argument": "Coarsening a Broker response is insufficient if the public Chronicle, Signal presence, Wayfarer links, or an LLM prompt receives the underlying privileged fact. Expiring a derived trace while retaining replayable exact source data can resurrect it. Access and retention rules must survive projection rebuilds.",
+      "evidence": [
+        "Blueprint §13.29 requires sensitivity and trace TTL.",
+        "Blueprint §14.8 and §17.2-17.3 require provenance, sharing rules, and architectural isolation.",
+        "Blueprint §22.3 explicitly rejects raw-coordinate access followed by UI rounding.",
+        "Blueprint Appendix E.6 requires sanitized public Chronicle views."
+      ],
+      "proposal": "Introduce one information-access service with typed precision, authorized audience, purpose, expiry, shareability, and publication eligibility. Feed website and narrator through allowlisted publication DTOs using separate database credentials. Apply deletion/expiry policy to source payloads, caches, projections, backups, and rebuild behavior; retain non-sensitive financial audit separately. Test cross-module inference and replay after expiry, including sealed contracts and actor-filtered history."
+    },
+    {
+      "title": "Synthetic ordinary gameplay still creates economic faucets and concentrated power",
+      "severity": "major",
+      "argument": "No GM item spawning does not mean zero economic creation. Normal drops, quest rewards, and NPC sales create assets. Hundreds of coordinated residents can dominate low-level supply chains, castle competition, and scarce bosses while technically obeying every retail rule. Split reporting detects this; it does not prevent it.",
+      "evidence": [
+        "Blueprint §8.5 requires bounded supply budgets.",
+        "Blueprint §16.2-16.4 distinguishes transfers, sinks, and newcomer relevance.",
+        "Blueprint §30 rejects replacing human dependence with convenience actors.",
+        "managers/RecipeManager.java:399-402 and 662-669 implements legitimate crafting transformations/output."
+      ],
+      "proposal": "Specify normal source/sink accounting by actor class and independent synthetic principal. Bound aggregate resident farming duty, extraction concentration, stockpiling, and scarce-content attendance through behavior policies, not stat changes. Model consumption, maintenance, losses, and commercial risk. Test human newcomer margins and access, human support-class demand, human purchase/sale opportunities, and political contestability under the full population. Include adversarial runs where citizens attempt economic concentration."
+    },
+    {
+      "title": "A calling card can reveal the alias-to-character mapping immediately",
+      "severity": "major",
+      "argument": "The victim or a nearby observer can associate an attacking object with a visible character name. If that same kill immediately delivers a unique alias signature, the mapping follows without a Broker investigation. The current proposal cannot promise persistent assassin anonymity while retaining normal L2 identity packets.",
+      "evidence": [
+        "network/serverpackets/CharInfo.java:130-137 sends object ID and visible name.",
+        "network/serverpackets/Attack.java:104-117 sends attacker ID and combat positions.",
+        "Blueprint §13.20-13.22 and Appendix F.2 depend on a mapping that can remain uncertain and later be exposed."
+      ],
+      "proposal": "Define anonymity as confidentiality of Ledger records and patron/hunter registrations, with ordinary combat observation explicitly able to expose an alias. Make signature placement a deliberate choice that can burn secrecy. Provide attribution-neutral or delayed institutional delivery for hunters choosing secrecy, with evidence rules for connecting it to a particular attack. Preserve full identity-intelligence and reverse-investigation features; do not globally hide ordinary combat identities."
+    },
+    {
+      "title": "Verified sightings need stronger semantics than nearby-object events",
+      "severity": "major",
+      "argument": "A nearby object is not necessarily a legitimate visual encounter. The existing creature-seen loop checks range and invisibility but does not visibly apply a LoS test there. Certifying every such event risks paid sightings through walls, across floors, or outside the intended attention window.",
+      "evidence": [
+        "entity/actor/Creature.java:7465-7484 iterates visible objects in range and checks invisibility before dispatch.",
+        "Blueprint §13.9 requires a legitimately encountered mark.",
+        "Blueprint §22.2 forbids trusting client claims of witness encounters."
+      ],
+      "proposal": "Define sighting eligibility explicitly: matching instance, bounded distance, valid geodata LoS, visibility state, minimum observation duration or authoritative interaction, and a recent timestamp. Snapshot and deduplicate the evidence server-side. Test walls, floors, invisibility, teleportation, login, doors, summons, and repeated colluding witnesses. Keep the disclosed clue coarse even when its private eligibility evidence is precise."
+    }
+  ],
+  "research": [
+    {
+      "question": "(a) Does a reproducible H5 Interface.u/UnrealScript and XDAT toolchain exist, and what are its reliability and licensing limits?",
+      "finding": "XDAT source tooling exists: acmi's editor documents a recursive-submodule Gradle build and Java 8u40+, and its schema explicitly maps High Five to ct26.XDAT. The H5 reader/writer and window layout source are available. The editor implementation has MIT-style notices; all schema/dependency rights still need an artifact-level audit. Its old Groovy/JavaFX/dependency stack should run in a separately pinned legacy tooling environment, not inherit Java 27 assumptions. Interface.u compilers are advertised by their distributors, including H5 recompilation examples, but those pages do not establish a source-reproducible, redistributable toolchain or successful operation on this project's exact client. acmi/L2unreal is MIT-licensed package/object tooling, not evidence of a complete H5 UnrealScript compiler. Required proof is a pinned input/compiler manifest, controlled build environment, no-op semantic round trip, and changed-window runtime test. I did not execute those tools.",
+      "sources": [
+        "[XDAT editor build instructions](https://github.com/acmi/xdat_editor/blob/master/README.md)",
+        "[High Five schema mapping](https://raw.githubusercontent.com/acmi/xdat_editor_schema/master/src/main/resources/versions.csv)",
+        "[H5 XDAT reader/writer](https://raw.githubusercontent.com/acmi/xdat_editor_schema/master/src/main/groovy/ct26/XDAT.groovy)",
+        "[Editor dependency definitions](https://raw.githubusercontent.com/acmi/xdat_editor/master/editor/build.gradle)",
+        "[Editor license notice](https://raw.githubusercontent.com/acmi/xdat_editor/master/editor/src/main/java/acmi/l2/clientmod/xdat/XdatEditor.java)",
+        "[L2unreal](https://github.com/acmi/L2unreal)",
+        "[L2unreal license](https://raw.githubusercontent.com/acmi/L2unreal/master/LICENSE)",
+        "[Compiler distributor's collection](https://maxcheaters.com/topic/235950-compiler-collection-for-interfaceu/)",
+        "[Compiler author's H5 recompilation offer](https://maxcheaters.com/topic/223667-ucc-u-xdat-compiler-last-chronicles-protocol-supported/)"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "question": "(b) Can one Tailscale node be shared externally with TCP-port restrictions, and do plan limits block ten testers?",
+      "finding": "Yes: individual external users can accept node shares; source selectors can name recipients or autogroup:shared. Grants support explicit TCP ports. A suitable grant restricts the shared node's IP to tcp:2106, tcp:7777, and tcp:443; broader overlapping rules must be removed. Current documentation lists six Personal tailnet users and separately supports node sharing, so adding ten testers as members would exceed that free membership limit, while external node shares use the documented alternative. No ten-recipient sharing prohibition was found in the opened documentation. Use persistent node state, individual accounts, and actual sharee connectivity tests. Neither sharing nor a sidecar establishes endpoint concealment or legal clearance.",
+      "sources": [
+        "[Sharing documentation](https://tailscale.com/docs/features/sharing)",
+        "[Protocol and port grants](https://tailscale.com/docs/features/access-control/grants)",
+        "[Personal-plan limits and node-sharing alternative](https://tailscale.com/docs/account/manage-plans/free-plans-discounts)",
+        "[Current pricing](https://tailscale.com/pricing)",
+        "[Container support](https://tailscale.com/docs/features/containers)",
+        "[Direct and relayed connections](https://tailscale.com/docs/reference/connection-types)"
+      ],
+      "confidence": "high"
+    },
+    {
+      "question": "(c) Does the stock H5 client send RequestHardWareInfo ex 0x96?",
+      "finding": "Do not assume it does. Web searches found discussion and backport claims, but no reproducible capture identifying a stock H5 client build and demonstrating transmission. The decisive inspected project evidence is its explicit configuration warning that a modified client system is required. The server handler's existence proves acceptance capability only. Verify the chosen unmodified client by recording its hashes and capturing decoded server-side packet IDs during login and world entry, then repeat with the distributed patch. Even successful transmission supplies spoofable client data, not proof of a unique machine.",
+      "sources": [
+        "Mobius dist/game/config/Server.ini:108-137",
+        "Mobius java/org/l2jmobius/gameserver/network/ExClientPackets.java:180",
+        "Mobius java/org/l2jmobius/gameserver/network/clientpackets/RequestHardWareInfo.java:51-81",
+        "Mobius java/org/l2jmobius/gameserver/network/holders/ClientHardwareInfoHolder.java:297-300"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "question": "(d) Are there existing open-source headless H5 protocol clients, and what do they prove about P2?",
+      "finding": "Yes. npetrovski/l2js-client has an MIT license and targets H5 revisions 268/271/273, with login/game connections and a local world model. gigabelka/l2py-highfive-client-l2jmobius documents MIT licensing, Mobius H5 login/world entry, crypto, typed packets, and tests. These are useful independent references, not proof of complete citizen personas or 800-session operation. Ariakan79/L2Bot additionally advertises H5 farming, party support, geodata, and up to sixteen sessions, but its README's noncommercial wording is not a standard unrestricted open-source license. Exact crypto negotiation matters: this Mobius checkout defaults game encryption off, while protocol implementations commonly implement the encrypted path. Audit and test compatibility rather than copying advertised coverage.",
+      "sources": [
+        "[l2js-client](https://github.com/npetrovski/l2js-client)",
+        "[l2js-client MIT license](https://github.com/npetrovski/l2js-client/blob/master/LICENSE.txt)",
+        "[Independent game-client implementation](https://raw.githubusercontent.com/npetrovski/l2js-client/master/src/network/GameClient.ts)",
+        "[l2py documentation](https://raw.githubusercontent.com/gigabelka/l2py-highfive-client-l2jmobius/main/README.md)",
+        "[L2Bot capabilities and licensing wording](https://github.com/Ariakan79/L2Bot)",
+        "Mobius dist/game/config/Server.ini:34-39 and network/serverpackets/KeyPacket.java:40-52"
+      ],
+      "confidence": "high"
+    },
+    {
+      "question": "(e) What is a technically reproducible and legally supportable H5 geodata source?",
+      "finding": "A technical generation route exists: m49n/l2mapconv-public documents HF support and L2J export, and its code is MIT-licensed. L2J-GeoConv provides conversion tooling under LGPL-3.0 as identified by its repository. Neither license establishes rights to proprietary client maps or to a particular downloaded geodata pack. I found no verified, provenance-complete, rights-cleared full H5 dataset. The concrete sourcing requirement is documented authorization for the input maps and intended derived use, or a separately licensed dataset with that chain of rights, plus reproducible generation and correction manifests. The opened publisher agreement restricts modification and redistribution, but is a current regional agreement; it does not establish the exact historical license governing an unidentified H5 client. Hobby access and local generation are not automatic legal exemptions.",
+      "sources": [
+        "[HF-capable generator and build documentation](https://github.com/m49n/l2mapconv-public)",
+        "[Generator MIT license](https://raw.githubusercontent.com/m49n/l2mapconv-public/master/LICENSE)",
+        "[L2J-GeoConv repository](https://github.com/ofaizulin/L2J-GeoConv)",
+        "[Official publisher agreement](https://eu.4game.com/legal/lineage2/21/archive/945/)",
+        "Mobius dist/game/data/geodata/Readme.txt"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "question": "Is Ant plus JUnit feasible with this Java 27 fork?",
+      "finding": "Yes in architecture; it has not been executed here. Ant documents JUnit Platform launching and forked JVMs, and JUnit 5.13.4 documents Java 8-or-higher runtime support. Pin a modern Ant, matching ant-junitlauncher, Platform/Jupiter dependencies, and Java 27, then prove that exact combination. The existing Ant 1.9.10 minimum does not guarantee junitlauncher support. Static singletons, script loading, filesystem-relative configuration, and background threads favor process-isolated integration tests. Optional bytecode agents must separately support Java 27; plain JUnit assertions do not require them.",
+      "sources": [
+        "[Ant JUnitLauncher](https://ant.apache.org/manual/Tasks/junitlauncher.html)",
+        "[JUnit 5.13.4 user guide](https://docs.junit.org/5.13.4/user-guide/index.html)",
+        "Mobius build.xml:47-70",
+        "Mobius java/org/l2jmobius/commons/threads/ThreadPool.java:67-91"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "overall_verdict": "Not consensus-ready. Keep the full project, the pinned H5 fork, external real-Player citizens, native UI framework, evidence-backed Retail Truth, and dependency-based construction. Reject the proposed one-line-only core seam: durable asset transactions, escrow-aware ID/cleanup integration, and pre-assignment execution hooks are required. Major disagreements also remain over information-sharing guarantees, Director authority over native competition state, unproven capacity, and client/geodata provenance. The remedies above preserve every gameplay feature. This was a read-only source and web review; no build, client execution, migration, or load test was performed.",
+  "consensus_ready": false
+}

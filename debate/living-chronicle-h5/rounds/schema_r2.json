@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["responses", "new_objections", "consensus_reached", "remaining_disagreements", "summary"],
+  "properties": {
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "decision", "argument", "evidence", "counter"],
+        "properties": {
+          "id": {"type": "string"},
+          "decision": {"type": "string", "enum": ["accept", "reject", "counter"]},
+          "argument": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "counter": {"type": "string"}
+        }
+      }
+    },
+    "new_objections": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["title", "severity", "argument", "evidence", "proposal"],
+        "properties": {
+          "title": {"type": "string"},
+          "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
+          "argument": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "proposal": {"type": "string"}
+        }
+      }
+    },
+    "consensus_reached": {"type": "boolean"},
+    "remaining_disagreements": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "string"}
+  }
+}

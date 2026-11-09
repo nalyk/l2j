@@ -1,0 +1,7 @@
+{"type":"object","additionalProperties":false,"required":["faithful","discrepancies","sign_off","statement"],
+ "properties":{
+  "faithful":{"type":"boolean"},
+  "discrepancies":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["section","problem","correction"],
+     "properties":{"section":{"type":"string"},"problem":{"type":"string"},"correction":{"type":"string"}}}},
+  "sign_off":{"type":"boolean"},
+  "statement":{"type":"string"}}}

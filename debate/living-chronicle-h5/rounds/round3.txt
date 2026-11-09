@@ -1,0 +1,6 @@
+Round 3 (sign-off). Read 05_CONSENSUS.md in the working directory. It is my written integration of everything we agreed
+in rounds 1-2 (your round-1 counters and missed items, my concessions C1-C12, D1, D2, A1, A2, and your round-2
+precisions). Check it line by line against the transcript (rounds/round1.json, rounds/round2.json) and the Mobius source.
+Report every place where it misstates, weakens, omits or adds something we did not agree, or cites a wrong file:line.
+Do not reopen settled points and do not add new scope. sign_off=true only if, after the listed corrections (if any)
+are applied verbatim, you endorse the document as the agreed consensus.

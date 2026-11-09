@@ -1,0 +1,195 @@
+{
+  "responses": [
+    {
+      "id": "C1",
+      "decision": "accept",
+      "argument": "This resolves P1. Population distributions and competing principals address the actual density problem. Deterministic economic/political policies preserve the narrator-only LLM boundary. Recorded ordinary progression provides an auditable origin for resident assets and capabilities.",
+      "evidence": [
+        "Blueprint §1.3 restricts LLM authority.",
+        "Blueprint §9.3-9.5 makes simultaneous compatibility relevant.",
+        "Blueprint §16.2-16.4 requires economic accounting and newcomer relevance."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C2",
+      "decision": "accept",
+      "argument": "The perception budget strengthens the adopted design. Apply it before information reaches decision policies and shared clan memory; otherwise discarded observations can still leak through another subsystem. Protocol conformance and perceptual fairness remain separate acceptance tests.",
+      "evidence": [
+        "Mobius java/org/l2jmobius/gameserver/network/serverpackets/CharInfo.java:130-137 sends coordinates, object ID, and visible name.",
+        "Blueprint §17.2-17.3 requires provenance and separation from omniscient backend knowledge.",
+        "Blueprint §19.3 requires complete synthetic gameplay workflows."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C3",
+      "decision": "accept",
+      "argument": "Separate identity dimensions and isolated synthetic principals resolve the classification disagreement. Interpret immutability as immutable origin and immutable event snapshots: activity mode must change through recorded transitions when an actor enters offline trade, resumes interactive play, or disconnects. Human, synthetic, and mixed Signal outcomes must remain separately measurable.",
+      "evidence": [
+        "Blueprint §7.2 distinguishes online humans, offline play, offline trade, and synthetic actors.",
+        "Blueprint §9.8 requires opt-in privacy.",
+        "Blueprint §27.2 measures discovery of compatible humans."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C4",
+      "decision": "accept",
+      "argument": "This closes the critical architectural disagreement. The transaction service must own every competing mutation of affected assets, including ordinary core operations and subsequent saves; otherwise an independent writer can overwrite committed state. That is an implementation obligation of the adopted lock/version and recovery protocol. Keeping canonical escrow items in items also lets existing used-ID extraction reserve them, provided cleanup recognizes their custody and IDs are not released during transfer.",
+      "evidence": [
+        "Mobius java/org/l2jmobius/gameserver/entity/item/instance/Item.java:1656-1684 independently obtains a connection and logs persistence exceptions.",
+        "Mobius java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java:67 defines owner cleanup; lines 122-128 define ID extraction.",
+        "Mobius dist/game/config/General.ini:189-197 documents lazy-update crash risk.",
+        "Blueprint §12.8 and §22.4 require transactional assets and recovery."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C5",
+      "decision": "accept",
+      "argument": "This replaces the false secrecy guarantee with an achievable information-access contract. Freezing disputed proceeds before payment and forbidding minted refunds also closes the accounting objection. Deduplication and disclosure limits must operate across cooperating hunters and contracts, rather than resetting whenever another account requests the same clue.",
+      "evidence": [
+        "Blueprint §10.8 permits sharing learned knowledge.",
+        "Blueprint §13.9-13.10 funds intelligence from deposited budgets.",
+        "Blueprint §13.24-13.26 requires conservation, anti-farming, and harassment controls."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C6",
+      "decision": "accept",
+      "argument": "The authority table and prohibition on overwriting earned results resolve P6. Native content gaps remain implementation obligations, with evidence-backed behavior specifications. Director situations may create opportunities for lawful participation without becoming a second writer of competition outcomes.",
+      "evidence": [
+        "Blueprint §25.1 scopes the illustrative five-percent bound to resource pressure.",
+        "Mobius java/org/l2jmobius/gameserver/managers/SeedOfDestructionManager.java:110-132 explicitly skips the unimplemented defense state.",
+        "Mobius java/org/l2jmobius/gameserver/mechanics/sevensigns/SevenSignsFestival.java:62-68 records unfinished behavior.",
+        "Blueprint §8.19 and §15.3 require bounded, explainable changes."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C7",
+      "decision": "accept",
+      "argument": "A complete server-driven interaction framework removes the compiler uncertainty from required gameplay coverage. If human testing establishes that a native widget is needed to satisfy an acceptance requirement, its toolchain becomes a required dependency. Merely offering an enhancement must not imply that it has already been validated.",
+      "evidence": [
+        "Mobius java/org/l2jmobius/gameserver/util/HtmlUtil.java:411-453 implements Community Board action caching and chunked delivery.",
+        "Mobius java/org/l2jmobius/gameserver/network/clientpackets/DlgAnswer.java:50-73 provides the dialog-answer integration.",
+        "Blueprint §24.1-24.3 distinguishes institutional ceremony, convenient personal UI, and information restrictions.",
+        "[H5 XDAT reader/writer](https://raw.githubusercontent.com/acmi/xdat_editor_schema/master/src/main/groovy/ct26/XDAT.groovy)."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C8",
+      "decision": "accept",
+      "argument": "Independent expected results, separate regression and truth artifacts, and scoped overrides resolve P9. A passing baseline establishes stability only; EXACT still requires evidence for the specified H5 behavior and tolerance.",
+      "evidence": [
+        "Blueprint §6.1 defines the truth classifications.",
+        "Blueprint §6.2 requires reference evidence, preconditions, expectations, and tolerances.",
+        "Blueprint §6.4 requires repeated statistical trials for probabilistic behavior.",
+        "Blueprint §6.6 defines regression and override obligations."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C9",
+      "decision": "accept",
+      "argument": "The revised accounting, failure boundaries, and replay contract resolve P10. Exact dependency versions and digests must be recorded rather than leaving version ranges as the reproducible build definition. Passing execution on the pinned Java 27 stack remains required evidence; this debate establishes the design, not that execution result.",
+      "evidence": [
+        "Mobius build.xml:47-70 requires Java 27.",
+        "Mobius java/org/l2jmobius/gameserver/managers/RecipeManager.java:388-429 contains multiple mutation boundaries within one craft operation.",
+        "Blueprint §21.3 requires idempotency; §32.12 concerns reproduction of derived state.",
+        "[Ant JUnitLauncher documentation](https://ant.apache.org/manual/Tasks/junitlauncher.html) describes explicit dependencies and forked execution."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C10",
+      "decision": "accept",
+      "argument": "Measured workload capacity, resource reservations, and queue-age instrumentation resolve the unsupported sizing claim. The dense-siege scenario must exercise actual combat, movement, visibility fanout, and active contractual processing; eight hundred idle connections would not establish this capacity.",
+      "evidence": [
+        "Mobius java/org/l2jmobius/gameserver/taskmanagers/MovementTaskManager.java:40-45, 100-147 defines movement batching and scheduling.",
+        "Mobius java/org/l2jmobius/commons/network/packet/PacketExecutor.java:50-52 uses an unbounded packet-execution queue.",
+        "Mobius java/org/l2jmobius/gameserver/geoengine/GeoEngine.java:142-147 memory-maps geodata.",
+        "Blueprint §20.2 and §23 require operational measurements and bounded processing."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C11",
+      "decision": "accept",
+      "argument": "The traceability matrix, additional dependency nodes, and actionable risk entries resolve the specification and work-order objections. Coverage must trace individual sub-features and cross-module behaviors, not merely mark a whole module complete because its primary screen exists.",
+      "evidence": [
+        "Blueprint §31 explicitly enumerates complete feature coverage.",
+        "Blueprint §14 defines cross-module behavior.",
+        "Blueprint §21.2 and §27 establish migration and acceptance obligations.",
+        "00_CONSTRAINTS.md constraints 2, 3, and 6 require complete scope and permit dependency ordering."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "C12",
+      "decision": "accept",
+      "argument": "The adopted remedies close the remaining source-backed engineering objections. Preserve them as individually traceable acceptance cases. In particular, restart tests must cover escrow cleanup/ID reservation, expired-intelligence rebuilds, and persisted craft outcomes; privacy and conservation cannot be inferred from a successful ordinary session.",
+      "evidence": [
+        "Mobius java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java:67, 122-128 establishes the escrow restart hazards.",
+        "Mobius java/org/l2jmobius/gameserver/entity/actor/Creature.java:7465-7484 establishes the insufficient sighting predicate.",
+        "Mobius java/org/l2jmobius/gameserver/geoengine/geodata/regions/NullRegion.java:33-69 establishes permissive missing-geodata behavior.",
+        "Blueprint §13.29, §19.4, §21.4, and §22.3 require retention, recovery, and privacy proofs."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "D1",
+      "decision": "accept",
+      "argument": "I withdraw publisher authorization specifically for geodata as a mandatory engineering acceptance gate. The evidence did not establish that authorization is the sole possible legal basis, and applying a special gate to geodata was inconsistent with leaving other client-derived artifacts as unresolved risks. Accept one project-wide register with artifact-specific provenance, applicable terms, distribution details, and unresolved questions. However, the artifacts do not automatically have identical legal status, and owner risk acceptance does not create rights. Local generation establishes reproducibility, not legal clearance. Engineering can proceed without claiming clearance; the register must exist during hobby work as well as inform the public-launch decision.",
+      "evidence": [
+        "[l2mapconv documentation](https://github.com/m49n/l2mapconv-public) describes HF input support and L2J export.",
+        "[Generator MIT license](https://raw.githubusercontent.com/m49n/l2mapconv-public/master/LICENSE) licenses the generator code, not arbitrary input assets.",
+        "[Publisher agreement](https://eu.4game.com/legal/lineage2/21/archive/945/) documents restrictions for its covered client use; it does not establish the governing historical terms of an unidentified H5 distribution.",
+        "Explicit reasoning: provenance, technical correctness, and permission are distinct properties; evidence for one cannot establish the others."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "D2",
+      "decision": "accept",
+      "argument": "Accept the hobby topology and withdraw any requirement for an external gateway merely to achieve endpoint concealment. Concealment is unnecessary when exposure is explicitly retained in the risk model. Record the proposed acceptance for the owner rather than treating agreement between engineers as proof of owner approval. The public topology remains a required deployment specification with its own activation criteria; different audience-dependent deployment controls do not remove a gameplay feature.",
+      "evidence": [
+        "[Tailscale sharing documentation](https://tailscale.com/docs/features/sharing) supports individual external node shares and restricted access.",
+        "[Tailscale grants](https://tailscale.com/docs/features/access-control/grants) supports TCP-port capabilities.",
+        "00_CONSTRAINTS.md constraints 1 and 4 distinguish hobby operation and at most ten human testers.",
+        "Explicit reasoning: endpoint exposure is a retained topology property, not a violated concealment requirement once that requirement is withdrawn."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "A1",
+      "decision": "accept",
+      "argument": "Enable PacketEncryption=True for the world and test both negotiated paths. One precision: the configuration and KeyPacket comments call this Blowfish, but the inspected game-channel implementation is stateful XOR. Specify and test the implementation's actual wire behavior, including the initial unencrypted key packet and directional rolling state. Do not treat this legacy cipher as authentication or integrity protection.",
+      "evidence": [
+        "Mobius dist/game/config/Server.ini:34-39 labels retail encryption enabled while setting the default to False.",
+        "Mobius java/org/l2jmobius/gameserver/network/serverpackets/KeyPacket.java:40-52 transmits the encryption flag.",
+        "Mobius java/org/l2jmobius/gameserver/network/Encryption.java:26-35, 92-144 implements stateful XOR and initial-packet behavior.",
+        "Mobius java/org/l2jmobius/gameserver/network/clientpackets/ProtocolVersion.java:54-71 initiates key negotiation."
+      ],
+      "counter": ""
+    },
+    {
+      "id": "A2",
+      "decision": "accept",
+      "argument": "The combined intake gate resolves the upstream-compatibility disagreement. Run both sides of migration/recovery tests against representative persisted contracts and escrow assets, and preserve independent expected behavior when updating regression artifacts. An intake change must not approve itself by regenerating its own goldens.",
+      "evidence": [
+        "Blueprint §6.6 requires regression gates and explicit overrides.",
+        "Blueprint §21.2-21.4 requires migrations, idempotency, and tested restoration.",
+        "Mobius java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java:67, 122-128 demonstrates why startup compatibility includes persisted assets and allocator behavior."
+      ],
+      "counter": ""
+    }
+  ],
+  "new_objections": [],
+  "consensus_reached": true,
+  "remaining_disagreements": [],
+  "summary": "Architectural consensus reached on the complete H5 project. All critical and major engineering disagreements are resolved by the adopted transaction, identity, perception, authority, UI, testing, and operational designs. I withdraw the special geodata authorization gate and mandatory hobby endpoint-concealment gateway. Legal clearance, owner risk acceptance, client compatibility, and capacity remain explicitly unproven acceptance matters, not claimed results. Mobius references are relative to the checkout identified in 01_VERIFIED_FACTS.md at commit 2b0758e97d5a097127b7330ee59e82d4b1d69b3b. Consensus concerns how to build and validate the project; it does not certify an implementation."
+}

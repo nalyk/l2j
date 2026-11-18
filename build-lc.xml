@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Living Chronicle build.
+
+	Upstream's build.xml is imported untouched and stays the only definition of
+	how the server is compiled and packaged. This file adds what upstream does
+	not have: a class fingerprint. Run it through ./build.sh.
+-->
+<project name="LivingChronicle" default="gate" basedir=".">
+
+	<!-- Upstream defaults to ../build, outside the checkout. Properties are write-once, so this wins. -->
+	<property name="build" location="build" />
+
+	<import file="build.xml" />
+
+	<target name="fingerprint" depends="compile" description="Record one digest over every compiled class.">
+		<!--
+			Jar files carry build timestamps, so they are never byte-identical.
+			The classes are. Two clean builds of one commit must print the same digest.
+		-->
+		<checksum algorithm="SHA-256" totalproperty="classes.fingerprint" todir="${build}/checksums">
+			<fileset dir="${build.bin}" />
+		</checksum>
+		<delete dir="${build}/checksums" />
+		<echo file="${build}/classes.sha256" message="${classes.fingerprint}${line.separator}" />
+		<echo message="classes fingerprint: ${classes.fingerprint}" />
+	</target>
+
+	<target name="dist" depends="fingerprint, cleanup" description="Package the server exactly as upstream does." />
+
+	<target name="gate" depends="dist" description="Everything a change must pass." />
+
+</project>

@@ -11,9 +11,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.l2jmobius.testing.agent.MethodRedirector.Target;
 
 /**
- * Java agent for test JVMs: makes Mobius read time from {@code GameClock} instead of the system.
+ * Java agent for test JVMs: makes Mobius read time from {@code GameClock} and schedule work through {@code GameScheduler}.
  * <p>
- * Mobius reads the clock in several hundred places across roughly 250 files, core and datapack scripts. Editing them would make every upstream intake a conflict, so they are not edited. Instead, as each Mobius class is loaded in a test JVM, its calls to the JDK's "what time is it" methods are pointed at the equivalent {@code GameClock} method (see {@link MethodRedirector}). {@code GameClock} follows the system until a test takes control of it, so loading this agent changes nothing by itself. Production never loads it and runs the classes exactly as compiled.
+ * Mobius reads the clock in several hundred places across roughly 250 files, core and datapack scripts, and hands work to its thread pool in several hundred more. Editing them would make every upstream intake a conflict, so they are not edited. Instead, as each Mobius class is loaded in a test JVM, its calls to the JDK's "what time is it" methods and to {@code ThreadPool} are pointed at the equivalent {@code GameClock} and {@code GameScheduler} methods (see {@link MethodRedirector}). Both pass straight through until a test takes control of them, so loading this agent changes nothing by itself. Production never loads it and runs the classes exactly as compiled.
  * </p>
  * <p>
  * The agent also keeps the books a test needs to trust it: how many classes it patched, every class it failed on, and every way of asking the time that it saw but cannot redirect. A silent miss here would be a hole in every time-dependent golden.
@@ -31,12 +31,24 @@ public final class TruthAgent implements ClassFileTransformer
 		"org/l2jmobius/testing/"
 	};
 
+	private static final String SCHEDULER = "org/l2jmobius/gameserver/livingchronicle/clock/GameScheduler";
+	private static final String THREAD_POOL = "org/l2jmobius/commons/threads/ThreadPool.";
+	private static final String FUTURE = "Ljava/util/concurrent/ScheduledFuture;";
+
 	private static final Map<String, Target> REDIRECTS = Map.of(
+		// What time is it.
 		"java/lang/System.currentTimeMillis()J", new Target(CLOCK, "millis"),
 		"java/lang/System.nanoTime()J", new Target(CLOCK, "nanos"),
 		"java/util/Calendar.getInstance()Ljava/util/Calendar;", new Target(CLOCK, "calendar"),
 		"java/util/Calendar.getInstance(Ljava/util/TimeZone;)Ljava/util/Calendar;", new Target(CLOCK, "calendar"),
-		"java/time/LocalDateTime.now()Ljava/time/LocalDateTime;", new Target(CLOCK, "localDateTime"));
+		"java/time/LocalDateTime.now()Ljava/time/LocalDateTime;", new Target(CLOCK, "localDateTime"),
+		// Run this later.
+		THREAD_POOL + "schedule(Ljava/lang/Runnable;J)" + FUTURE, new Target(SCHEDULER, "schedule"),
+		THREAD_POOL + "scheduleAtFixedRate(Ljava/lang/Runnable;JJ)" + FUTURE, new Target(SCHEDULER, "scheduleAtFixedRate"),
+		THREAD_POOL + "schedulePriorityTaskAtFixedRate(Ljava/lang/Runnable;JJ)" + FUTURE, new Target(SCHEDULER, "schedulePriorityTaskAtFixedRate"),
+		THREAD_POOL + "execute(Ljava/lang/Runnable;)V", new Target(SCHEDULER, "execute"),
+		// Wait this long.
+		"java/lang/Thread.sleep(J)V", new Target(SCHEDULER, "sleep"));
 
 	/** Constructors that capture "now" without being handed an instant. They cannot be redirected, only reported. */
 	private static final Set<String> NOW_CONSTRUCTORS = Set.of(
@@ -46,7 +58,15 @@ public final class TruthAgent implements ClassFileTransformer
 		"java/util/GregorianCalendar.<init>(Ljava/util/Locale;)V",
 		"java/util/GregorianCalendar.<init>(Ljava/util/TimeZone;Ljava/util/Locale;)V");
 
-	private static final MethodRedirector REDIRECTOR = new MethodRedirector(REDIRECTS, TruthAgent::readsTheSystemClock);
+	/** Ways of waiting for real time to pass that are not redirected. An untimed wait() is not here: it waits for another thread, not for time. */
+	private static final Set<String> REAL_TIME_WAITS = Set.of(
+		"java/lang/Object.wait(J)V",
+		"java/lang/Object.wait(JI)V",
+		"java/lang/Thread.sleep(JI)V",
+		"java/lang/Thread.sleep(Ljava/time/Duration;)V",
+		"java/util/concurrent/TimeUnit.sleep(J)V");
+
+	private static final MethodRedirector REDIRECTOR = new MethodRedirector(REDIRECTS, TruthAgent::dependsOnRealTime);
 
 	private static final AtomicInteger PATCHED_CORE_CLASSES = new AtomicInteger();
 	private static final AtomicInteger PATCHED_SCRIPT_CLASSES = new AtomicInteger();
@@ -113,11 +133,12 @@ public final class TruthAgent implements ClassFileTransformer
 	}
 
 	/**
-	 * Every JDK entry point that answers "what time is it now" and is not in {@link #REDIRECTS}.
+	 * Every JDK entry point that answers "what time is it now" or waits for real time to pass, and is not in {@link #REDIRECTS}.
 	 */
-	private static boolean readsTheSystemClock(String reference)
+	private static boolean dependsOnRealTime(String reference)
 	{
 		return NOW_CONSTRUCTORS.contains(reference) //
+			|| REAL_TIME_WAITS.contains(reference) //
 			|| reference.startsWith("java/lang/System.currentTimeMillis(") //
 			|| reference.startsWith("java/lang/System.nanoTime(") //
 			|| reference.startsWith("java/util/Calendar.getInstance(") //

@@ -37,3 +37,19 @@ Upstream files use CRLF line endings. Patches keep them.
   agent cannot redirect.
 - Proof: `CoreClockCoverageTest` (every compiled core class), `GameServerBootTest.everyLoadedClassReadsTimeThroughTheGameClock`
   (every script, as loaded), `TruthAgentTest` (the redirect itself).
+
+## CP-0003 The festival manager pauses with a sleep, not a wait
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/sevensigns/SevenSignsFestival.java`
+- Reason: `FestivalManager.run()` is one long task that paces a whole festival cycle with eight `wait(millis)` calls on
+  itself. Nothing ever notifies it, so each is a timer. Test JVMs redirect `Thread.sleep` to `GameScheduler.sleep`, which
+  pauses a task in game time while the rest of the world keeps running; an instance `wait` cannot be redirected the same
+  way, and left alone it blocks the simulated world for real minutes.
+- Change: the eight `wait(x)` become `Thread.sleep(x)`. No other line changes.
+- Invariant: production behaviour is unchanged where the old code worked. Two differences, both stated because both are real:
+  the monitor of the manager stays held during the pause (no other code synchronizes on it, and fixed-rate runs of one task
+  never overlap), and a computed pause of exactly 0 ms now continues instead of waiting forever (`wait(0)` means "no
+  timeout"; that was a latent hang, reachable when a festival's elapsed time equals its configured length to the millisecond).
+- Proof: `GameSchedulerTest` (a sleeping task does not stop the world and wakes in order), `CoreClockCoverageTest` (no core
+  class waits on real time in a way the agent cannot redirect), `PausedWorldTest` (the world, festival manager included,
+  advances through game time without blocking).

@@ -1775,7 +1775,7 @@ public class SevenSignsFestival
 				// Stand by until the allowed signup period has elapsed.
 				try
 				{
-					wait(FESTIVAL_SIGNUP_TIME);
+					Thread.sleep(FESTIVAL_SIGNUP_TIME);
 				}
 				catch (Exception e)
 				{
@@ -1803,7 +1803,7 @@ public class SevenSignsFestival
 						{
 							setNextCycleStart();
 							setNextFestivalStart(FeatureConfig.ALT_FESTIVAL_CYCLE_LENGTH - FESTIVAL_SIGNUP_TIME);
-							wait(FeatureConfig.ALT_FESTIVAL_CYCLE_LENGTH - FESTIVAL_SIGNUP_TIME);
+							Thread.sleep(FeatureConfig.ALT_FESTIVAL_CYCLE_LENGTH - FESTIVAL_SIGNUP_TIME);
 							for (DarknessFestival festivalInst : _festivalInstances.values())
 							{
 								if (!festivalInst._npcInsts.isEmpty())
@@ -1850,7 +1850,7 @@ public class SevenSignsFestival
 				// Stand by for a short length of time before starting the festival.
 				try
 				{
-					wait(FeatureConfig.ALT_FESTIVAL_FIRST_SPAWN);
+					Thread.sleep(FeatureConfig.ALT_FESTIVAL_FIRST_SPAWN);
 				}
 				catch (Exception e)
 				{
@@ -1873,7 +1873,7 @@ public class SevenSignsFestival
 				// After a short time period, move all idle spawns to the center of the arena.
 				try
 				{
-					wait(FeatureConfig.ALT_FESTIVAL_FIRST_SWARM - FeatureConfig.ALT_FESTIVAL_FIRST_SPAWN);
+					Thread.sleep(FeatureConfig.ALT_FESTIVAL_FIRST_SWARM - FeatureConfig.ALT_FESTIVAL_FIRST_SPAWN);
 				}
 				catch (Exception e)
 				{
@@ -1889,7 +1889,7 @@ public class SevenSignsFestival
 				// Stand by until the time comes for the second spawn.
 				try
 				{
-					wait(FeatureConfig.ALT_FESTIVAL_SECOND_SPAWN - FeatureConfig.ALT_FESTIVAL_FIRST_SWARM);
+					Thread.sleep(FeatureConfig.ALT_FESTIVAL_SECOND_SPAWN - FeatureConfig.ALT_FESTIVAL_FIRST_SWARM);
 				}
 				catch (Exception e)
 				{
@@ -1918,7 +1918,7 @@ public class SevenSignsFestival
 				// After another short time period, again move all idle spawns to the center of the arena.
 				try
 				{
-					wait(FeatureConfig.ALT_FESTIVAL_SECOND_SWARM - FeatureConfig.ALT_FESTIVAL_SECOND_SPAWN);
+					Thread.sleep(FeatureConfig.ALT_FESTIVAL_SECOND_SWARM - FeatureConfig.ALT_FESTIVAL_SECOND_SPAWN);
 				}
 				catch (Exception e)
 				{
@@ -1935,7 +1935,7 @@ public class SevenSignsFestival
 				// Stand by until the time comes for the chests to be spawned.
 				try
 				{
-					wait(FeatureConfig.ALT_FESTIVAL_CHEST_SPAWN - FeatureConfig.ALT_FESTIVAL_SECOND_SWARM);
+					Thread.sleep(FeatureConfig.ALT_FESTIVAL_CHEST_SPAWN - FeatureConfig.ALT_FESTIVAL_SECOND_SWARM);
 				}
 				catch (Exception e)
 				{
@@ -1955,7 +1955,7 @@ public class SevenSignsFestival
 				// Stand by and wait until it's time to end the festival.
 				try
 				{
-					wait(FeatureConfig.ALT_FESTIVAL_LENGTH - elapsedTime);
+					Thread.sleep(FeatureConfig.ALT_FESTIVAL_LENGTH - elapsedTime);
 				}
 				catch (Exception e)
 				{

@@ -17,6 +17,7 @@
 	<property name="test.bin" location="${build}/test-bin" />
 	<property name="test.reports" location="${build}/test-reports" />
 	<property name="test.libs" location="/opt/lc/test-libs" />
+	<property name="runtime.game" location="${build}/runtime/game" />
 
 	<path id="test.classpath">
 		<pathelement location="${test.bin}" />
@@ -49,9 +50,18 @@
 		</javac>
 	</target>
 
-	<target name="test" depends="compile-tests" description="Run the test suite, one JVM per test class.">
+	<target name="stage" description="Stage a pristine copy of the game runtime for tests to boot from.">
+		<!-- The server writes logs and state into its working directory; the checkout is read-only. -->
+		<sync todir="${runtime.game}">
+			<fileset dir="${datapack}/game" />
+		</sync>
+	</target>
+
+	<target name="test" depends="compile-tests, stage" description="Run the test suite, one JVM per test class.">
 		<delete dir="${test.reports}" quiet="true" />
 		<mkdir dir="${test.reports}" />
+		<!-- Tests run under the JVM flags production runs under, read from the file production reads. -->
+		<loadfile property="server.jvmargs" srcFile="${datapack}/game/java.cfg" />
 		<!--
 			Mobius is built from static singletons. A fresh JVM per class is the
 			only way one test cannot leak state into the next.
@@ -62,8 +72,10 @@
 				<fileset dir="${test.bin}" includes="**/*Test.class" />
 				<listener type="legacy-plain" sendSysOut="true" sendSysErr="true" />
 				<listener type="legacy-xml" sendSysOut="true" sendSysErr="true" />
-				<fork forkMode="perTestClass">
-					<jvmarg value="-Dfile.encoding=UTF-8" />
+				<fork dir="${runtime.game}" forkMode="perTestClass">
+					<jvmarg line="${server.jvmargs}" />
+					<jvmarg value="-Djava.awt.headless=true" />
+					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
 				</fork>
 			</testclasses>
 		</junitlauncher>

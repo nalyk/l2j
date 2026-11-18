@@ -10,23 +10,23 @@ import java.util.StringJoiner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import org.l2jmobius.gameserver.data.xml.NpcData;
 import org.l2jmobius.gameserver.data.xml.PlayerTemplateData;
 import org.l2jmobius.gameserver.entity.actor.Creature;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.entity.actor.holders.creature.TimeStamp;
 import org.l2jmobius.gameserver.entity.actor.instance.Monster;
-import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
-import org.l2jmobius.gameserver.entity.item.instance.Item;
-import org.l2jmobius.gameserver.entity.itemcontainer.Inventory;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
-import org.l2jmobius.gameserver.managers.ZoneManager;
 import org.l2jmobius.gameserver.mechanics.skill.BuffInfo;
 import org.l2jmobius.gameserver.mechanics.skill.Skill;
+import org.l2jmobius.testing.Arena;
 import org.l2jmobius.testing.Golden;
+import org.l2jmobius.testing.TestGear;
+import org.l2jmobius.testing.TestGear.Piece;
+import org.l2jmobius.testing.TestGear.Weapon;
+import org.l2jmobius.testing.TestGear.Wear;
 import org.l2jmobius.testing.TestPlayers;
 import org.l2jmobius.testing.TestServer;
 
@@ -36,7 +36,7 @@ import org.l2jmobius.testing.TestServer;
  * Every case is a fresh character and a fresh target, so no case inherits anything from another. The character asks to use the skill the way the client does ({@code useMagic}), and the paused world is stepped from event to event until the cast is over, so the server's own checks, cast time, reuse, costs and effects are what get recorded. Harmful skills are aimed at a Maluk Warlord (level 85, one of the most spawned monsters of that level) standing in front of the caster; every other skill at the caster itself. Both are spawned, because the server will not let a character target anything that is not, in open sea far west of every spawn and outside every zone, so area skills find exactly the one monster and nothing else can interfere. The Warlord's own AI is switched off: what is recorded is the skill, not the fight it would start.
  * </p>
  * <p>
- * Gear comes from the skill, not from a guess about the class. The caster holds the first loadout, in the order of {@link #LOADOUTS}, with which the server's own condition check lets the skill be used: nothing at all first, then each Vesper weapon alone and with a Vesper shield or sigil, then the same over Vesper heavy, light and robe armour. A bow comes with Shining Arrows, a crossbow with Shining Bolts. No geodata is loaded, so line of sight is never in the way.
+ * Gear comes from the skill, not from a guess about the class. The caster holds the first loadout, in the order of {@link #LOADOUTS}, with which the server's own condition check lets the skill be used: nothing at all first, then each Vesper weapon alone and with a Vesper shield or sigil, then the same in the Vesper heavy, light and robe sets with Vesper jewels ({@link TestGear}). A bow comes with Shining Arrows, a crossbow with Shining Bolts. No geodata is loaded, so line of sight is never in the way.
  * </p>
  */
 class SkillLockTest
@@ -47,25 +47,8 @@ class SkillLockTest
 	private static final int LEVEL = 85;
 	private static final int MALUK_WARLORD = 22839;
 	
-	/** Open sea, about 196,000 from the nearest spawn of the datapack. */
-	private static final int ARENA_X = -280000;
-	private static final int ARENA_Y = -66000;
-	private static final int ARENA_Z = -3500;
-
 	/** A cast still going after this much game time is recorded as such and cut short. */
 	private static final long CAST_LIMIT_MILLIS = 60_000;
-
-	private static final int[] GEAR_SLOTS =
-	{
-		Inventory.PAPERDOLL_RHAND,
-		Inventory.PAPERDOLL_LHAND,
-		Inventory.PAPERDOLL_CHEST,
-		Inventory.PAPERDOLL_LEGS
-	};
-
-	private record Piece(String name, int itemId, long count)
-	{
-	}
 
 	private record Loadout(String name, List<Piece> pieces)
 	{
@@ -82,10 +65,7 @@ class SkillLockTest
 	static void boot() throws Exception
 	{
 		_server = TestServer.bootPaused(START, SEED);
-		if (!ZoneManager.getInstance().getZones(ARENA_X, ARENA_Y, ARENA_Z).isEmpty())
-		{
-			throw new IllegalStateException("the arena at " + ARENA_X + ", " + ARENA_Y + ", " + ARENA_Z + " is inside a zone now: " + ZoneManager.getInstance().getZones(ARENA_X, ARENA_Y, ARENA_Z));
-		}
+		Arena.checkEmpty();
 
 		final List<PlayerClass> classes = new ArrayList<>();
 		for (PlayerClass playerClass : PlayerClass.values())
@@ -140,8 +120,8 @@ class SkillLockTest
 	private static Map<Skill, Loadout> chooseGear(PlayerClass playerClass, List<Skill> skills)
 	{
 		final Player probe = TestPlayers.create(playerClass, LEVEL);
-		final Monster target = target();
-		face(probe, target);
+		final Monster target = Arena.monster(MALUK_WARLORD);
+		Arena.placeInFront(probe, target);
 
 		final Map<Skill, Loadout> chosen = new LinkedHashMap<>();
 		final List<Skill> pending = new ArrayList<>(skills);
@@ -179,8 +159,8 @@ class SkillLockTest
 		caster.setCurrentHpMp(caster.getMaxHp(), caster.getMaxMp());
 		caster.setCurrentCp(caster.getMaxCp());
 
-		final Monster target = target();
-		face(caster, target);
+		final Monster target = Arena.monster(MALUK_WARLORD);
+		Arena.placeInFront(caster, target);
 		final boolean harmful = skill.hasNegativeEffect();
 		caster.setTarget(harmful ? target : caster);
 
@@ -195,11 +175,7 @@ class SkillLockTest
 		_server.withRandom(KeyedRandom.of(SEED, "lock.skill", (playerClass.getId() * 100_000L) + skill.getId()), () ->
 		{
 			accepted[0] = caster.useMagic(skill, false, true);
-			while ((caster.isCastingNow() || caster.isCastingSimultaneouslyNow()) && ((GameClock.millis() - start) < CAST_LIMIT_MILLIS))
-			{
-				final long next = Math.min(GameScheduler.nextDue(), start + CAST_LIMIT_MILLIS);
-				GameScheduler.advance(Math.max(0, next - GameClock.millis()));
-			}
+			Arena.runWhile(() -> caster.isCastingNow() || caster.isCastingSimultaneouslyNow(), CAST_LIMIT_MILLIS);
 		});
 
 		final String result;
@@ -253,45 +229,9 @@ class SkillLockTest
 		return line;
 	}
 
-	/**
-	 * A fresh reference target at full health, with its AI switched off, spawned in the arena facing east.
-	 */
-	private static Monster target()
-	{
-		final Monster target = new Monster(NpcData.getInstance().getTemplate(MALUK_WARLORD));
-		target.disableCoreAI(true);
-		target.setCurrentHpMp(target.getMaxHp(), target.getMaxMp());
-		target.setHeading(0);
-		target.spawnMe(ARENA_X, ARENA_Y, ARENA_Z);
-		return target;
-	}
-
-	/**
-	 * Spawns {@code player} close in front of {@code target}, facing it.
-	 */
-	private static void face(Player player, Monster target)
-	{
-		player.setHeading(32768);
-		player.spawnMe(target.getX() + 30, target.getY(), target.getZ());
-	}
-
 	private static void wear(Player player, Loadout loadout)
 	{
-		final Inventory inventory = player.getInventory();
-		for (int slot : GEAR_SLOTS)
-		{
-			inventory.unEquipItemInSlot(slot);
-		}
-
-		for (Piece piece : loadout.pieces())
-		{
-			Item item = inventory.getItemByItemId(piece.itemId());
-			if (item == null)
-			{
-				item = inventory.addItem(ItemProcessType.NONE, piece.itemId(), piece.count(), player, null);
-			}
-			inventory.equipItem(item);
-		}
+		TestGear.wear(player, loadout.pieces());
 	}
 
 	private static String effects(Creature creature)
@@ -316,57 +256,45 @@ class SkillLockTest
 	 */
 	private static List<Loadout> loadouts()
 	{
-		final List<List<Piece>> armours = List.of( //
-			List.of(), //
-			List.of(new Piece("heavy", 13432, 1), new Piece("", 13438, 1)), //
-			List.of(new Piece("light", 13433, 1), new Piece("", 13441, 1)), //
-			List.of(new Piece("robe", 13434, 1), new Piece("", 13444, 1)));
-
-		final List<List<Piece>> weapons = List.of( //
-			List.of(), //
-			List.of(new Piece("sword", 13457, 1)), //
-			List.of(new Piece("two-handed sword", 13458, 1)), //
-			List.of(new Piece("blunt", 13463, 1)), //
-			List.of(new Piece("two-handed blunt", 13464, 1)), //
-			List.of(new Piece("dagger", 13460, 1)), //
-			List.of(new Piece("dual daggers", 13884, 1)), //
-			List.of(new Piece("dual swords", 52, 1)), //
-			List.of(new Piece("fists", 13461, 1)), //
-			List.of(new Piece("polearm", 13462, 1)), //
-			List.of(new Piece("bow", 13467, 1), new Piece("", 1345, 1000)), //
-			List.of(new Piece("crossbow", 13469, 1), new Piece("", 9637, 1000)), //
-			List.of(new Piece("rapier", 13468, 1)), //
-			List.of(new Piece("ancient sword", 13470, 1)));
-
-		final List<String> oneHanded = List.of("sword", "blunt", "dagger", "rapier");
-		final List<List<Piece>> offHands = List.of(List.of(new Piece("shield", 13471, 1)), List.of(new Piece("sigil", 12813, 1)));
-
+		final List<Wear> armours = new ArrayList<>();
+		armours.add(null);
+		armours.addAll(List.of(TestGear.HEAVY, TestGear.LIGHT, TestGear.ROBE));
+		
+		final List<Weapon> weapons = new ArrayList<>();
+		weapons.add(null);
+		weapons.addAll(TestGear.WEAPONS);
+		
 		final List<Loadout> loadouts = new ArrayList<>();
-		for (List<Piece> armour : armours)
+		for (Wear armour : armours)
 		{
-			for (List<Piece> weapon : weapons)
+			for (Weapon weapon : weapons)
 			{
-				final List<List<Piece>> offHandChoices = new ArrayList<>();
-				offHandChoices.add(List.of());
-				if (weapon.isEmpty() || oneHanded.contains(weapon.get(0).name()))
+				final List<Wear> offHands = new ArrayList<>();
+				offHands.add(null);
+				if ((weapon == null) || weapon.oneHanded())
 				{
-					offHandChoices.addAll(offHands);
+					offHands.add(TestGear.SHIELD);
+					offHands.add(TestGear.SIGIL);
 				}
-
-				for (List<Piece> offHand : offHandChoices)
+				
+				for (Wear offHand : offHands)
 				{
 					final List<Piece> pieces = new ArrayList<>();
-					pieces.addAll(weapon);
-					pieces.addAll(offHand);
-					pieces.addAll(armour);
-
 					final StringJoiner name = new StringJoiner("+");
-					for (Piece piece : pieces)
+					if (weapon != null)
 					{
-						if (!piece.name().isEmpty())
-						{
-							name.add(piece.name());
-						}
+						pieces.addAll(weapon.pieces());
+						name.add(weapon.name());
+					}
+					if (offHand != null)
+					{
+						pieces.addAll(offHand.pieces());
+						name.add(offHand.name());
+					}
+					if (armour != null)
+					{
+						pieces.addAll(armour.pieces());
+						name.add(armour.name());
 					}
 					loadouts.add(new Loadout(name.length() == 0 ? "-" : name.toString(), List.copyOf(pieces)));
 				}

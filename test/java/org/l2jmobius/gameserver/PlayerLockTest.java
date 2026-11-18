@@ -14,6 +14,7 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.mechanics.skill.Skill;
 import org.l2jmobius.testing.Golden;
+import org.l2jmobius.testing.StatLine;
 import org.l2jmobius.testing.TestPlayers;
 import org.l2jmobius.testing.TestServer;
 
@@ -60,37 +61,10 @@ class PlayerLockTest
 	{
 		final List<String> lines = new ArrayList<>();
 		lines.add("# LOCK-PLAYER-0001: every class at the lowest and highest level it can have, made, levelled and taught by the server, naked, at full HP/MP/CP.");
-		lines.add("class\tid\tlevel\tskills\tmaxHp\tmaxMp\tmaxCp\tpAtk\tpDef\tmAtk\tmDef\taccuracy\tevasion\tcritical\tmCritical\tpAtkSpd\tmAtkSpd\trunSpeed\twalkSpeed\tattackRange\tSTR\tDEX\tCON\tINT\tWIT\tMEN\tmaxLoad");
+		lines.add("class\tid\tlevel\tskills\t" + StatLine.HEADER);
 		for (Player player : PLAYERS.values())
 		{
-			lines.add(String.join("\t", //
-				player.getPlayerClass().toString(), //
-				String.valueOf(player.getPlayerClass().getId()), //
-				String.valueOf(player.getLevel()), //
-				String.valueOf(player.getSkills().size()), //
-				String.valueOf(player.getMaxHp()), //
-				String.valueOf(player.getMaxMp()), //
-				String.valueOf(player.getMaxCp()), //
-				String.valueOf(player.getPAtk(null)), //
-				String.valueOf(player.getPDef(null)), //
-				String.valueOf(player.getMAtk(null, null)), //
-				String.valueOf(player.getMDef(null, null)), //
-				String.valueOf(player.getAccuracy()), //
-				String.valueOf(player.getEvasionRate(null)), //
-				String.valueOf(player.getCriticalHit(null, null)), //
-				String.valueOf(player.getMCriticalHit(null, null)), //
-				String.valueOf(player.getPAtkSpd()), //
-				String.valueOf(player.getMAtkSpd()), //
-				String.valueOf(player.getRunSpeed()), //
-				String.valueOf(player.getWalkSpeed()), //
-				String.valueOf(player.getPhysicalAttackRange()), //
-				String.valueOf(player.getSTR()), //
-				String.valueOf(player.getDEX()), //
-				String.valueOf(player.getCON()), //
-				String.valueOf(player.getINT()), //
-				String.valueOf(player.getWIT()), //
-				String.valueOf(player.getMEN()), //
-				String.valueOf(player.getMaxLoad())));
+			lines.add(player.getPlayerClass() + "\t" + player.getPlayerClass().getId() + "\t" + player.getLevel() + "\t" + player.getSkills().size() + "\t" + StatLine.of(player));
 		}
 		Golden.repository().assertMatches("player/class-stats.tsv", lines);
 	}

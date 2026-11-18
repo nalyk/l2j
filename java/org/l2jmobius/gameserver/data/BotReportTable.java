@@ -125,6 +125,8 @@ public class BotReportTable
 				final Calendar calendar = Calendar.getInstance();
 				calendar.set(Calendar.HOUR_OF_DAY, hour);
 				calendar.set(Calendar.MINUTE, minute);
+				calendar.set(Calendar.SECOND, 0);
+				calendar.set(Calendar.MILLISECOND, 0);
 				if (currentTime < calendar.getTimeInMillis())
 				{
 					calendar.set(Calendar.DAY_OF_YEAR, calendar.get(Calendar.DAY_OF_YEAR) - 1);
@@ -424,7 +426,9 @@ public class BotReportTable
 			final Calendar calendar = Calendar.getInstance();
 			calendar.set(Calendar.HOUR_OF_DAY, hour);
 			calendar.set(Calendar.MINUTE, minute);
-			if (calendar.getTimeInMillis() < currentTime)
+			calendar.set(Calendar.SECOND, 0);
+			calendar.set(Calendar.MILLISECOND, 0);
+			if (calendar.getTimeInMillis() <= currentTime)
 			{
 				calendar.add(Calendar.DAY_OF_YEAR, 1);
 			}

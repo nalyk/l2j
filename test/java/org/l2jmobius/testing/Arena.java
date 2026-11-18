@@ -1,11 +1,20 @@
 package org.l2jmobius.testing;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 
 import org.l2jmobius.gameserver.data.xml.NpcData;
+import org.l2jmobius.gameserver.entity.World;
+import org.l2jmobius.gameserver.entity.WorldObject;
+import org.l2jmobius.gameserver.entity.WorldRegion;
 import org.l2jmobius.gameserver.entity.actor.Creature;
+import org.l2jmobius.gameserver.entity.actor.Npc;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.instance.Monster;
+import org.l2jmobius.gameserver.entity.actor.templates.NpcTemplate;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.spawns.Spawn;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.managers.ZoneManager;
@@ -54,12 +63,46 @@ public final class Arena
 	}
 
 	/**
+	 * A fresh NPC of {@code template} spawned in the arena facing east the way the datapack spawns one, through a {@link Spawn}: its own class, a home to return to, its minions, its scripts' spawn hooks, its AI left on. It never respawns.
+	 */
+	public static Npc spawn(NpcTemplate template)
+	{
+		final Spawn spawn;
+		try
+		{
+			spawn = new Spawn(template);
+		}
+		catch (ReflectiveOperationException | ClassCastException e)
+		{
+			throw new IllegalArgumentException("no spawn can be made of " + template.getId(), e);
+		}
+		spawn.setXYZ(X, Y, Z);
+		spawn.setHeading(0);
+		spawn.setAmount(1);
+		spawn.stopRespawn();
+		final Npc npc = spawn.doSpawn(false);
+		if (npc == null)
+		{
+			throw new IllegalStateException("the spawn of " + template.getId() + " made nothing");
+		}
+		return npc;
+	}
+
+	/**
 	 * Spawns {@code player} close in front of {@code target}, facing it.
 	 */
 	public static void placeInFront(Player player, Creature target)
 	{
+		placeInFront(player, target, DISTANCE);
+	}
+
+	/**
+	 * Spawns {@code player} {@code distance} east of {@code target}, facing it.
+	 */
+	public static void placeInFront(Player player, Creature target, int distance)
+	{
 		player.setHeading(32768);
-		player.spawnMe(target.getX() + DISTANCE, target.getY(), target.getZ());
+		player.spawnMe(target.getX() + distance, target.getY(), target.getZ());
 	}
 
 	/**
@@ -73,5 +116,48 @@ public final class Arena
 			final long next = Math.min(GameScheduler.nextDue(), end);
 			GameScheduler.advance(Math.max(0, next - GameClock.millis()));
 		}
+	}
+
+	/**
+	 * Steps the paused world from event to event for {@code millis} of game time, running {@code observer} after each step, so it sees every state the world passes through.
+	 */
+	public static void run(long millis, Runnable observer)
+	{
+		final long end = GameClock.millis() + millis;
+		while (GameClock.millis() < end)
+		{
+			final long next = Math.min(GameScheduler.nextDue(), end);
+			GameScheduler.advance(Math.max(0, next - GameClock.millis()));
+			observer.run();
+		}
+	}
+
+	/**
+	 * Removes every NPC and every item on the ground in and around the arena (its region and the ones next to it): what a case's fight dropped, summoned or had its scripts spawn, so the next case meets only what it puts there. Players are left to the cases that made them.
+	 * @return how many objects were removed.
+	 */
+	public static int sweep()
+	{
+		final List<WorldObject> left = new ArrayList<>();
+		for (WorldRegion region : World.getRegion(X, Y, Z).getSurroundingRegions())
+		{
+			left.addAll(region.getVisibleObjects());
+		}
+
+		int removed = 0;
+		for (WorldObject object : left)
+		{
+			if (object instanceof Npc npc)
+			{
+				npc.deleteMe();
+				removed++;
+			}
+			else if ((object instanceof Item item) && item.isSpawned())
+			{
+				item.decayMe();
+				removed++;
+			}
+		}
+		return removed;
 	}
 }

@@ -53,3 +53,18 @@ Upstream files use CRLF line endings. Patches keep them.
 - Proof: `GameSchedulerTest` (a sleeping task does not stop the world and wakes in order), `CoreClockCoverageTest` (no core
   class waits on real time in a way the agent cannot redirect), `PausedWorldTest` (the world, festival manager included,
   advances through game time without blocking).
+
+## CP-0004 The bot report reset is scheduled for tomorrow, not for now
+
+- Files: `java/org/l2jmobius/gameserver/data/BotReportTable.java`
+- Reason: the daily reset of bot report points is computed as "today at BotReportPointsResetHour" by setting only the hour
+  and minute of a calendar for the present, which keeps the present's seconds and milliseconds. When the reset task runs at
+  that minute and schedules the next one, "today at 00:00" is the present itself, which is not before the present, so the
+  next reset is due at once. The task reschedules itself with no delay until the clock leaves the reset minute: in production
+  it spins a pool thread and resets every reporter's points thousands of times each night; in a paused world, where time
+  does not move by itself, it never ends. The AI lock is the first case to run the world through a midnight and found it.
+- Change: the reset point is the start of its minute (seconds and milliseconds 0), both where the next reset is scheduled and
+  where the last one is computed at load, and the next reset is the first one strictly after the present.
+- Invariant: points still reset once a day at the configured hour and minute, now exactly once.
+- Proof: `AiLockTest.theWorldRanThroughMidnightWithoutAFailedTask` (its sweep runs the world through 00:00; before the
+  patch the scheduler stopped there with the reset task run a million times without game time moving).

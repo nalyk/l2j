@@ -1,9 +1,12 @@
 package org.l2jmobius.gameserver.livingchronicle.clock;
 
 import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -43,6 +46,9 @@ public final class GameScheduler
 	private static final long MAX_DELAY_MILLIS = 3155695200000L;
 
 	private static final int MAX_RUNS_PER_INSTANT = 1_000_000;
+
+	/** How many of the last runs before that limit are tallied, so the failure names the tasks that kept the instant from ending. */
+	private static final int TALLIED_RUNS = 10_000;
 
 	/** How long, in real time, an advance may take before it is declared stuck. */
 	private static final long STUCK_AFTER_SECONDS = Long.getLong("lc.scheduler.stuckAfterSeconds", 600);
@@ -463,6 +469,7 @@ public final class GameScheduler
 		_simThreadSetup.run();
 
 		int runsAtThisInstant = 0;
+		final Map<String, Integer> tally = new HashMap<>();
 		while (_controlled)
 		{
 			final Event event = QUEUE.pollFirst();
@@ -504,13 +511,32 @@ public final class GameScheduler
 			if (++runsAtThisInstant > MAX_RUNS_PER_INSTANT)
 			{
 				QUEUE.add(event);
-				_abort = new IllegalStateException("more than " + MAX_RUNS_PER_INSTANT + " task runs without game time moving; last was " + ((Task) event)._runnable.getClass().getName());
+				_abort = new IllegalStateException("more than " + MAX_RUNS_PER_INSTANT + " task runs without game time moving at " + GameClock.millis() + "; of the last " + TALLIED_RUNS + ", " + mostRun(tally));
+				tally.clear();
 				continue;
+			}
+			if (runsAtThisInstant > (MAX_RUNS_PER_INSTANT - TALLIED_RUNS))
+			{
+				tally.merge(((Task) event)._runnable.getClass().getName(), 1, Integer::sum);
+			}
+			else if (!tally.isEmpty())
+			{
+				tally.clear();
 			}
 
 			_runs++;
 			((Task) event).run();
 		}
+	}
+
+	/**
+	 * The tasks of {@code tally} that ran most, most first, as "name (runs)".
+	 */
+	private static String mostRun(Map<String, Integer> tally)
+	{
+		final StringJoiner names = new StringJoiner(", ");
+		tally.entrySet().stream().sorted(Map.Entry.<String, Integer> comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey())).limit(5).forEach(entry -> names.add(entry.getKey() + " (" + entry.getValue() + ")"));
+		return names.toString();
 	}
 
 	/**

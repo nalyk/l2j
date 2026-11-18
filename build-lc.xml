@@ -21,6 +21,8 @@
 	<property name="lock.dir" location="test/lock" />
 	<property name="lock.actual" location="${build}/lock-actual" />
 	<property name="truth.agent" location="${build}/lc-truth-agent.jar" />
+	<!-- Which test classes run. The gate runs them all; ./build.sh test -Dtest.only=AiLockTest runs one while working on it. -->
+	<property name="test.only" value="*Test" />
 
 	<path id="test.classpath">
 		<pathelement location="${test.bin}" />
@@ -84,7 +86,7 @@
 		<junitlauncher failureProperty="tests.failed" printSummary="true">
 			<classpath refid="test.classpath" />
 			<testclasses outputdir="${test.reports}">
-				<fileset dir="${test.bin}" includes="**/*Test.class" />
+				<fileset dir="${test.bin}" includes="**/${test.only}.class" />
 				<listener type="legacy-plain" sendSysOut="true" sendSysErr="true" />
 				<listener type="legacy-xml" sendSysOut="true" sendSysErr="true" />
 				<fork dir="${runtime.game}" forkMode="perTestClass">

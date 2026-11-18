@@ -239,6 +239,8 @@ class GameSchedulerTest
 
 		final IllegalStateException stopped = assertThrows(IllegalStateException.class, () -> GameScheduler.advance(0));
 		assertTrue(stopped.getMessage().contains("without game time moving"), stopped.getMessage());
+		// The failure names what spun, which the task about to run when the limit is reached need not be.
+		assertTrue(stopped.getMessage().contains(spinner[0].getClass().getName() + " (10000)"), stopped.getMessage());
 	}
 
 	@Test

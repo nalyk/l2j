@@ -7,11 +7,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.l2jmobius.commons.util.Rnd;
 import org.l2jmobius.gameserver.GameServer;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
+import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
 
 /**
  * The real game server, booted once inside the test JVM.
@@ -35,6 +40,9 @@ public final class TestServer
 	private static final Pattern LOG_RECORD = Pattern.compile("^\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3}\\t([A-Z]+)\\t\\d+\\t([^\\t]*)\\t(.*)$");
 
 	private static final String BOOT_COMPLETE = "GameServer: Server loaded in ";
+
+	/** Threads Mobius starts itself whose loops are part of the world: the one that turns game time, day and night. */
+	private static final Set<String> COOPERATIVE_THREADS = Set.of("GameTimeTaskManager");
 
 	private static TestServer _instance;
 
@@ -72,6 +80,35 @@ public final class TestServer
 		return _bootLog;
 	}
 
+	/**
+	 * Boots a world that is standing still: the game clock stopped at {@code epochMillis}, every scheduled task queued instead of run, and all of it drawing from the keyed stream {@code (seed, "world", 0)}.
+	 * <p>
+	 * Such a world is a function of the code, the datapack, the instant and the seed. Nothing in it moves until the test advances {@link GameScheduler}.
+	 * </p>
+	 */
+	public static synchronized TestServer bootPaused(long epochMillis, long seed) throws Exception
+	{
+		if (_instance != null)
+		{
+			throw new IllegalStateException("the server is already booted in this JVM");
+		}
+
+		// One stream for the whole world. It is shared by every thread of the simulation, which is safe because only one of them runs at a time.
+		final KeyedRandom world = KeyedRandom.of(seed, "world", 0);
+		GameClock.set(epochMillis);
+		GameScheduler.takeControl(() -> Rnd.bind(world), COOPERATIVE_THREADS);
+		Rnd.bind(world);
+
+		final TestServer server = boot();
+
+		// Until its first sleep the game-time thread still runs beside us; from here on it only runs when the simulation wakes it.
+		GameScheduler.awaitCooperativeThreads(10_000);
+		return server;
+	}
+
+	/**
+	 * Boots the server as production would run it: real time, real thread pool, unseeded randomness.
+	 */
 	public static synchronized TestServer boot() throws Exception
 	{
 		if (_instance != null)

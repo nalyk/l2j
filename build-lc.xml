@@ -97,6 +97,13 @@
 					<jvmarg value="-javaagent:${truth.agent}" />
 					<!-- Goldens print dates. -->
 					<jvmarg value="-Duser.timezone=UTC" />
+					<!--
+						Every identity hash is the same constant, so hash tables keyed by objects without a hashCode of
+						their own (Mobius's world objects, every enum) iterate in insertion order instead of an order
+						that changes from run to run. Without this no world is reproducible. Costs lookups, not correctness.
+					-->
+					<jvmarg value="-XX:+UnlockExperimentalVMOptions" />
+					<jvmarg value="-XX:hashCode=2" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
 					<sysproperty key="lc.classes.dir" value="${build.bin}" />
 					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->

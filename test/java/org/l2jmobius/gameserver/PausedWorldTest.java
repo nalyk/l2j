@@ -1,0 +1,92 @@
+package org.l2jmobius.gameserver;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
+
+import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
+import org.l2jmobius.testing.Golden;
+import org.l2jmobius.testing.TestServer;
+import org.l2jmobius.testing.WorldSummary;
+
+/**
+ * LOCK-WORLD: the world is a function of the code, the datapack, the instant it boots at and its seed.
+ * <p>
+ * The server boots standing still (clock stopped, every task queued, one random stream) and is then advanced through game time by hand. What the world looks like at boot and after ten minutes is recorded in goldens. If two runs of this test disagree, something in the server still depends on real time, real threads or unseeded randomness, and no golden of anything that moves could be trusted.
+ * </p>
+ * <p>
+ * It also locks behaviour in the large: spawn placement, respawn and AI scheduling, the festival and siege schedulers and every periodic manager all feed these summaries, so a change to any of them shows up here even before a narrower lock exists for it.
+ * </p>
+ */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class PausedWorldTest
+{
+	/** 2026-11-09T09:21:30Z, the fork point. Day in game time, so the game clock does not flip to night while booting. */
+	private static final long START = 1_794_216_090_000L;
+	private static final long SEED = 1;
+
+	private static final long TEN_MINUTES = 600_000;
+
+	@BeforeAll
+	static void boot() throws Exception
+	{
+		TestServer.bootPaused(START, SEED);
+	}
+
+	/**
+	 * The suite's JVM flag for constant identity hashes is experimental. If a JDK ever drops it, say so here instead of letting worlds quietly stop being reproducible.
+	 */
+	@Test
+	@Order(0)
+	void identityHashesAreConstantInTheSuite()
+	{
+		assertEquals(System.identityHashCode(new Object()), System.identityHashCode(new Object()), "the suite must run with -XX:hashCode=2");
+	}
+
+	@Test
+	@Order(1)
+	void theWorldAtBootIsTheRecordedOne()
+	{
+		assertEquals(START, GameClock.millis(), "booting must not move game time");
+
+		final List<String> summary = new ArrayList<>();
+		summary.add("# LOCK-WORLD-0001: the world as booted at " + START + " with seed " + SEED + ", before any scheduled task has run.");
+		summary.add("pending-tasks\t" + GameScheduler.pendingTasks());
+		summary.addAll(WorldSummary.of());
+		Golden.repository().writeForDiagnosis("world/at-boot.detail.tsv", WorldSummary.detail());
+		Golden.repository().assertMatches("world/at-boot.tsv", summary);
+	}
+
+	@Test
+	@Order(2)
+	void tenMinutesLaterTheWorldIsTheRecordedOne()
+	{
+		final int startupRuns = GameScheduler.advance(0);
+		final int runs = GameScheduler.advance(TEN_MINUTES);
+		assertEquals(START + TEN_MINUTES, GameClock.millis());
+
+		final List<String> summary = new ArrayList<>();
+		summary.add("# LOCK-WORLD-0002: the same world after " + TEN_MINUTES + " ms of game time.");
+		summary.add("task-runs-due-at-boot\t" + startupRuns);
+		summary.add("task-runs-in-ten-minutes\t" + runs);
+		summary.add("pending-tasks\t" + GameScheduler.pendingTasks());
+		summary.addAll(WorldSummary.of());
+		Golden.repository().writeForDiagnosis("world/after-ten-minutes.detail.tsv", WorldSummary.detail());
+		Golden.repository().assertMatches("world/after-ten-minutes.tsv", summary);
+	}
+
+	@Test
+	@Order(3)
+	void noScheduledTaskFailed()
+	{
+		assertEquals(List.of(), GameScheduler.failures());
+	}
+}

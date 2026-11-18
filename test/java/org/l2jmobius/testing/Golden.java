@@ -91,6 +91,25 @@ public final class Golden
 		}
 	}
 
+	/**
+	 * Writes detail next to what a comparison observed, for whoever has to work out why a golden changed. It is never compared with anything.
+	 * @param name path relative to the directory observed behaviour is written to
+	 * @param lines the detail
+	 */
+	public void writeForDiagnosis(String name, List<String> lines)
+	{
+		final Path file = _actualDir.resolve(name);
+		try
+		{
+			Files.createDirectories(file.getParent());
+			Files.write(file, lines, StandardCharsets.UTF_8);
+		}
+		catch (IOException e)
+		{
+			throw new UncheckedIOException(e);
+		}
+	}
+
 	private static String describeDifference(String name, List<String> expected, List<String> lines, Path actual)
 	{
 		final StringBuilder report = new StringBuilder();

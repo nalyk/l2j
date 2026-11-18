@@ -4,7 +4,7 @@
 
 	Upstream's build.xml is imported untouched and stays the only definition of
 	how the server is compiled and packaged. This file adds what upstream does
-	not have: a class fingerprint. Run it through ./build.sh.
+	not have: a class fingerprint and the test suite. Run it through ./build.sh.
 -->
 <project name="LivingChronicle" default="gate" basedir=".">
 
@@ -12,6 +12,18 @@
 	<property name="build" location="build" />
 
 	<import file="build.xml" />
+
+	<property name="test.src" location="test/java" />
+	<property name="test.bin" location="${build}/test-bin" />
+	<property name="test.reports" location="${build}/test-reports" />
+	<property name="test.libs" location="/opt/lc/test-libs" />
+
+	<path id="test.classpath">
+		<pathelement location="${test.bin}" />
+		<pathelement location="${build.bin}" />
+		<path refid="classpath" />
+		<fileset dir="${test.libs}" includes="*.jar" />
+	</path>
 
 	<target name="fingerprint" depends="compile" description="Record one digest over every compiled class.">
 		<!--
@@ -28,6 +40,35 @@
 
 	<target name="dist" depends="fingerprint, cleanup" description="Package the server exactly as upstream does." />
 
-	<target name="gate" depends="dist" description="Everything a change must pass." />
+	<target name="compile-tests" depends="compile" description="Compile the test suite.">
+		<delete dir="${test.bin}" quiet="true" />
+		<mkdir dir="${test.bin}" />
+		<javac srcdir="${test.src}" destdir="${test.bin}" classpathref="test.classpath" debug="true" includeantruntime="false" release="27" encoding="UTF-8">
+			<compilerarg value="-Xlint:all" />
+			<compilerarg value="-Werror" />
+		</javac>
+	</target>
+
+	<target name="test" depends="compile-tests" description="Run the test suite, one JVM per test class.">
+		<delete dir="${test.reports}" quiet="true" />
+		<mkdir dir="${test.reports}" />
+		<!--
+			Mobius is built from static singletons. A fresh JVM per class is the
+			only way one test cannot leak state into the next.
+		-->
+		<junitlauncher haltOnFailure="true" printSummary="true">
+			<classpath refid="test.classpath" />
+			<testclasses outputdir="${test.reports}">
+				<fileset dir="${test.bin}" includes="**/*Test.class" />
+				<listener type="legacy-plain" sendSysOut="true" sendSysErr="true" />
+				<listener type="legacy-xml" sendSysOut="true" sendSysErr="true" />
+				<fork forkMode="perTestClass">
+					<jvmarg value="-Dfile.encoding=UTF-8" />
+				</fork>
+			</testclasses>
+		</junitlauncher>
+	</target>
+
+	<target name="gate" depends="dist, test" description="Everything a change must pass." />
 
 </project>

@@ -66,6 +66,7 @@ class SkillLockTest
 	{
 		_server = TestServer.bootPaused(START, SEED);
 		Arena.checkEmpty();
+		Arena.wake();
 
 		final List<PlayerClass> classes = new ArrayList<>();
 		for (PlayerClass playerClass : PlayerClass.values())
@@ -149,7 +150,18 @@ class SkillLockTest
 		return chosen;
 	}
 
+	/**
+	 * One case, all of it on its own stream: making and dressing the caster, setting the scene, the cast, the clean-up. What the scene's setting-up sets going (the regions it wakes) draws on the case's stream too, not on whatever the world has drawn by then.
+	 */
 	private static String use(PlayerClass playerClass, Skill skill, Loadout loadout)
+	{
+		final String[] line = new String[1];
+		Arena.align();
+		_server.withRandom(KeyedRandom.of(SEED, "lock.skill", (playerClass.getId() * 100_000L) + skill.getId()), () -> line[0] = useOnItsStream(playerClass, skill, loadout));
+		return line[0];
+	}
+
+	private static String useOnItsStream(PlayerClass playerClass, Skill skill, Loadout loadout)
 	{
 		final Player caster = TestPlayers.create(playerClass, LEVEL);
 		if (loadout != null)
@@ -171,15 +183,11 @@ class SkillLockTest
 		final int failuresBefore = GameScheduler.failures().size();
 		final long start = GameClock.millis();
 
-		final boolean[] accepted = new boolean[1];
-		_server.withRandom(KeyedRandom.of(SEED, "lock.skill", (playerClass.getId() * 100_000L) + skill.getId()), () ->
-		{
-			accepted[0] = caster.useMagic(skill, false, true);
-			Arena.runWhile(() -> caster.isCastingNow() || caster.isCastingSimultaneouslyNow(), CAST_LIMIT_MILLIS);
-		});
+		final boolean accepted = caster.useMagic(skill, false, true);
+		Arena.runWhile(() -> caster.isCastingNow() || caster.isCastingSimultaneouslyNow(), CAST_LIMIT_MILLIS);
 
 		final String result;
-		if (!accepted[0])
+		if (!accepted)
 		{
 			result = "refused";
 		}

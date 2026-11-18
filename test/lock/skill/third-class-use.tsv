@@ -1,35 +1,35 @@
 # LOCK-SKILL-0001: every skill a level 85 third class can use, used once by a fresh character (useMagic, then the world stepped until the cast is over) on a fresh Maluk Warlord in front of it if harmful, on itself if not,
 # holding the first loadout the skill's own conditions accept, on the stream (1, "lock.skill", class * 100000 + skill). Costs and losses are before minus after; effects are skill-level:abnormal seconds; - is none.
 class	skill	level	name	on	gear	result	castMillis	reuseMillis	mpSpent	hpSpent	targetHpLost	targetMpLost	targetDead	charges	souls	casterEffects	targetEffects	taskFailures
-DUELIST	1	37	Triple Slash	target	dual swords	used	1589	3000	86.0	0.0	164.0	0.0	false	0	0	-	-	-
-DUELIST	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	54.0	0.0	false	0	0	-	-	-
+DUELIST	1	37	Triple Slash	target	dual swords	used	1589	3000	86.0	0.0	158.0	0.0	false	0	0	-	-	-
+DUELIST	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	48.0	0.0	false	0	0	-	-	-
 DUELIST	5	31	Double Sonic Slash	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DUELIST	6	37	Sonic Blaster	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DUELIST	7	28	Sonic Storm	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DUELIST	8	8	Sonic Focus	self	sword	used	647	-	5.0	25.0	0.0	0.0	false	1	0	-	-	-
 DUELIST	9	34	Sonic Buster	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DUELIST	16	9	Mortal Blow	target	dagger	used	1134	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
-DUELIST	56	9	Power Shot	target	bow	used	3726	6000	34.0	0.0	73.0	0.0	false	0	0	-	-	-
+DUELIST	16	9	Mortal Blow	target	dagger	used	1134	3000	15.0	0.0	42.65071963840455	0.0	false	0	0	-	-	-
+DUELIST	56	9	Power Shot	target	bow	used	3726	6000	34.0	0.0	72.0	0.0	false	0	0	-	-	-
 DUELIST	75	1	Detect Insect Weakness	self	-	used	1363	3000	14.0	0.0	0.0	0.0	false	0	0	75-1:600	-	-
 DUELIST	78	2	War Cry	self	-	used	1363	45000	19.0	0.0	0.0	0.0	false	0	0	78-2:60	-	-
 DUELIST	80	1	Detect Beast Weakness	self	-	used	1363	3000	24.0	0.0	0.0	0.0	false	0	0	80-1:600	-	-
 DUELIST	87	1	Detect Animal Weakness	self	-	used	1363	3000	18.0	0.0	0.0	0.0	false	0	0	87-1:600	-	-
 DUELIST	88	1	Detect Dragon Weakness	self	-	used	1363	3000	27.0	0.0	0.0	0.0	false	0	0	88-1:600	-	-
-DUELIST	100	15	Stun Attack	target	blunt	used	1294	3000	33.0	0.0	53.0	0.0	false	0	0	-	-	-
+DUELIST	100	15	Stun Attack	target	blunt	used	1294	3000	33.0	0.0	62.0	0.0	false	0	0	-	-	-
 DUELIST	104	1	Detect Plant Weakness	self	-	used	1363	3000	21.0	0.0	0.0	0.0	false	0	0	104-1:600	-	-
 DUELIST	121	1	Battle Roar	self	-	used	1363	150000	13.0	-575.0	0.0	0.0	false	0	0	121-1:600	-	-
-DUELIST	190	37	Fatal Strike	target	sword	used	1294	3000	75.0	0.0	230.0	0.0	false	0	0	-	-	-
+DUELIST	190	37	Fatal Strike	target	sword	used	1294	3000	75.0	0.0	183.0	0.0	false	0	0	-	-	-
 DUELIST	226	1	Relax	self	-	used	0	-	2.0	0.0	0.0	0.0	false	0	0	226-1:-1	-	-
-DUELIST	245	15	Wild Sweep	target	polearm	used	1508	4000	34.0	0.0	61.0	0.0	false	0	0	-	-	-
-DUELIST	255	15	Power Smash	target	sword	used	1294	3000	34.0	0.0	57.0	0.0	false	0	0	-	-	-
+DUELIST	245	15	Wild Sweep	target	polearm	used	1508	4000	34.0	0.0	53.0	0.0	false	0	0	-	-	-
+DUELIST	255	15	Power Smash	target	sword	used	1294	3000	34.0	0.0	68.0	0.0	false	0	0	-	-	-
 DUELIST	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
-DUELIST	260	37	Hammer Crush	target	blunt	used	1294	3000	72.0	0.0	167.0	0.0	false	0	0	-	-	-
+DUELIST	260	37	Hammer Crush	target	blunt	used	1294	3000	72.0	0.0	316.0	0.0	false	0	0	-	-	-
 DUELIST	261	22	Triple Sonic Slash	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DUELIST	287	3	Lionheart	self	-	used	1363	150000	29.0	0.0	0.0	0.0	false	0	0	287-3:60	-	-
 DUELIST	297	2	Duelist Spirit	self	-	used	1363	30000	34.0	0.0	0.0	0.0	false	0	0	297-2:60	-	-
 DUELIST	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	312-20:-1	-	-
 DUELIST	340	1	Riposte Stance	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	340-1:-1	-	-
-DUELIST	345	1	Sonic Rage	target	dual swords	used	1256	-	5.0	50.0	64.0	0.0	false	1	0	-	-	-
+DUELIST	345	1	Sonic Rage	target	dual swords	used	1256	-	5.0	50.0	53.0	0.0	false	1	0	-	-	-
 DUELIST	359	1	Eye of Hunter	self	-	used	1818	3000	70.0	0.0	0.0	0.0	false	0	0	359-1:600	-	-
 DUELIST	360	1	Eye of Slayer	self	-	used	1818	3000	71.0	0.0	0.0	0.0	false	0	0	360-1:600	-	-
 DUELIST	424	3	War Frenzy	self	-	used	0	-	15.0	0.0	0.0	0.0	false	0	0	424-3:-1	-	-
@@ -41,25 +41,25 @@ DUELIST	775	1	Weapon Blockade	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0
 DUELIST	994	1	Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DUELIST	995	1	Rush Impact	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DUELIST	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	50.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	16	9	Mortal Blow	target	dagger	used	1134	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	36	37	Whirlwind	target	polearm	used	1510	4000	75.0	0.0	134.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	48	37	Thunder Storm	target	polearm	used	1508	5000	107.0	0.0	145.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	16	9	Mortal Blow	target	dagger	used	1134	3000	15.0	0.0	42.21990428851859	0.0	false	0	0	-	-	-
+DREADNOUGHT	36	37	Whirlwind	target	polearm	used	1510	4000	75.0	0.0	135.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	48	37	Thunder Storm	target	polearm	used	1508	5000	107.0	0.0	135.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	56	9	Power Shot	target	bow	used	3726	6000	34.0	0.0	78.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	75	1	Detect Insect Weakness	self	-	used	1363	3000	14.0	0.0	0.0	0.0	false	0	0	75-1:600	-	-
 DREADNOUGHT	78	1	War Cry	self	-	used	1363	45000	10.0	0.0	0.0	0.0	false	0	0	78-1:60	-	-
 DREADNOUGHT	80	1	Detect Beast Weakness	self	-	used	1363	3000	24.0	0.0	0.0	0.0	false	0	0	80-1:600	-	-
 DREADNOUGHT	87	1	Detect Animal Weakness	self	-	used	1363	3000	18.0	0.0	0.0	0.0	false	0	0	87-1:600	-	-
 DREADNOUGHT	88	1	Detect Dragon Weakness	self	-	used	1363	3000	27.0	0.0	0.0	0.0	false	0	0	88-1:600	-	-
-DREADNOUGHT	100	15	Stun Attack	target	blunt	used	1294	3000	33.0	0.0	69.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	100	15	Stun Attack	target	blunt	used	1294	3000	33.0	0.0	59.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	104	1	Detect Plant Weakness	self	-	used	1363	3000	21.0	0.0	0.0	0.0	false	0	0	104-1:600	-	-
-DREADNOUGHT	116	14	Howl	target	-	used	1090	2000	53.0	0.0	0.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	121	6	Battle Roar	self	-	used	1363	150000	33.0	-2166.0	0.0	0.0	false	0	0	121-6:1200	-	-
+DREADNOUGHT	116	14	Howl	target	-	used	1090	2000	53.0	0.0	0.0	0.0	false	0	0	-	116-14:17	-
+DREADNOUGHT	121	6	Battle Roar	self	-	used	1363	150000	33.0	-2166.0	0.0	0.0	false	0	0	121-6:600	-	-
 DREADNOUGHT	130	2	Thrill Fight	self	-	used	1363	3000	25.0	0.0	0.0	0.0	false	0	0	130-2:300	-	-
 DREADNOUGHT	181	1	Revival	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	226	1	Relax	self	-	used	0	-	2.0	0.0	0.0	0.0	false	0	0	226-1:-1	-	-
-DREADNOUGHT	245	15	Wild Sweep	target	polearm	used	1508	4000	34.0	0.0	52.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	255	15	Power Smash	target	sword	used	1294	3000	34.0	0.0	58.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	245	15	Wild Sweep	target	polearm	used	1508	4000	34.0	0.0	61.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	255	15	Power Smash	target	sword	used	1294	3000	34.0	0.0	56.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
 DREADNOUGHT	286	3	Provoke	target	-	used	1363	4000	83.0	0.0	0.0	0.0	false	0	0	-	286-3:8	-
 DREADNOUGHT	287	3	Lionheart	self	-	used	1363	150000	29.0	0.0	0.0	0.0	false	0	0	287-3:60	-	-
@@ -67,22 +67,22 @@ DREADNOUGHT	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	312
 DREADNOUGHT	317	5	Focus Attack	self	-	used	0	-	34.0	0.0	0.0	0.0	false	0	0	317-5:-1	-	-
 DREADNOUGHT	320	10	Wrath	target	polearm	used	1508	30000	75.0	0.0	0.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	339	1	Parry Stance	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	339-1:-1	-	-
-DREADNOUGHT	347	1	Earthquake	target	polearm	used	1508	8000	78.0	340.0	277.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	347	1	Earthquake	target	polearm	used	1508	8000	78.0	340.0	556.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	359	1	Eye of Hunter	self	-	used	1818	3000	70.0	0.0	0.0	0.0	false	0	0	359-1:600	-	-
 DREADNOUGHT	360	1	Eye of Slayer	self	-	used	1818	3000	71.0	0.0	0.0	0.0	false	0	0	360-1:600	-	-
-DREADNOUGHT	361	1	Shock Blast	target	polearm	used	2094	8000	53.0	507.0	146.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	361	1	Shock Blast	target	polearm	used	2094	8000	53.0	507.0	144.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	421	5	Fell Swoop	self	polearm	used	1675	75000	34.0	0.0	0.0	0.0	false	0	0	421-5:120	-	-
-DREADNOUGHT	422	3	Polearm Accuracy	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	422-3:-1	-	-
+DREADNOUGHT	422	3	Polearm Accuracy	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	422-3:-2	-	-
 DREADNOUGHT	424	3	War Frenzy	self	-	used	0	-	15.0	0.0	0.0	0.0	false	0	0	424-3:-1	-	-
 DREADNOUGHT	440	1	Braveheart	self	-	used	1363	150000	57.0	0.0	0.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	452	5	Shock Stomp	target	polearm	used	837	5000	52.0	0.0	0.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	457	1	Symbol of Honor	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	920	37	Power Crush	target	polearm	used	1508	3000	77.0	0.0	170.0	0.0	false	0	0	-	-	-
-DREADNOUGHT	921	1	Cursed Pierce	target	polearm	used	1508	3000	77.0	0.0	194.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	920	37	Power Crush	target	polearm	used	1508	3000	77.0	0.0	168.0	0.0	false	0	0	-	-	-
+DREADNOUGHT	921	1	Cursed Pierce	target	polearm	used	1508	3000	77.0	0.0	211.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	994	1	Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	995	1	Rush Impact	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DREADNOUGHT	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-PHOENIX_KNIGHT	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	46.0	0.0	false	0	0	-	-	-
+PHOENIX_KNIGHT	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	49.0	0.0	false	0	0	-	-	-
 PHOENIX_KNIGHT	16	9	Mortal Blow	target	dagger	used	1134	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 PHOENIX_KNIGHT	18	37	Aura of Hate	target	-	used	909	40000	102.0	0.0	0.0	0.0	false	0	0	-	18-37:3	-
 PHOENIX_KNIGHT	28	49	Aggression	target	-	used	818	6000	0.0	0.0	0.0	0.0	false	0	0	-	28-49:3	-
@@ -107,10 +107,10 @@ PHOENIX_KNIGHT	322	6	Shield Fortress	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	
 PHOENIX_KNIGHT	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
 PHOENIX_KNIGHT	341	1	Touch of Life	self	-	used	1636	300000	0.0	0.0	0.0	0.0	false	0	0	341-1:120	-	-
 PHOENIX_KNIGHT	350	1	Physical Mirror	self	shield	used	1818	150000	36.0	0.0	0.0	0.0	false	0	0	350-1:300	-	-
-PHOENIX_KNIGHT	353	1	Shield Slam	target	shield	used	1818	8000	35.0	0.0	0.0	0.0	false	0	0	-	353-1:35	-
+PHOENIX_KNIGHT	353	1	Shield Slam	target	shield	used	1818	8000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 PHOENIX_KNIGHT	368	1	Vengeance	target	shield	used	909	900000	35.0	0.0	0.0	0.0	false	0	0	368-1:30	-	-
-PHOENIX_KNIGHT	400	10	Tribunal	target	sword	used	1438	4000	72.0	0.0	125.0	0.0	false	0	0	-	400-10:19	-
-PHOENIX_KNIGHT	403	10	Shackle	target	-	used	1818	4000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
+PHOENIX_KNIGHT	400	10	Tribunal	target	sword	used	1438	4000	72.0	0.0	133.0	0.0	false	0	0	-	-	-
+PHOENIX_KNIGHT	403	10	Shackle	target	-	used	1818	4000	34.0	0.0	0.0	0.0	false	0	0	-	403-10:6	-
 PHOENIX_KNIGHT	404	5	Mass Shackling	target	-	used	2727	8000	51.0	0.0	0.0	0.0	false	0	0	-	-	-
 PHOENIX_KNIGHT	405	10	Banish Undead	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 PHOENIX_KNIGHT	406	3	Angelic Icon	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -121,18 +121,18 @@ PHOENIX_KNIGHT	528	1	Shield of Faith	self	-	used	909	900000	43.0	0.0	0.0	0.0	fal
 PHOENIX_KNIGHT	810	1	Vanguard	self	-	used	5000	30000	31.0	0.0	0.0	0.0	false	0	0	810-1:21600	-	-
 PHOENIX_KNIGHT	916	4	Shield Deflect Magic	self	shield	used	500	45000	29.0	0.0	0.0	0.0	false	0	0	916-4:8	-	-
 PHOENIX_KNIGHT	982	3	Combat Aura	self	-	used	1363	2000	52.0	0.0	0.0	0.0	false	0	0	982-3:1200	-	-
-PHOENIX_KNIGHT	984	25	Shield Strike	target	shield	used	1327	6000	83.0	0.0	175.0	0.0	false	0	0	-	-	-
+PHOENIX_KNIGHT	984	25	Shield Strike	target	shield	used	1327	6000	83.0	0.0	206.0	0.0	false	0	0	-	-	-
 PHOENIX_KNIGHT	985	1	Challenge for Fate	target	-	used	909	45000	0.0	0.0	0.0	0.0	false	0	0	6913-1:15	985-1:4	-
 PHOENIX_KNIGHT	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-HELL_KNIGHT	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
+HELL_KNIGHT	3	9	Power Strike	target	sword	used	1294	3000	17.0	0.0	39.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	16	9	Mortal Blow	target	dagger	used	1134	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	18	37	Aura of Hate	target	-	used	909	40000	102.0	0.0	0.0	0.0	false	0	0	-	18-37:3	-
 HELL_KNIGHT	28	49	Aggression	target	-	used	818	6000	0.0	0.0	0.0	0.0	false	0	0	-	28-49:3	-
 HELL_KNIGHT	45	9	Divine Heal	self	-	used	6253	3000	85.0	0.0	0.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	46	15	Life Scavenge	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-HELL_KNIGHT	56	9	Power Shot	target	bow	used	3726	6000	34.0	0.0	77.0	0.0	false	0	0	-	-	-
+HELL_KNIGHT	56	9	Power Shot	target	bow	used	3726	6000	34.0	0.0	85.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	65	13	Horror	target	-	used	2345	5000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-HELL_KNIGHT	70	53	Drain Health	target	-	used	4690	4000	41.0	0.0	34.0	0.0	false	0	0	-	-	-
+HELL_KNIGHT	70	53	Drain Health	target	-	used	4690	4000	41.0	0.0	40.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	72	3	Iron Will	self	-	used	6253	2000	20.0	0.0	0.0	0.0	false	0	0	72-3:1200	-	-
 HELL_KNIGHT	82	3	Majesty	self	-	used	1363	3000	27.0	0.0	0.0	0.0	false	0	0	82-3:300	-	-
 HELL_KNIGHT	86	3	Reflect Damage	self	-	used	6253	2000	19.0	0.0	0.0	0.0	false	0	0	86-3:1200	-	-
@@ -148,9 +148,9 @@ HELL_KNIGHT	322	6	Shield Fortress	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	322
 HELL_KNIGHT	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
 HELL_KNIGHT	342	1	Touch of Death	target	-	used	1636	150000	0.0	669.0	0.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	350	1	Physical Mirror	self	shield	used	1818	150000	36.0	0.0	0.0	0.0	false	0	0	350-1:300	-	-
-HELL_KNIGHT	353	1	Shield Slam	target	shield	used	1818	8000	35.0	0.0	0.0	0.0	false	0	0	-	353-1:35	-
+HELL_KNIGHT	353	1	Shield Slam	target	shield	used	1818	8000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	368	1	Vengeance	target	shield	used	909	900000	35.0	0.0	0.0	0.0	false	0	0	368-1:30	-	-
-HELL_KNIGHT	401	10	Judgment	target	sword	used	1438	4000	72.0	0.0	125.0	0.0	false	0	0	-	401-10:17	-
+HELL_KNIGHT	401	10	Judgment	target	sword	used	1438	4000	72.0	0.0	109.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	403	10	Shackle	target	-	used	1818	4000	34.0	0.0	0.0	0.0	false	0	0	-	403-10:6	-
 HELL_KNIGHT	439	1	Shield of Revenge	self	-	used	3636	150000	78.0	0.0	0.0	0.0	false	0	0	439-1:300	-	-
 HELL_KNIGHT	450	10	Banish Seraph	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -160,21 +160,21 @@ HELL_KNIGHT	528	1	Shield of Faith	self	-	used	909	900000	43.0	0.0	0.0	0.0	false	
 HELL_KNIGHT	811	1	Vanguard	self	-	used	5000	30000	31.0	0.0	0.0	0.0	false	0	0	811-1:21600	-	-
 HELL_KNIGHT	916	4	Shield Deflect Magic	self	shield	used	500	45000	29.0	0.0	0.0	0.0	false	0	0	916-4:8	-	-
 HELL_KNIGHT	982	3	Combat Aura	self	-	used	1363	2000	52.0	0.0	0.0	0.0	false	0	0	982-3:1200	-	-
-HELL_KNIGHT	984	25	Shield Strike	target	shield	used	1327	6000	83.0	0.0	173.0	0.0	false	0	0	-	-	-
+HELL_KNIGHT	984	25	Shield Strike	target	shield	used	1327	6000	83.0	0.0	176.0	0.0	false	0	0	-	-	-
 HELL_KNIGHT	985	1	Challenge for Fate	target	-	used	909	45000	0.0	0.0	0.0	0.0	false	0	0	6913-1:15	985-1:4	-
 HELL_KNIGHT	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	3	9	Power Strike	target	sword	used	1232	3000	17.0	0.0	42.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	3	9	Power Strike	target	sword	used	1232	3000	17.0	0.0	41.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	4	1	Dash	self	-	used	864	30000	10.0	0.0	0.0	0.0	false	0	0	4-1:15	-	-
 SAGITTARIUS	16	24	Mortal Blow	target	dagger	used	1080	3000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	19	37	Double Shot	target	bow	used	3550	3000	150.0	0.0	319.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	24	31	Burst Shot	target	bow	used	3550	6000	224.0	0.0	159.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	19	37	Double Shot	target	bow	used	3550	3000	150.0	0.0	297.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	24	31	Burst Shot	target	bow	used	3550	6000	224.0	0.0	164.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	27	5	Unlock	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	56	24	Power Shot	target	bow	used	3550	6000	67.0	0.0	149.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	56	24	Power Shot	target	bow	used	3550	6000	67.0	0.0	155.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	96	2	Bleed	target	dagger	used	1080	3000	37.0	0.0	0.0	0.0	false	0	0	-	96-2:10	-
 SAGITTARIUS	99	2	Rapid Shot	self	-	used	1296	3000	25.0	0.0	0.0	0.0	false	0	0	99-2:1200	-	-
-SAGITTARIUS	101	40	Stun Shot	target	bow	used	3550	3000	109.0	0.0	218.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	101	40	Stun Shot	target	bow	used	3550	3000	109.0	0.0	195.0	0.0	false	0	0	-	101-40:5	-
 SAGITTARIUS	111	1	Ultimate Evasion	self	-	used	864	900000	13.0	0.0	0.0	0.0	false	0	0	111-1:30	-	-
-SAGITTARIUS	131	3	Hawk Eye	self	-	used	1296	3000	27.0	0.0	0.0	0.0	false	0	0	131-3:300	-	-
+SAGITTARIUS	131	3	Hawk Eye	self	-	used	1296	3000	27.0	0.0	0.0	0.0	false	0	0	131-3:600	-	-
 SAGITTARIUS	226	1	Relax	self	-	used	0	-	2.0	0.0	0.0	0.0	false	0	0	226-1:-1	-	-
 SAGITTARIUS	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
 SAGITTARIUS	303	4	Soul of Sagittarius	self	-	used	1729	4000	0.0	364.0	0.0	0.0	false	0	0	303-4:1200	-	-
@@ -183,17 +183,17 @@ SAGITTARIUS	313	8	Snipe	self	bow	used	1775	75000	34.0	0.0	0.0	0.0	false	0	0	313-
 SAGITTARIUS	323	1	Quiver of Arrow: A Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	324	1	Quiver of Arrow: S Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	334-1:-1	-	-
-SAGITTARIUS	343	1	Lethal Shot	target	bow	used	3550	8000	153.0	0.0	448.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	354	1	Hamstring Shot	target	bow	used	3550	15000	78.0	0.0	398.0	0.0	false	0	0	-	354-1:35	-
+SAGITTARIUS	343	1	Lethal Shot	target	bow	used	3550	8000	153.0	0.0	431.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	354	1	Hamstring Shot	target	bow	used	3550	15000	78.0	0.0	196.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	415	3	Spirit of Sagittarius	self	-	used	1729	4000	34.0	0.0	0.0	0.0	false	0	0	415-3:1200	-	-
 SAGITTARIUS	416	3	Blessing of Sagittarius	self	-	used	1729	4000	34.0	0.0	0.0	0.0	false	0	0	416-3:1200	-	-
 SAGITTARIUS	417	5	Pain of Sagittarius	self	-	used	1729	8000	0.0	407.0	0.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	459	1	Symbol of the Sniper	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	933	1	Detection	self	-	used	2161	8000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	987	1	Multiple Shot	target	bow	used	2662	12000	162.0	0.0	1730.0	0.0	false	0	0	-	-	-
-SAGITTARIUS	990	1	Death Shot	target	bow	used	3106	12000	165.0	0.0	1193.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	987	1	Multiple Shot	target	bow	used	2662	12000	162.0	0.0	898.0	0.0	false	0	0	-	-	-
+SAGITTARIUS	990	1	Death Shot	target	bow	used	3106	12000	165.0	0.0	1253.0	0.0	false	0	0	-	-	-
 SAGITTARIUS	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-ADVENTURER	3	9	Power Strike	target	sword	used	1176	3000	17.0	0.0	45.0	0.0	false	0	0	-	-	-
+ADVENTURER	3	9	Power Strike	target	sword	used	1176	3000	17.0	0.0	40.0	0.0	false	0	0	-	-	-
 ADVENTURER	4	2	Dash	self	-	used	826	30000	21.0	0.0	0.0	0.0	false	0	0	4-2:15	-	-
 ADVENTURER	11	12	Trick	target	-	used	991	5000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	12	14	Switch	target	-	used	991	3000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -201,13 +201,13 @@ ADVENTURER	16	24	Mortal Blow	target	dagger	used	1030	3000	30.0	0.0	0.0	0.0	false
 ADVENTURER	27	14	Unlock	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	30	37	Backstab	target	dagger	used	1030	3000	112.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	51	1	Lure	self	-	used	1239	3000	44.0	0.0	0.0	0.0	false	0	0	-	-	-
-ADVENTURER	56	24	Power Shot	target	bow	used	3380	6000	67.0	0.0	113.0	0.0	false	0	0	-	-	-
+ADVENTURER	56	24	Power Shot	target	bow	used	3380	6000	67.0	0.0	120.0	0.0	false	0	0	-	-	-
 ADVENTURER	60	1	Fake Death	self	-	used	0	3000	200.0	0.0	0.0	0.0	false	0	0	60-1:-1	-	-
 ADVENTURER	96	6	Bleed	target	dagger	used	1030	3000	89.0	0.0	0.0	0.0	false	0	0	-	96-6:10	-
 ADVENTURER	99	1	Rapid Shot	self	-	used	1239	3000	14.0	0.0	0.0	0.0	false	0	0	99-1:1200	-	-
-ADVENTURER	101	3	Stun Shot	target	bow	used	3380	3000	49.0	0.0	88.0	0.0	false	0	0	-	-	-
+ADVENTURER	101	3	Stun Shot	target	bow	used	3380	3000	49.0	0.0	87.0	0.0	false	0	0	-	-	-
 ADVENTURER	106	14	Veil	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-ADVENTURER	111	2	Ultimate Evasion	self	-	used	826	-	25.0	0.0	0.0	0.0	false	0	0	111-2:30	-	-
+ADVENTURER	111	2	Ultimate Evasion	self	-	used	826	900000	25.0	0.0	0.0	0.0	false	0	0	111-2:30	-	-
 ADVENTURER	221	1	Silent Move	self	-	used	0	-	7.0	0.0	0.0	0.0	false	0	0	221-1:-1	-	-
 ADVENTURER	226	1	Relax	self	-	used	0	-	2.0	0.0	0.0	0.0	false	0	0	226-1:-1	-	-
 ADVENTURER	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
@@ -217,20 +217,20 @@ ADVENTURER	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	
 ADVENTURER	344	1	Lethal Blow	target	dagger	used	1030	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	356	1	Focus Chance	self	dagger	used	1145	30000	36.0	0.0	0.0	0.0	false	0	0	356-1:120	-	-
 ADVENTURER	357	1	Focus Power	self	dagger	used	1145	30000	36.0	0.0	0.0	0.0	false	0	0	357-1:120	-	-
-ADVENTURER	358	1	Bluff	target	dagger	used	572	8000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
+ADVENTURER	358	1	Bluff	target	dagger	used	572	8000	35.0	0.0	0.0	0.0	false	0	0	-	358-1:6	-
 ADVENTURER	409	10	Critical Blow	target	dagger	used	1145	30000	72.0	0.0	0.0	0.0	false	0	0	409-10:15	-	-
-ADVENTURER	411	3	Stealth	self	-	used	1652	4000	34.0	0.0	0.0	0.0	false	0	0	411-3:240	-	-
+ADVENTURER	411	3	Stealth	self	-	used	1652	-	34.0	0.0	0.0	0.0	false	0	0	411-3:120	-	-
 ADVENTURER	412	10	Sand Bomb	target	-	used	1652	4000	34.0	0.0	0.0	0.0	false	0	0	-	412-10:17	-
 ADVENTURER	419	4	Summon Treasure Key	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	445	1	Mirage	self	-	used	1652	150000	43.0	0.0	0.0	0.0	false	0	0	445-1:60	-	-
 ADVENTURER	453	1	Escape Shackle	self	-	used	826	15000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	460	1	Symbol of the Assassin	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-ADVENTURER	531	1	Critical Wound	target	dagger	used	858	8000	43.0	0.0	0.0	0.0	false	0	0	-	531-1:15	-
+ADVENTURER	531	1	Critical Wound	target	dagger	used	858	8000	43.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	623	1	Find Trap	self	-	used	2066	3000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	624	1	Remove Trap	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	821	1	Shadow Step	target	-	used	400	75000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
 ADVENTURER	928	1	Dual Blow	target	dual daggers	used	1030	8000	82.0	0.0	0.0	0.0	false	0	0	-	-	-
-ADVENTURER	991	1	Throwing Dagger	target	dagger	used	618	45000	82.0	0.0	189.0	0.0	false	0	0	-	-	-
+ADVENTURER	991	1	Throwing Dagger	target	dagger	used	618	45000	82.0	0.0	180.0	0.0	false	0	0	-	-	-
 ADVENTURER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	337	1	Arcane Power	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	337-1:-1	-	-
 ARCHMAGE	1011	6	Heal	self	-	used	9098	2400	17.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -240,9 +240,9 @@ ARCHMAGE	1027	3	Group Heal	self	-	used	12737	4800	34.0	0.0	0.0	0.0	false	0	0	-	-
 ARCHMAGE	1040	1	Shield	self	-	used	7278	1600	8.0	0.0	0.0	0.0	false	0	0	1040-1:1200	-	-
 ARCHMAGE	1056	12	Cancellation	target	-	used	10918	24000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1068	1	Might	self	-	used	7278	1600	8.0	0.0	0.0	0.0	false	0	0	1068-1:1200	-	-
-ARCHMAGE	1069	42	Sleep	target	-	used	18196	3200	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1072	5	Sleeping Cloud	target	-	used	27295	6400	78.0	0.0	0.0	0.0	false	0	0	-	1072-5:16	-
-ARCHMAGE	1074	14	Surrender To Wind	target	-	used	2729	-	69.0	0.0	0.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1069	42	Sleep	target	-	used	18196	3200	55.0	0.0	0.0	0.0	false	0	0	-	1069-42:17	-
+ARCHMAGE	1072	5	Sleeping Cloud	target	-	used	27295	6400	78.0	0.0	0.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1074	14	Surrender To Wind	target	-	used	2729	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1078	6	Concentration	self	-	used	7278	1600	51.0	0.0	0.0	0.0	false	0	0	1078-6:1200	-	-
 ARCHMAGE	1083	17	Surrender To Fire	target	-	used	2729	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1111	4	Summon Kat the Cat	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -253,38 +253,38 @@ ARCHMAGE	1147	6	Vampiric Touch	target	-	used	7278	2400	32.0	0.0	0.0	0.0	false	0	
 ARCHMAGE	1151	2	Corpse Life Drain	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1157	1	Body To Mind	self	-	used	7278	4000	0.0	131.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1160	15	Slow	target	-	used	7278	1600	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1164	5	Curse Weakness	target	-	used	2729	1600	15.0	0.0	0.0	0.0	false	0	0	-	1164-5:15	-
+ARCHMAGE	1164	5	Curse Weakness	target	-	used	2729	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1167	2	Poisonous Cloud	target	-	used	7278	4000	36.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1168	3	Curse Poison	target	-	used	7278	2400	21.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1169	14	Curse Fear	target	-	used	7278	2400	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1171	19	Blazing Circle	target	-	used	7278	3200	82.0	0.0	73.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1171	19	Blazing Circle	target	-	used	7278	3200	82.0	0.0	39.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1172	8	Aura Burn	target	-	used	2729	-	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1177	5	Wind Strike	target	-	used	7278	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1181	3	Flame Strike	target	-	used	7278	3200	32.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1184	6	Ice Bolt	target	-	used	6004	-	16.0	0.0	0.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1184	6	Ice Bolt	target	-	used	6004	1600	16.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1216	1	Self Heal	self	-	used	9098	2400	7.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1220	8	Blaze	target	-	used	7278	-	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1222	1	Curse Chaos	target	-	used	2729	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1225	4	Summon Mew the Cat	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1230	28	Prominence	target	-	used	7278	-	55.0	0.0	123.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1231	28	Aura Flare	target	-	used	2729	-	69.0	0.0	99.0	0.0	false	0	0	1231-28:3	-	-
+ARCHMAGE	1230	28	Prominence	target	-	used	7278	-	55.0	0.0	107.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1231	28	Aura Flare	target	-	used	2729	-	69.0	0.0	108.0	0.0	false	0	0	1231-28:3	-	-
 ARCHMAGE	1232	3	Blazing Skin	self	-	used	7278	1600	41.0	0.0	0.0	0.0	false	0	0	1232-3:1200	-	-
 ARCHMAGE	1233	4	Decay	target	-	used	7278	1600	82.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1274	4	Energy Bolt	target	-	used	3639	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1275	14	Aura Bolt	target	-	used	3639	-	28.0	0.0	61.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1275	14	Aura Bolt	target	-	used	3639	-	28.0	0.0	27.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1285	1	Seed of Fire	self	-	used	7278	1600	214.74367999999959	0.0	0.0	0.0	false	0	0	1285-1:600	-	-
-ARCHMAGE	1288	1	Aura Symphony	target	-	used	7278	240000	214.74367999999959	0.0	92.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1289	1	Inferno	target	-	used	7278	240000	214.74367999999959	0.0	0.0	0.0	false	0	0	-	1289-1:10	-
-ARCHMAGE	1292	1	Elemental Assault	target	-	used	7278	240000	214.74367999999959	0.0	238.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1296	9	Rain of Fire	target	-	used	9098	4000	55.0	0.0	65.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1288	1	Aura Symphony	target	-	used	7278	240000	214.74367999999959	0.0	145.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1289	1	Inferno	target	-	used	7278	240000	214.74367999999959	0.0	188.0	0.0	false	0	0	-	1289-1:10	-
+ARCHMAGE	1292	1	Elemental Assault	target	-	used	7278	-	214.74367999999959	0.0	0.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1296	9	Rain of Fire	target	-	used	9098	4000	55.0	0.0	54.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1338	1	Arcane Chaos	target	-	used	7278	12000	57.0	0.0	0.0	0.0	false	0	0	-	1338-1:18	-
-ARCHMAGE	1339	1	Fire Vortex	target	-	used	10918	12000	84.0	0.0	158.0	0.0	false	0	0	-	1339-1:18	-
+ARCHMAGE	1338	1	Arcane Chaos	target	-	used	7278	12000	57.0	0.0	0.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1339	1	Fire Vortex	target	-	used	10918	12000	84.0	0.0	83.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1417	5	Aura Flash	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1419	1	Volcano	target	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1451	1	Fire Vortex Buster	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1452	1	Count of Fire	target	-	used	7278	60000	87.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCHMAGE	1554	1	Aura Blast	target	-	used	5459	12000	17.371839999999793	0.0	233.0	0.0	false	0	0	-	-	-
+ARCHMAGE	1554	1	Aura Blast	target	-	used	5459	12000	17.371839999999793	0.0	250.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1555	1	Aura Cannon	target	-	used	3639	8000	0.0	0.0	343.0	0.0	false	0	0	-	-	-
 ARCHMAGE	1556	1	Arcane Shield	self	-	used	1819	240000	112.0	0.0	0.0	0.0	false	0	0	1556-1:10	-	-
 SOULTAKER	337	1	Arcane Power	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	337-1:-1	-	-
@@ -296,7 +296,7 @@ SOULTAKER	1040	1	Shield	self	-	used	7278	1600	8.0	0.0	0.0	0.0	false	0	0	1040-1:1
 SOULTAKER	1064	14	Silence	target	-	used	7278	6400	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1068	1	Might	self	-	used	7278	1600	8.0	0.0	0.0	0.0	false	0	0	1068-1:1200	-	-
 SOULTAKER	1069	42	Sleep	target	-	used	18196	3200	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1078	2	Concentration	self	-	used	7278	1600	21.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
+SOULTAKER	1078	2	Concentration	self	-	used	7278	-	21.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
 SOULTAKER	1083	3	Surrender To Fire	target	-	used	2729	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1111	4	Summon Kat the Cat	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1126	6	Servitor Recharge	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -304,7 +304,7 @@ SOULTAKER	1127	12	Servitor Heal	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-
 SOULTAKER	1129	7	Summon Reanimated Man	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1144	1	Servitor Wind Walk	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1147	6	Vampiric Touch	target	-	used	7278	2400	32.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1148	13	Death Spike	target	-	used	7278	-	40.0	0.0	65.0	0.0	false	0	0	-	-	-
+SOULTAKER	1148	13	Death Spike	target	-	used	7278	-	40.0	0.0	112.0	0.0	false	0	0	-	-	-
 SOULTAKER	1151	16	Corpse Life Drain	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1154	6	Summon Corrupted Man	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1155	15	Corpse Burst	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -314,7 +314,7 @@ SOULTAKER	1159	22	Curse Death Link	target	-	used	7278	-	55.0	0.0	0.0	0.0	false	0
 SOULTAKER	1160	1	Slow	target	-	used	7278	1600	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1163	14	Curse Discord	target	-	used	7278	8000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1164	19	Curse Weakness	target	-	used	2729	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1167	6	Poisonous Cloud	target	-	used	7278	-	82.0	0.0	0.0	0.0	false	0	0	-	1167-6:15	-
+SOULTAKER	1167	6	Poisonous Cloud	target	-	used	7278	4000	82.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1168	7	Curse Poison	target	-	used	7278	2400	53.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1169	14	Curse Fear	target	-	used	7278	2400	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1170	13	Anchor	target	-	used	2729	48000	69.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -326,21 +326,21 @@ SOULTAKER	1216	1	Self Heal	self	-	used	9098	2400	7.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1220	8	Blaze	target	-	used	7278	-	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1222	15	Curse Chaos	target	-	used	2729	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1225	4	Summon Mew the Cat	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1234	28	Vampiric Claw	target	-	used	7278	2400	98.52368000000024	0.0	127.0	0.0	false	0	0	-	-	-
+SOULTAKER	1234	28	Vampiric Claw	target	-	used	7278	2400	98.52368000000024	0.0	131.0	0.0	false	0	0	-	-	-
 SOULTAKER	1262	5	Transfer Pain	self	-	used	0	-	13.0	0.0	0.0	0.0	false	0	0	1262-5:-1	-	-
-SOULTAKER	1263	13	Curse Gloom	target	-	used	2729	4000	69.0	0.0	107.0	0.0	false	0	0	-	-	-
+SOULTAKER	1263	13	Curse Gloom	target	-	used	2729	4000	69.0	0.0	108.0	0.0	false	0	0	-	-	-
 SOULTAKER	1269	9	Curse Disease	target	-	used	7278	3200	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1274	4	Energy Bolt	target	-	used	3639	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1298	14	Mass Slow	target	-	used	7278	4000	0.0	610.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1334	7	Summon Cursed Man	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1336	1	Curse of Doom	target	-	used	7278	24000	56.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1337	1	Curse of Abyss	target	-	used	7278	24000	57.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1343	1	Dark Vortex	target	-	used	10918	12000	84.0	0.0	173.0	0.0	false	0	0	-	-	-
+SOULTAKER	1337	1	Curse of Abyss	target	-	used	7278	24000	57.0	0.0	0.0	0.0	false	0	0	-	1337-1:18	-
+SOULTAKER	1343	1	Dark Vortex	target	-	used	10918	12000	84.0	0.0	133.0	0.0	false	0	0	-	-	-
 SOULTAKER	1344	1	Mass Warrior Bane	target	-	used	7278	6400	84.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1345	1	Mass Mage Bane	target	-	used	7278	6400	85.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1381	5	Mass Fear	target	-	used	9098	60000	82.0	0.0	0.0	0.0	false	0	0	-	-	-
-SOULTAKER	1382	5	Mass Gloom	target	-	used	10918	9600	103.0	0.0	50.0	0.0	false	0	0	-	-	-
+SOULTAKER	1382	5	Mass Gloom	target	-	used	10918	9600	103.0	0.0	22.0	0.0	false	0	0	-	-	-
 SOULTAKER	1422	1	Day of Doom	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1423	1	Gehenna	target	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SOULTAKER	1557	1	Servitor Share	self	-	used	1819	48000	35.0	0.0	0.0	0.0	false	0	0	1557-1:1200	-	-
@@ -369,7 +369,7 @@ ARCANA_LORD	1157	1	Body To Mind	self	-	used	7278	4000	0.0	131.0	0.0	0.0	false	0	
 ARCANA_LORD	1160	1	Slow	target	-	used	7278	1600	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1164	5	Curse Weakness	target	-	used	2729	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1167	2	Poisonous Cloud	target	-	used	7278	4000	36.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCANA_LORD	1168	3	Curse Poison	target	-	used	7278	2400	21.0	0.0	0.0	0.0	false	0	0	-	-	-
+ARCANA_LORD	1168	3	Curse Poison	target	-	used	7278	2400	21.0	0.0	0.0	0.0	false	0	0	-	1168-3:15	-
 ARCANA_LORD	1172	8	Aura Burn	target	-	used	2729	-	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1177	5	Wind Strike	target	-	used	7278	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1181	3	Flame Strike	target	-	used	7278	3200	32.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -394,13 +394,13 @@ ARCANA_LORD	1350	1	Warrior Bane	target	-	used	7278	2400	56.0	0.0	0.0	0.0	false	0
 ARCANA_LORD	1351	1	Mage Bane	target	-	used	7278	2400	56.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1380	10	Betray	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1383	5	Mass Surrender to Fire	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-ARCANA_LORD	1386	10	Arcane Disruption	target	-	used	7278	3200	69.0	0.0	0.0	0.0	false	0	0	-	1386-10:17	-
+ARCANA_LORD	1386	10	Arcane Disruption	target	-	used	7278	3200	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1403	1	Summon Friend	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1406	1	Summon Feline King	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1424	1	Anti-Summoning Field	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ARCANA_LORD	1547	3	Spirit Sharing	self	-	used	7278	1600	52.0	0.0	0.0	0.0	false	0	0	1547-3:1200	-	-
 ARCANA_LORD	1557	1	Servitor Share	self	-	used	1819	48000	35.0	0.0	0.0	0.0	false	0	0	1557-1:1200	-	-
-ARCANA_LORD	1558	24	Dimension Spiral	target	-	used	5459	12000	121.76184000000012	0.0	207.0	0.0	false	0	0	-	-	-
+ARCANA_LORD	1558	24	Dimension Spiral	target	-	used	5459	12000	121.76184000000012	0.0	243.0	0.0	false	0	0	-	-	-
 CARDINAL	336	1	Arcane Wisdom	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	336-1:-1	-	-
 CARDINAL	1011	18	Heal	self	-	used	9098	2400	38.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1012	3	Cure Poison	self	-	used	7278	3200	41.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -427,7 +427,7 @@ CARDINAL	1077	1	Focus	self	-	used	7278	1600	17.0	0.0	0.0	0.0	false	0	0	1077-1:12
 CARDINAL	1078	2	Concentration	self	-	used	7278	1600	19.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
 CARDINAL	1085	2	Acumen	self	-	used	7278	1600	22.0	0.0	0.0	0.0	false	0	0	1085-2:1200	-	-
 CARDINAL	1147	2	Vampiric Touch	target	-	used	7278	2400	20.0	0.0	0.0	0.0	false	0	0	-	-	-
-CARDINAL	1164	1	Curse Weakness	target	-	used	2729	1600	2.0	0.0	0.0	0.0	false	0	0	-	1164-1:15	-
+CARDINAL	1164	1	Curse Weakness	target	-	used	2729	1600	2.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1168	1	Curse Poison	target	-	used	7278	2400	7.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1177	5	Wind Strike	target	-	used	7278	-	11.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1184	4	Ice Bolt	target	-	used	6004	1600	11.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -447,12 +447,12 @@ CARDINAL	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1335	1	Balance Life	self	-	used	9098	24000	93.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1353	1	Divine Protection	self	-	used	7278	2400	53.0	0.0	0.0	0.0	false	0	0	1353-1:1200	-	-
 CARDINAL	1360	1	Mass Block Shield	target	-	used	7278	24000	79.0	0.0	0.0	0.0	false	0	0	-	-	-
-CARDINAL	1361	1	Mass Block Wind Walk	target	-	used	7278	24000	80.0	0.0	0.0	0.0	false	0	0	-	1361-1:70	-
+CARDINAL	1361	1	Mass Block Wind Walk	target	-	used	7278	24000	80.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1394	10	Trance	target	-	used	5459	-	26.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1395	10	Erase	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1396	10	Magical BackFire	target	-	used	7278	3200	52.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1398	10	Mana Burn	target	-	used	7278	6400	97.0	0.0	0.0	0.0	false	0	0	-	-	-
-CARDINAL	1399	5	Mana Storm	target	-	used	10918	12000	145.0	0.0	0.0	0.0	false	0	0	-	-	-
+CARDINAL	1399	5	Mana Storm	target	-	used	10918	12000	145.0	0.0	0.0	30.651833715254725	false	0	0	-	-	-
 CARDINAL	1400	10	Turn Undead	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1401	11	Major Heal	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 CARDINAL	1402	5	Major Group Heal	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -473,17 +473,17 @@ HIEROPHANT	1016	2	Resurrection	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.
 HIEROPHANT	1027	15	Group Heal	self	-	used	12737	4800	77.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1031	8	Disrupt Undead	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1032	3	Invigor	self	-	used	7278	1600	38.0	0.0	0.0	0.0	false	0	0	1032-3:1200	-	-
-HIEROPHANT	1033	3	Resist Poison	self	-	used	7278	-	29.0	0.0	0.0	0.0	false	0	0	1033-3:1200	-	-
+HIEROPHANT	1033	3	Resist Poison	self	-	used	7278	1600	29.0	0.0	0.0	0.0	false	0	0	1033-3:1200	-	-
 HIEROPHANT	1035	4	Mental Shield	self	-	used	7278	1600	38.0	0.0	0.0	0.0	false	0	0	1035-4:1200	-	-
 HIEROPHANT	1036	2	Magic Barrier	self	-	used	7278	1600	36.0	0.0	0.0	0.0	false	0	0	1036-2:1200	-	-
 HIEROPHANT	1040	3	Shield	self	-	used	7278	1600	29.0	0.0	0.0	0.0	false	0	0	1040-3:1200	-	-
 HIEROPHANT	1043	1	Holy Weapon	self	-	used	7278	1600	21.0	0.0	0.0	0.0	false	0	0	1043-1:1200	-	-
 HIEROPHANT	1044	3	Regeneration	self	-	used	7278	1600	38.0	0.0	0.0	0.0	false	0	0	1044-3:1200	-	-
 HIEROPHANT	1045	6	Bless the Body	self	-	used	7278	1600	50.0	0.0	0.0	0.0	false	0	0	1045-6:1200	-	-
-HIEROPHANT	1048	6	Bless the Soul	self	-	used	7278	1600	49.0	0.0	0.0	0.0	false	0	0	1048-6:1200	-	-
+HIEROPHANT	1048	6	Bless the Soul	self	-	used	7278	-	49.0	0.0	0.0	0.0	false	0	0	1048-6:1200	-	-
 HIEROPHANT	1050	2	Return	self	-	used	2729	60000	146.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1062	2	Berserker Spirit	self	-	used	7278	1600	36.0	0.0	0.0	0.0	false	0	0	1062-2:1200	-	-
-HIEROPHANT	1068	3	Might	self	-	used	7278	-	26.0	0.0	0.0	0.0	false	0	0	1068-3:1200	-	-
+HIEROPHANT	1068	3	Might	self	-	used	7278	1600	26.0	0.0	0.0	0.0	false	0	0	1068-3:1200	-	-
 HIEROPHANT	1069	9	Sleep	target	-	used	18196	3200	22.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1073	2	Kiss of Eva	self	-	used	7278	1600	45.0	0.0	0.0	0.0	false	0	0	1073-2:1200	-	-
 HIEROPHANT	1075	1	Peace	self	-	used	7278	4000	22.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -496,7 +496,7 @@ HIEROPHANT	1164	1	Curse Weakness	target	-	used	2729	1600	2.0	0.0	0.0	0.0	false	0
 HIEROPHANT	1168	1	Curse Poison	target	-	used	7278	2400	7.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1177	5	Wind Strike	target	-	used	7278	-	11.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1182	3	Resist Aqua	self	-	used	7278	1600	29.0	0.0	0.0	0.0	false	0	0	1182-3:1200	-	-
-HIEROPHANT	1184	4	Ice Bolt	target	-	used	6004	1600	11.0	0.0	0.0	0.0	false	0	0	-	1184-4:30	-
+HIEROPHANT	1184	4	Ice Bolt	target	-	used	6004	1600	11.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1189	3	Resist Wind	self	-	used	7278	1600	29.0	0.0	0.0	0.0	false	0	0	1189-3:1200	-	-
 HIEROPHANT	1191	3	Resist Fire	self	-	used	7278	1600	29.0	0.0	0.0	0.0	false	0	0	1191-3:1200	-	-
 HIEROPHANT	1201	33	Dryad Root	target	-	used	4549	1600	53.76184000000012	0.0	0.0	0.0	false	0	0	-	-	-
@@ -509,7 +509,7 @@ HIEROPHANT	1272	13	Word of Fear	target	-	used	7278	120000	170.52368000000024	0.0
 HIEROPHANT	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1352	1	Elemental Protection	self	-	used	7278	2400	53.0	0.0	0.0	0.0	false	0	0	1352-1:1200	-	-
 HIEROPHANT	1356	1	Prophecy of Fire	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-HIEROPHANT	1358	1	Block Shield	target	-	used	7278	6400	53.0	0.0	0.0	0.0	false	0	0	-	1358-1:70	-
+HIEROPHANT	1358	1	Block Shield	target	-	used	7278	6400	53.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1359	1	Block Wind Walk	target	-	used	7278	6400	53.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1388	3	Greater Might	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1389	3	Greater Shield	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -520,14 +520,14 @@ HIEROPHANT	1398	10	Mana Burn	target	-	used	7278	6400	97.0	0.0	0.0	0.0	false	0	0	
 HIEROPHANT	1411	1	Mystic Immunity	self	-	used	7278	120000	69.0	0.0	0.0	0.0	false	0	0	1411-1:30	-	-
 HIEROPHANT	1412	1	Spell Turning	target	-	used	909	24000	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 HIEROPHANT	1548	3	Resist Earth	self	-	used	7278	1600	29.0	0.0	0.0	0.0	false	0	0	1548-3:1200	-	-
-EVA_TEMPLAR	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	39.0	0.0	false	0	0	-	-	-
+EVA_TEMPLAR	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	35.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	10	8	Summon Storm Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	15	52	Charm	self	-	used	2006	15000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	16	9	Mortal Blow	target	dagger	used	1084	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	18	37	Aura of Hate	target	-	used	869	40000	102.0	0.0	0.0	0.0	false	0	0	-	18-37:3	-
 EVA_TEMPLAR	21	3	Poison Recovery	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	28	49	Aggression	target	-	used	782	6000	0.0	0.0	0.0	0.0	false	0	0	-	28-49:3	-
-EVA_TEMPLAR	56	9	Power Shot	target	bow	used	3560	6000	34.0	0.0	72.0	0.0	false	0	0	-	-	-
+EVA_TEMPLAR	56	9	Power Shot	target	bow	used	3560	6000	34.0	0.0	66.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	58	55	Elemental Heal	self	-	used	6686	3000	211.35788000000002	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	61	3	Cure Bleeding	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	67	7	Summon Life Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -545,10 +545,10 @@ EVA_TEMPLAR	322	6	Shield Fortress	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	322
 EVA_TEMPLAR	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
 EVA_TEMPLAR	341	1	Touch of Life	self	-	used	1565	300000	0.0	0.0	0.0	0.0	false	0	0	341-1:120	-	-
 EVA_TEMPLAR	351	1	Magical Mirror	self	shield	used	1739	150000	36.0	0.0	0.0	0.0	false	0	0	351-1:300	-	-
-EVA_TEMPLAR	352	1	Shield Bash	target	shield	used	869	3000	18.0	0.0	0.0	0.0	false	0	0	-	352-1:1	-
+EVA_TEMPLAR	352	1	Shield Bash	target	shield	used	869	3000	18.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	368	1	Vengeance	target	shield	used	869	900000	35.0	0.0	0.0	0.0	false	0	0	368-1:30	-	-
-EVA_TEMPLAR	400	10	Tribunal	target	sword	used	1376	4000	72.0	0.0	149.0	0.0	false	0	0	-	-	-
-EVA_TEMPLAR	402	10	Arrest	target	-	used	1739	4000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
+EVA_TEMPLAR	400	10	Tribunal	target	sword	used	1376	4000	72.0	0.0	142.0	0.0	false	0	0	-	-	-
+EVA_TEMPLAR	402	10	Arrest	target	-	used	1739	4000	34.0	0.0	0.0	0.0	false	0	0	-	402-10:6	-
 EVA_TEMPLAR	449	4	Summon Attractive Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	454	1	Symbol of Defense	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	527	1	Iron Shield	self	-	used	869	150000	43.0	0.0	0.0	0.0	false	0	0	527-1:1200	-	-
@@ -557,20 +557,20 @@ EVA_TEMPLAR	779	1	Summon Smart Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-
 EVA_TEMPLAR	812	1	Vanguard	self	-	used	5000	30000	31.0	0.0	0.0	0.0	false	0	0	812-1:21600	-	-
 EVA_TEMPLAR	916	4	Shield Deflect Magic	self	shield	used	500	45000	29.0	0.0	0.0	0.0	false	0	0	916-4:8	-	-
 EVA_TEMPLAR	982	3	Combat Aura	self	-	used	1304	2000	52.0	0.0	0.0	0.0	false	0	0	982-3:1200	-	-
-EVA_TEMPLAR	984	25	Shield Strike	target	shield	used	1269	6000	83.0	0.0	190.0	0.0	false	0	0	-	-	-
+EVA_TEMPLAR	984	25	Shield Strike	target	shield	used	1269	6000	83.0	0.0	214.0	0.0	false	0	0	-	-	-
 EVA_TEMPLAR	985	1	Challenge for Fate	target	-	used	869	45000	0.0	0.0	0.0	0.0	false	0	0	6913-1:15	985-1:4	-
 EVA_TEMPLAR	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SWORD_MUSE	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	40.0	0.0	false	0	0	-	-	-
+SWORD_MUSE	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	39.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	15	52	Charm	self	-	used	2006	15000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	16	9	Mortal Blow	target	dagger	used	1084	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	21	3	Poison Recovery	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	28	12	Aggression	target	-	used	782	6000	0.0	0.0	0.0	0.0	false	0	0	-	28-12:2	-
-SWORD_MUSE	56	9	Power Shot	target	bow	used	3560	6000	34.0	0.0	67.0	0.0	false	0	0	-	-	-
+SWORD_MUSE	56	9	Power Shot	target	bow	used	3560	6000	34.0	0.0	70.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	58	55	Elemental Heal	self	-	used	6686	3000	211.35788000000002	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	61	3	Cure Bleeding	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	77	2	Attack Aura	self	-	used	5349	2000	10.0	0.0	0.0	0.0	false	0	0	77-2:1200	-	-
 SWORD_MUSE	91	2	Defense Aura	self	-	used	5349	2000	8.0	0.0	0.0	0.0	false	0	0	91-2:1200	-	-
-SWORD_MUSE	98	5	Sword Symphony	target	-	used	1739	15000	77.0	0.0	74.0	0.0	false	0	0	-	-	-
+SWORD_MUSE	98	5	Sword Symphony	target	-	used	1739	15000	77.0	0.0	68.0	0.0	false	0	0	-	98-5:6	-
 SWORD_MUSE	102	16	Entangle	target	-	used	4012	2000	28.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	110	1	Ultimate Defense	self	-	used	869	900000	10.0	0.0	0.0	0.0	false	0	0	110-1:30	-	-
 SWORD_MUSE	112	2	Deflect Arrow	self	-	used	1304	3000	14.0	0.0	0.0	0.0	false	0	0	112-2:1200	-	-
@@ -592,22 +592,22 @@ SWORD_MUSE	349	1	Song of Renewal	self	-	used	2173	3000	54.0	0.0	0.0	0.0	false	0	
 SWORD_MUSE	363	1	Song of Meditation	self	-	used	2173	3000	54.0	0.0	0.0	0.0	false	0	0	363-1:120	-	-
 SWORD_MUSE	364	1	Song of Champion	self	-	used	2173	3000	54.0	0.0	0.0	0.0	false	0	0	364-1:120	-	-
 SWORD_MUSE	402	10	Arrest	target	-	used	1739	4000	34.0	0.0	0.0	0.0	false	0	0	-	402-10:6	-
-SWORD_MUSE	407	10	Psycho Symphony	target	-	used	2608	15000	107.0	0.0	16.0	0.0	false	0	0	-	-	-
-SWORD_MUSE	437	1	Song of Silence	target	-	used	2173	150000	54.0	0.0	0.0	0.0	false	0	0	-	437-1:71	-
+SWORD_MUSE	407	10	Psycho Symphony	target	-	used	2608	15000	107.0	0.0	19.0	0.0	false	0	0	-	407-10:6	-
+SWORD_MUSE	437	1	Song of Silence	target	-	used	2173	150000	54.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	455	1	Symbol of Noise	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	529	1	Song of Elemental	self	-	used	2173	150000	48.0	0.0	0.0	0.0	false	0	0	529-1:120	-	-
-SWORD_MUSE	986	25	Deadly Strike	target	sword	used	1032	5000	83.0	0.0	217.0	0.0	false	0	0	-	-	-
+SWORD_MUSE	986	25	Deadly Strike	target	sword	used	1032	5000	83.0	0.0	215.0	0.0	false	0	0	-	-	-
 SWORD_MUSE	988	3	Battle Whisper	self	-	used	2173	3000	35.0	0.0	0.0	0.0	false	0	0	988-3:120	-	-
 SWORD_MUSE	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-WIND_RIDER	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
+WIND_RIDER	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	34.0	0.0	false	0	0	-	-	-
 WIND_RIDER	12	14	Switch	target	-	used	1043	3000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	15	52	Charm	self	-	used	2006	15000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-WIND_RIDER	16	24	Mortal Blow	target	dagger	used	1084	3000	30.0	0.0	77.18870870640967	0.0	false	0	0	-	-	-
+WIND_RIDER	16	24	Mortal Blow	target	dagger	used	1084	3000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	21	3	Poison Recovery	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	27	14	Unlock	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	30	37	Backstab	target	dagger	used	1084	3000	112.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	51	1	Lure	self	-	used	1304	3000	44.0	0.0	0.0	0.0	false	0	0	-	-	-
-WIND_RIDER	56	24	Power Shot	target	bow	used	3560	6000	67.0	0.0	95.0	0.0	false	0	0	-	-	-
+WIND_RIDER	56	24	Power Shot	target	bow	used	3560	6000	67.0	0.0	93.0	0.0	false	0	0	-	-	-
 WIND_RIDER	58	55	Elemental Heal	self	-	used	6686	3000	222.57787999999982	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	60	1	Fake Death	self	-	used	0	3000	200.0	0.0	0.0	0.0	false	0	0	60-1:-1	-	-
 WIND_RIDER	61	3	Cure Bleeding	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -620,9 +620,9 @@ WIND_RIDER	102	16	Entangle	target	-	used	4012	2000	28.0	0.0	0.0	0.0	false	0	0	-	
 WIND_RIDER	111	2	Ultimate Evasion	self	-	used	869	900000	25.0	0.0	0.0	0.0	false	0	0	111-2:30	-	-
 WIND_RIDER	123	3	Spirit Barrier	self	-	used	5349	2000	22.0	0.0	0.0	0.0	false	0	0	123-3:1200	-	-
 WIND_RIDER	221	1	Silent Move	self	-	used	0	-	7.0	0.0	0.0	0.0	false	0	0	221-1:-1	-	-
-WIND_RIDER	230	2	Sprint	self	-	used	5349	-	19.0	0.0	0.0	0.0	false	0	0	230-2:1200	-	-
-WIND_RIDER	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
-WIND_RIDER	263	37	Deadly Blow	target	dagger	used	1084	3000	68.0	0.0	0.0	0.0	false	0	0	-	-	-
+WIND_RIDER	230	2	Sprint	self	-	used	5349	3000	19.0	0.0	0.0	0.0	false	0	0	230-2:1200	-	-
+WIND_RIDER	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-2	-	-
+WIND_RIDER	263	37	Deadly Blow	target	dagger	used	1084	3000	68.0	0.0	260.2484835341893	0.0	false	0	0	-	-	-
 WIND_RIDER	296	1	Chameleon Rest	self	-	used	0	-	9.0	0.0	0.0	0.0	false	0	0	296-1:-1	-	-
 WIND_RIDER	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	312-20:-1	-	-
 WIND_RIDER	321	10	Blinding Blow	target	dagger	used	1084	30000	72.0	0.0	0.0	0.0	false	0	0	321-10:15	-	-
@@ -630,35 +630,35 @@ WIND_RIDER	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	
 WIND_RIDER	344	1	Lethal Blow	target	dagger	used	1084	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	355	1	Focus Death	self	dagger	used	1204	30000	36.0	0.0	0.0	0.0	false	0	0	355-1:120	-	-
 WIND_RIDER	356	1	Focus Chance	self	dagger	used	1204	30000	36.0	0.0	0.0	0.0	false	0	0	356-1:120	-	-
-WIND_RIDER	358	1	Bluff	target	dagger	used	602	8000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-WIND_RIDER	410	3	Mortal Strike	self	dagger	used	1204	150000	34.0	0.0	0.0	0.0	false	0	0	410-3:240	-	-
+WIND_RIDER	358	1	Bluff	target	dagger	used	602	8000	35.0	0.0	0.0	0.0	false	0	0	-	358-1:6	-
+WIND_RIDER	410	3	Mortal Strike	self	dagger	used	1204	150000	34.0	0.0	0.0	0.0	false	0	0	410-3:120	-	-
 WIND_RIDER	412	10	Sand Bomb	target	-	used	1739	4000	34.0	0.0	0.0	0.0	false	0	0	-	412-10:17	-
 WIND_RIDER	419	4	Summon Treasure Key	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	446	1	Dodge	self	-	used	500	75000	29.0	0.0	0.0	0.0	false	0	0	446-1:10	-	-
 WIND_RIDER	453	1	Escape Shackle	self	-	used	869	15000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	460	1	Symbol of the Assassin	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-WIND_RIDER	531	1	Critical Wound	target	dagger	used	903	8000	43.0	0.0	0.0	0.0	false	0	0	-	531-1:15	-
+WIND_RIDER	531	1	Critical Wound	target	dagger	used	903	8000	43.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	623	1	Find Trap	self	-	used	2173	3000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	624	1	Remove Trap	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 WIND_RIDER	821	1	Shadow Step	target	-	used	400	75000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
-WIND_RIDER	928	1	Dual Blow	target	dual daggers	used	1084	8000	82.0	0.0	44096.0	0.0	false	0	0	-	-	-
-WIND_RIDER	991	1	Throwing Dagger	target	dagger	used	650	45000	82.0	0.0	200.0	0.0	false	0	0	-	991-1:6	-
+WIND_RIDER	928	1	Dual Blow	target	dual daggers	used	1084	8000	82.0	0.0	528.8354557991406	0.0	false	0	0	-	-	-
+WIND_RIDER	991	1	Throwing Dagger	target	dagger	used	650	45000	82.0	0.0	176.0	0.0	false	0	0	-	-	-
 WIND_RIDER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	34.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	3	9	Power Strike	target	sword	used	1238	3000	17.0	0.0	33.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	15	52	Charm	self	-	used	2006	15000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	16	24	Mortal Blow	target	dagger	used	1084	3000	30.0	0.0	74.6169363930967	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	19	37	Double Shot	target	bow	used	3560	3000	150.0	0.0	640.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	16	24	Mortal Blow	target	dagger	used	1084	3000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	19	37	Double Shot	target	bow	used	3560	3000	150.0	0.0	322.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	21	3	Poison Recovery	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	24	31	Burst Shot	target	bow	used	3560	6000	224.0	0.0	141.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	24	31	Burst Shot	target	bow	used	3560	6000	224.0	0.0	167.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	27	5	Unlock	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	56	24	Power Shot	target	bow	used	3560	6000	67.0	0.0	150.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	56	24	Power Shot	target	bow	used	3560	6000	67.0	0.0	147.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	58	55	Elemental Heal	self	-	used	6686	3000	222.57787999999982	0.0	0.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	61	3	Cure Bleeding	self	-	used	1337	2000	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	77	2	Attack Aura	self	-	used	5349	2000	10.0	0.0	0.0	0.0	false	0	0	77-2:1200	-	-
 MOONLIGHT_SENTINEL	91	2	Defense Aura	self	-	used	5349	2000	8.0	0.0	0.0	0.0	false	0	0	91-2:1200	-	-
 MOONLIGHT_SENTINEL	96	2	Bleed	target	dagger	used	1084	3000	37.0	0.0	0.0	0.0	false	0	0	-	96-2:10	-
 MOONLIGHT_SENTINEL	99	2	Rapid Shot	self	-	used	1304	3000	25.0	0.0	0.0	0.0	false	0	0	99-2:1200	-	-
-MOONLIGHT_SENTINEL	101	40	Stun Shot	target	bow	used	3560	3000	109.0	0.0	210.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	101	40	Stun Shot	target	bow	used	3560	3000	109.0	0.0	206.0	0.0	false	0	0	-	101-40:5	-
 MOONLIGHT_SENTINEL	102	16	Entangle	target	-	used	4012	2000	28.0	0.0	0.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	111	1	Ultimate Evasion	self	-	used	869	900000	13.0	0.0	0.0	0.0	false	0	0	111-1:30	-	-
 MOONLIGHT_SENTINEL	123	3	Spirit Barrier	self	-	used	5349	2000	22.0	0.0	0.0	0.0	false	0	0	123-3:1200	-	-
@@ -669,16 +669,16 @@ MOONLIGHT_SENTINEL	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	
 MOONLIGHT_SENTINEL	323	1	Quiver of Arrow: A Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	324	1	Quiver of Arrow: S Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	334-1:-1	-	-
-MOONLIGHT_SENTINEL	343	1	Lethal Shot	target	bow	used	3560	8000	153.0	0.0	430.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	354	1	Hamstring Shot	target	bow	used	3560	15000	78.0	0.0	174.0	0.0	false	0	0	-	354-1:35	-
-MOONLIGHT_SENTINEL	369	1	Evade Shot	target	bow	used	3560	75000	114.0	0.0	187.0	0.0	false	0	0	369-1:30	-	-
+MOONLIGHT_SENTINEL	343	1	Lethal Shot	target	bow	used	3560	8000	153.0	0.0	862.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	354	1	Hamstring Shot	target	bow	used	3560	15000	78.0	0.0	183.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	369	1	Evade Shot	target	bow	used	3560	75000	114.0	0.0	194.0	0.0	false	0	0	369-1:30	-	-
 MOONLIGHT_SENTINEL	413	8	Rapid Fire	self	bow	used	1780	75000	34.0	0.0	0.0	0.0	false	0	0	413-8:120	-	-
 MOONLIGHT_SENTINEL	415	3	Spirit of Sagittarius	self	-	used	1739	4000	34.0	0.0	0.0	0.0	false	0	0	415-3:1200	-	-
 MOONLIGHT_SENTINEL	416	3	Blessing of Sagittarius	self	-	used	1739	4000	34.0	0.0	0.0	0.0	false	0	0	416-3:1200	-	-
 MOONLIGHT_SENTINEL	459	1	Symbol of the Sniper	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	933	1	Detection	self	-	used	2173	8000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	987	1	Multiple Shot	target	bow	used	2670	12000	162.0	0.0	1642.0	0.0	false	0	0	-	-	-
-MOONLIGHT_SENTINEL	990	1	Death Shot	target	bow	used	3115	12000	165.0	0.0	1138.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	987	1	Multiple Shot	target	bow	used	2670	12000	162.0	0.0	788.0	0.0	false	0	0	-	-	-
+MOONLIGHT_SENTINEL	990	1	Death Shot	target	bow	used	3115	12000	165.0	0.0	2277.0	0.0	false	0	0	-	-	-
 MOONLIGHT_SENTINEL	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	337	1	Arcane Power	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	337-1:-1	-	-
 MYSTIC_MUSE	1011	6	Heal	self	-	used	7853	2400	17.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -692,14 +692,14 @@ MYSTIC_MUSE	1068	1	Might	self	-	used	6283	1600	8.0	0.0	0.0	0.0	false	0	0	1068-1:
 MYSTIC_MUSE	1069	42	Sleep	target	-	used	15707	3200	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1071	14	Surrender To Water	target	-	used	2356	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1072	5	Sleeping Cloud	target	-	used	23561	6400	78.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1078	2	Concentration	self	-	used	6283	1600	21.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
+MYSTIC_MUSE	1078	2	Concentration	self	-	used	6283	1600	21.0	0.0	0.0	0.0	false	0	0	1078-2:2400	-	-
 MYSTIC_MUSE	1126	6	Servitor Recharge	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1127	12	Servitor Heal	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1145	1	Bright Servitor	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1164	19	Curse Weakness	target	-	used	2356	-	69.0	0.0	0.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1164	19	Curse Weakness	target	-	used	2356	1600	69.0	0.0	0.0	0.0	false	0	0	-	1164-19:34	-
 MYSTIC_MUSE	1169	14	Curse Fear	target	-	used	6283	2400	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1172	8	Aura Burn	target	-	used	2356	-	30.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1174	22	Frost Wall	target	-	used	4712	3200	85.31442000000015	0.0	39.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1174	22	Frost Wall	target	-	used	4712	3200	85.31442000000015	0.0	90.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1175	8	Aqua Swirl	target	-	used	6283	-	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1177	5	Wind Strike	target	-	used	6283	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1181	3	Flame Strike	target	-	used	6283	3200	32.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -711,31 +711,31 @@ MYSTIC_MUSE	1216	1	Self Heal	self	-	used	7853	2400	7.0	0.0	0.0	0.0	false	0	0	-	-
 MYSTIC_MUSE	1223	15	Surrender To Earth	target	-	used	2356	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1226	4	Summon Boxer the Unicorn	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1227	4	Summon Mirage the Unicorn	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1231	28	Aura Flare	target	-	used	2356	-	69.0	0.0	92.0	0.0	false	0	0	1231-28:3	-	-
-MYSTIC_MUSE	1235	28	Hydro Blast	target	-	used	6283	-	55.0	0.0	115.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1236	19	Frost Bolt	target	-	used	5183	-	55.0	0.0	76.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1237	17	Ice Dagger	target	-	used	3926	-	53.0	0.0	59.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1231	28	Aura Flare	target	-	used	2356	-	69.0	0.0	44.0	0.0	false	0	0	1231-28:3	-	-
+MYSTIC_MUSE	1235	28	Hydro Blast	target	-	used	6283	-	55.0	0.0	54.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1236	19	Frost Bolt	target	-	used	5183	-	55.0	0.0	72.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1237	17	Ice Dagger	target	-	used	3926	-	53.0	0.0	56.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1238	3	Freezing Skin	self	-	used	6283	1600	41.0	0.0	0.0	0.0	false	0	0	1238-3:1200	-	-
 MYSTIC_MUSE	1264	3	Solar Spark	target	-	used	7853	6400	30.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1265	14	Solar Flare	target	-	used	7853	6400	68.0	0.0	72.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1265	14	Solar Flare	target	-	used	7853	6400	68.0	0.0	186.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1274	4	Energy Bolt	target	-	used	3141	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1275	14	Aura Bolt	target	-	used	3141	-	28.0	0.0	57.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1286	1	Seed of Water	self	-	used	6283	1600	214.6288400000003	0.0	0.0	0.0	false	0	0	1286-1:600	-	-
 MYSTIC_MUSE	1288	1	Aura Symphony	target	-	used	6283	240000	214.6288400000003	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1290	1	Blizzard	target	-	used	6283	240000	214.6288400000003	0.0	81.0	0.0	false	0	0	-	1290-1:17	-
-MYSTIC_MUSE	1293	1	Elemental Symphony	target	-	used	6283	240000	214.6288400000003	0.0	121.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1295	9	Aqua Splash	target	-	used	7853	4000	82.0	0.0	56.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1290	1	Blizzard	target	-	used	6283	240000	214.6288400000003	0.0	76.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1293	1	Elemental Symphony	target	-	used	6283	240000	214.6288400000003	0.0	188.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1295	9	Aqua Splash	target	-	used	7853	4000	82.0	0.0	33.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1338	1	Arcane Chaos	target	-	used	6283	12000	57.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1340	1	Ice Vortex	target	-	used	9424	12000	84.0	0.0	163.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1342	1	Light Vortex	target	-	used	9424	12000	84.0	0.0	74.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1340	1	Ice Vortex	target	-	used	9424	12000	84.0	0.0	149.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1342	1	Light Vortex	target	-	used	9424	12000	84.0	0.0	194.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1417	5	Aura Flash	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1421	1	Raging Waves	target	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1453	1	Ice Vortex Crusher	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1454	1	Diamond Dust	target	-	used	4712	12000	109.0	0.0	76.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1455	1	Throne of Ice	target	-	used	6283	60000	109.0	0.0	0.0	0.0	false	0	0	-	1455-1:7	-
-MYSTIC_MUSE	1554	1	Aura Blast	target	-	used	4712	12000	17.314420000000155	0.0	213.0	0.0	false	0	0	-	-	-
-MYSTIC_MUSE	1555	1	Aura Cannon	target	-	used	3141	8000	0.0	0.0	288.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1454	1	Diamond Dust	target	-	used	4712	12000	109.0	0.0	70.0	0.0	false	0	0	-	1454-1:19	-
+MYSTIC_MUSE	1455	1	Throne of Ice	target	-	used	6283	60000	109.0	0.0	0.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1554	1	Aura Blast	target	-	used	4712	12000	17.314420000000155	0.0	191.0	0.0	false	0	0	-	-	-
+MYSTIC_MUSE	1555	1	Aura Cannon	target	-	used	3141	8000	0.0	0.0	334.0	0.0	false	0	0	-	-	-
 MYSTIC_MUSE	1556	1	Arcane Shield	self	-	used	1570	240000	112.0	0.0	0.0	0.0	false	0	0	1556-1:10	-	-
 ELEMENTAL_MASTER	67	7	Summon Life Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	338	1	Arcane Agility	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	338-1:-1	-	-
@@ -744,10 +744,10 @@ ELEMENTAL_MASTER	1011	6	Heal	self	-	used	7853	2400	17.0	0.0	0.0	0.0	false	0	0	-	
 ELEMENTAL_MASTER	1012	1	Cure Poison	self	-	used	6283	3200	8.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	1015	3	Battle Heal	self	-	used	3141	-	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	1027	3	Group Heal	self	-	used	10995	4800	34.0	0.0	0.0	0.0	false	0	0	-	-	-
-ELEMENTAL_MASTER	1040	1	Shield	self	-	used	6283	1600	8.0	0.0	0.0	0.0	false	0	0	1040-1:1200	-	-
+ELEMENTAL_MASTER	1040	1	Shield	self	-	used	6283	1600	8.0	0.0	0.0	0.0	false	0	0	1040-1:2400	-	-
 ELEMENTAL_MASTER	1068	1	Might	self	-	used	6283	1600	8.0	0.0	0.0	0.0	false	0	0	1068-1:1200	-	-
 ELEMENTAL_MASTER	1069	9	Sleep	target	-	used	15707	3200	24.0	0.0	0.0	0.0	false	0	0	-	-	-
-ELEMENTAL_MASTER	1078	2	Concentration	self	-	used	6283	1600	21.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
+ELEMENTAL_MASTER	1078	2	Concentration	self	-	used	6283	-	21.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
 ELEMENTAL_MASTER	1126	34	Servitor Recharge	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	1127	45	Servitor Heal	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	1139	2	Servitor Magic Shield	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -786,8 +786,8 @@ ELEMENTAL_MASTER	1403	1	Summon Friend	self	(no loadout fits)	refused	0	-	0.0	0.0
 ELEMENTAL_MASTER	1407	1	Summon Magnus the Unicorn	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	1424	1	Anti-Summoning Field	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 ELEMENTAL_MASTER	1547	3	Spirit Sharing	self	-	used	6283	1600	52.0	0.0	0.0	0.0	false	0	0	1547-3:1200	-	-
-ELEMENTAL_MASTER	1557	1	Servitor Share	self	-	used	1570	48000	35.0	0.0	0.0	0.0	false	0	0	1557-1:2400	-	-
-ELEMENTAL_MASTER	1558	24	Dimension Spiral	target	-	used	4712	12000	121.70442000000003	0.0	203.0	0.0	false	0	0	-	-	-
+ELEMENTAL_MASTER	1557	1	Servitor Share	self	-	used	1570	48000	35.0	0.0	0.0	0.0	false	0	0	1557-1:1200	-	-
+ELEMENTAL_MASTER	1558	24	Dimension Spiral	target	-	used	4712	12000	121.70442000000003	0.0	255.0	0.0	false	0	0	-	-	-
 EVA_SAINT	336	1	Arcane Wisdom	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	336-1:-1	-	-
 EVA_SAINT	1011	18	Heal	self	-	used	7853	2400	38.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1012	3	Cure Poison	self	-	used	6283	3200	41.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -800,7 +800,7 @@ EVA_SAINT	1028	19	Might of Heaven	target	(no loadout fits)	refused	0	-	0.0	0.0	0
 EVA_SAINT	1031	8	Disrupt Undead	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1033	3	Resist Poison	self	-	used	6283	1600	29.0	0.0	0.0	0.0	false	0	0	1033-3:1200	-	-
 EVA_SAINT	1035	4	Mental Shield	self	-	used	6283	1600	38.0	0.0	0.0	0.0	false	0	0	1035-4:1200	-	-
-EVA_SAINT	1040	3	Shield	self	-	used	6283	1600	29.0	0.0	0.0	0.0	false	0	0	1040-3:1200	-	-
+EVA_SAINT	1040	3	Shield	self	-	used	6283	1600	29.0	0.0	0.0	0.0	false	0	0	1040-3:2400	-	-
 EVA_SAINT	1043	1	Holy Weapon	self	-	used	6283	1600	21.0	0.0	0.0	0.0	false	0	0	1043-1:1200	-	-
 EVA_SAINT	1044	3	Regeneration	self	-	used	6283	1600	38.0	0.0	0.0	0.0	false	0	0	1044-3:1200	-	-
 EVA_SAINT	1050	2	Return	self	-	used	2356	60000	146.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -809,7 +809,7 @@ EVA_SAINT	1069	42	Sleep	target	-	used	15707	3200	52.0	0.0	0.0	0.0	false	0	0	-	-	
 EVA_SAINT	1073	2	Kiss of Eva	self	-	used	6283	1600	45.0	0.0	0.0	0.0	false	0	0	1073-2:1200	-	-
 EVA_SAINT	1078	6	Concentration	self	-	used	6283	1600	48.0	0.0	0.0	0.0	false	0	0	1078-6:1200	-	-
 EVA_SAINT	1087	3	Agility	self	-	used	6283	1600	36.0	0.0	0.0	0.0	false	0	0	1087-3:1200	-	-
-EVA_SAINT	1164	1	Curse Weakness	target	-	used	2356	1600	2.0	0.0	0.0	0.0	false	0	0	-	1164-1:15	-
+EVA_SAINT	1164	1	Curse Weakness	target	-	used	2356	1600	2.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1177	5	Wind Strike	target	-	used	6283	-	11.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1184	4	Ice Bolt	target	-	used	5183	1600	11.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1201	9	Dryad Root	target	-	used	3926	1600	22.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -831,7 +831,7 @@ EVA_SAINT	1354	1	Arcane Protection	self	-	used	6283	2400	53.0	0.0	0.0	0.0	false	
 EVA_SAINT	1355	1	Prophecy of Water	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1359	1	Block Wind Walk	target	-	used	6283	6400	53.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1393	3	Resist Dark	self	-	used	6283	1600	65.0	0.0	0.0	0.0	false	0	0	1393-3:1200	-	-
-EVA_SAINT	1394	10	Trance	target	-	used	4712	-	26.0	0.0	0.0	0.0	false	0	0	-	-	-
+EVA_SAINT	1394	10	Trance	target	-	used	4712	-	26.0	0.0	0.0	0.0	false	0	0	-	1394-10:9	-
 EVA_SAINT	1395	10	Erase	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1397	3	Clarity	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1398	10	Mana Burn	target	-	used	6283	6400	97.0	0.0	0.0	60.24706131393759	false	0	0	-	-	-
@@ -845,35 +845,35 @@ EVA_SAINT	1550	1	Mass Cure Poison	self	-	used	6283	12000	63.0	0.0	0.0	0.0	false	
 EVA_SAINT	1552	1	Mass Vitalize	self	-	used	4712	7200	178.70442000000003	0.0	0.0	0.0	false	0	0	-	-	-
 EVA_SAINT	1553	1	Chain Heal	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	2	19	Confusion	self	-	used	2210	5000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	16	9	Mortal Blow	target	dagger	used	1093	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	48.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	16	9	Mortal Blow	target	dagger	used	1093	3000	15.0	0.0	43.325418712120154	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	18	37	Aura of Hate	target	-	used	877	40000	102.0	0.0	0.0	0.0	false	0	0	-	18-37:3	-
 SHILLIEN_TEMPLAR	22	7	Summon Vampiric Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	28	49	Aggression	target	-	used	789	6000	0.0	0.0	0.0	0.0	false	0	0	-	28-49:3	-
 SHILLIEN_TEMPLAR	33	8	Summon Phantom Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	56	9	Power Shot	target	bow	used	3592	6000	34.0	0.0	81.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	70	53	Drain Health	target	-	used	4420	4000	41.0	0.0	19.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	56	9	Power Shot	target	bow	used	3592	6000	34.0	0.0	82.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	70	53	Drain Health	target	-	used	4420	4000	41.0	0.0	39.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	77	2	Attack Aura	self	-	used	5893	2000	10.0	0.0	0.0	0.0	false	0	0	77-2:1200	-	-
 SHILLIEN_TEMPLAR	91	2	Defense Aura	self	-	used	5893	2000	8.0	0.0	0.0	0.0	false	0	0	91-2:1200	-	-
 SHILLIEN_TEMPLAR	103	4	Corpse Plague	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	105	24	Freezing Strike	target	-	used	4420	2000	55.17894000000001	0.0	26.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	105	24	Freezing Strike	target	-	used	4420	2000	55.17894000000001	0.0	27.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	110	2	Ultimate Defense	self	-	used	877	900000	21.0	0.0	0.0	0.0	false	0	0	110-2:30	-	-
 SHILLIEN_TEMPLAR	112	4	Deflect Arrow	self	-	used	1315	3000	22.0	0.0	0.0	0.0	false	0	0	112-4:1200	-	-
 SHILLIEN_TEMPLAR	115	17	Power Break	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	122	15	Hex	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	129	5	Poison	target	-	used	4420	2000	28.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	98.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	102.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	278	6	Summon Viper Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_TEMPLAR	279	5	Lightning Strike	target	-	used	4420	15000	89.17894000000001	0.0	44.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	279	5	Lightning Strike	target	-	used	4420	15000	89.17894000000001	0.0	19.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	288	4	Guard Stance	self	-	used	0	-	13.0	0.0	0.0	0.0	false	0	0	288-4:-1	-	-
-SHILLIEN_TEMPLAR	289	15	Life Leech	target	-	used	4420	4000	75.17894000000001	0.0	19.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	289	15	Life Leech	target	-	used	4420	4000	75.17894000000001	0.0	18.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	322	6	Shield Fortress	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	322-6:-1	-	-
 SHILLIEN_TEMPLAR	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
 SHILLIEN_TEMPLAR	342	1	Touch of Death	target	-	used	1578	150000	0.0	669.0	0.0	0.0	false	0	0	-	342-1:60	-
 SHILLIEN_TEMPLAR	351	1	Magical Mirror	self	shield	used	1754	150000	36.0	0.0	0.0	0.0	false	0	0	351-1:300	-	-
 SHILLIEN_TEMPLAR	352	1	Shield Bash	target	shield	used	877	3000	18.0	0.0	0.0	0.0	false	0	0	-	352-1:1	-
 SHILLIEN_TEMPLAR	368	1	Vengeance	target	shield	used	877	900000	35.0	0.0	0.0	0.0	false	0	0	368-1:30	-	-
-SHILLIEN_TEMPLAR	401	10	Judgment	target	sword	used	1388	4000	72.0	0.0	154.0	0.0	false	0	0	-	401-10:17	-
+SHILLIEN_TEMPLAR	401	10	Judgment	target	sword	used	1388	4000	72.0	0.0	144.0	0.0	false	0	0	-	401-10:17	-
 SHILLIEN_TEMPLAR	402	10	Arrest	target	-	used	1754	4000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	450	10	Banish Seraph	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	454	1	Symbol of Defense	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -883,25 +883,25 @@ SHILLIEN_TEMPLAR	780	1	Summon Smart Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	
 SHILLIEN_TEMPLAR	813	1	Vanguard	self	-	used	5000	30000	31.0	0.0	0.0	0.0	false	0	0	813-1:21600	-	-
 SHILLIEN_TEMPLAR	916	4	Shield Deflect Magic	self	shield	used	500	45000	29.0	0.0	0.0	0.0	false	0	0	916-4:8	-	-
 SHILLIEN_TEMPLAR	982	3	Combat Aura	self	-	used	1315	2000	52.0	0.0	0.0	0.0	false	0	0	982-3:1200	-	-
-SHILLIEN_TEMPLAR	984	25	Shield Strike	target	shield	used	1280	6000	83.0	0.0	191.0	0.0	false	0	0	-	-	-
+SHILLIEN_TEMPLAR	984	25	Shield Strike	target	shield	used	1280	6000	83.0	0.0	173.0	0.0	false	0	0	-	-	-
 SHILLIEN_TEMPLAR	985	1	Challenge for Fate	target	-	used	877	45000	0.0	0.0	0.0	0.0	false	0	0	6913-1:15	985-1:4	-
 SHILLIEN_TEMPLAR	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	2	19	Confusion	self	-	used	2210	5000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_DANCER	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	42.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	44.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	16	9	Mortal Blow	target	dagger	used	1093	3000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	28	12	Aggression	target	-	used	789	6000	0.0	0.0	0.0	0.0	false	0	0	-	28-12:2	-
-SPECTRAL_DANCER	56	9	Power Shot	target	bow	used	3592	6000	34.0	0.0	86.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	56	9	Power Shot	target	bow	used	3592	6000	34.0	0.0	84.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	70	53	Drain Health	target	-	used	4420	4000	41.0	0.0	16.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	77	2	Attack Aura	self	-	used	5893	2000	10.0	0.0	0.0	0.0	false	0	0	77-2:1200	-	-
-SPECTRAL_DANCER	84	3	Poison Blade Dance	target	dual swords	used	1619	15000	50.0	0.0	54.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	84	3	Poison Blade Dance	target	dual swords	used	1619	15000	50.0	0.0	57.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	91	2	Defense Aura	self	-	used	5893	2000	8.0	0.0	0.0	0.0	false	0	0	91-2:1200	-	-
-SPECTRAL_DANCER	105	24	Freezing Strike	target	-	used	4420	2000	55.17894000000001	0.0	21.0	0.0	false	0	0	-	105-24:35	-
+SPECTRAL_DANCER	105	24	Freezing Strike	target	-	used	4420	2000	55.17894000000001	0.0	27.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	110	1	Ultimate Defense	self	-	used	877	900000	10.0	0.0	0.0	0.0	false	0	0	110-1:30	-	-
 SPECTRAL_DANCER	112	2	Deflect Arrow	self	-	used	1315	3000	14.0	0.0	0.0	0.0	false	0	0	112-2:1200	-	-
-SPECTRAL_DANCER	115	17	Power Break	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	115	17	Power Break	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	115-17:17	-
 SPECTRAL_DANCER	122	15	Hex	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	129	5	Poison	target	-	used	4420	2000	28.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_DANCER	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	93.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	83.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	271	1	Dance of the Warrior	self	dual swords	used	2027	3000	54.0	0.0	0.0	0.0	false	0	0	271-1:120	-	-
 SPECTRAL_DANCER	272	1	Dance of Inspiration	self	dual swords	used	2027	3000	54.0	0.0	0.0	0.0	false	0	0	272-1:120	-	-
 SPECTRAL_DANCER	273	1	Dance of the Mystic	self	dual swords	used	2027	3000	54.0	0.0	0.0	0.0	false	0	0	273-1:120	-	-
@@ -916,92 +916,92 @@ SPECTRAL_DANCER	311	1	Dance of Protection	self	dual swords	used	2027	3000	54.0	0
 SPECTRAL_DANCER	365	1	Dance of Siren	self	dual swords	used	2027	3000	54.0	0.0	0.0	0.0	false	0	0	365-1:120	-	-
 SPECTRAL_DANCER	366	1	Dance of Shadows	self	dual swords	used	2027	3000	54.0	0.0	0.0	0.0	false	0	0	366-1:120	-	-
 SPECTRAL_DANCER	367	1	Dance of Medusa	target	dual swords	used	1621	15000	53.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_DANCER	402	10	Arrest	target	-	used	1754	4000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_DANCER	408	10	Demonic Blade Dance	target	dual swords	used	1216	15000	54.0	0.0	109.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	402	10	Arrest	target	-	used	1754	4000	34.0	0.0	0.0	0.0	false	0	0	-	402-10:6	-
+SPECTRAL_DANCER	408	10	Demonic Blade Dance	target	dual swords	used	1216	15000	54.0	0.0	110.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	455	1	Symbol of Noise	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	530	1	Dance of Alignment	self	dual swords	used	2027	150000	48.0	0.0	0.0	0.0	false	0	0	530-1:120	-	-
-SPECTRAL_DANCER	986	25	Deadly Strike	target	sword	used	1041	5000	83.0	0.0	225.0	0.0	false	0	0	-	-	-
+SPECTRAL_DANCER	986	25	Deadly Strike	target	sword	used	1041	5000	83.0	0.0	238.0	0.0	false	0	0	-	-	-
 SPECTRAL_DANCER	989	1	Defense Motion	self	dual swords	used	2027	3000	27.0	0.0	0.0	0.0	false	0	0	989-1:120	-	-
 SPECTRAL_DANCER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	2	19	Confusion	self	-	used	2210	5000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	41.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	42.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	11	12	Trick	target	-	used	1052	5000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	16	24	Mortal Blow	target	dagger	used	1093	3000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	27	14	Unlock	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	30	37	Backstab	target	dagger	used	1093	3000	112.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	51	1	Lure	self	-	used	1315	3000	44.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	56	24	Power Shot	target	bow	used	3592	6000	67.0	0.0	114.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	70	53	Drain Health	target	-	used	4420	4000	43.78893999999991	0.0	39.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	70	53	Drain Health	target	-	used	4420	4000	43.78893999999991	0.0	42.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	77	2	Attack Aura	self	-	used	5893	2000	10.0	0.0	0.0	0.0	false	0	0	77-2:1200	-	-
 GHOST_HUNTER	91	2	Defense Aura	self	-	used	5893	2000	8.0	0.0	0.0	0.0	false	0	0	91-2:1200	-	-
 GHOST_HUNTER	96	6	Bleed	target	dagger	used	1093	3000	89.0	0.0	0.0	0.0	false	0	0	-	96-6:10	-
 GHOST_HUNTER	99	1	Rapid Shot	self	-	used	1315	3000	14.0	0.0	0.0	0.0	false	0	0	99-1:1200	-	-
-GHOST_HUNTER	101	3	Stun Shot	target	bow	used	3592	3000	49.0	0.0	92.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	105	24	Freezing Strike	target	-	used	4420	2000	60.78893999999991	0.0	23.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	101	3	Stun Shot	target	bow	used	3592	3000	49.0	0.0	96.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	105	24	Freezing Strike	target	-	used	4420	2000	60.78893999999991	0.0	25.0	0.0	false	0	0	-	105-24:35	-
 GHOST_HUNTER	106	14	Veil	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	111	2	Ultimate Evasion	self	-	used	877	900000	25.0	0.0	0.0	0.0	false	0	0	111-2:30	-	-
 GHOST_HUNTER	115	17	Power Break	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	122	15	Hex	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	122	15	Hex	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	122-15:17	-
 GHOST_HUNTER	129	5	Poison	target	-	used	4420	2000	28.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	221	1	Silent Move	self	-	used	0	-	7.0	0.0	0.0	0.0	false	0	0	221-1:-1	-	-
-GHOST_HUNTER	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	85.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	89.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
-GHOST_HUNTER	263	37	Deadly Blow	target	dagger	used	1093	3000	68.0	0.0	0.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	263	37	Deadly Blow	target	dagger	used	1093	3000	68.0	0.0	394.24134238284023	0.0	false	0	0	-	-	-
 GHOST_HUNTER	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	312-20:-1	-	-
 GHOST_HUNTER	321	10	Blinding Blow	target	dagger	used	1093	30000	72.0	0.0	0.0	0.0	false	0	0	321-10:15	-	-
 GHOST_HUNTER	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	334-1:-1	-	-
-GHOST_HUNTER	344	1	Lethal Blow	target	dagger	used	1093	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
+GHOST_HUNTER	344	1	Lethal Blow	target	dagger	used	1093	4000	77.0	0.0	399.20430444175145	0.0	false	0	0	-	-	-
 GHOST_HUNTER	355	1	Focus Death	self	dagger	used	1214	30000	36.0	0.0	0.0	0.0	false	0	0	355-1:120	-	-
 GHOST_HUNTER	357	1	Focus Power	self	dagger	used	1214	30000	36.0	0.0	0.0	0.0	false	0	0	357-1:120	-	-
 GHOST_HUNTER	358	1	Bluff	target	dagger	used	607	8000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	410	3	Mortal Strike	self	dagger	used	1214	150000	34.0	0.0	0.0	0.0	false	0	0	410-3:120	-	-
 GHOST_HUNTER	412	10	Sand Bomb	target	-	used	1754	4000	34.0	0.0	0.0	0.0	false	0	0	-	412-10:17	-
 GHOST_HUNTER	419	4	Summon Treasure Key	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	447	1	Counterattack	self	-	used	500	-	29.0	0.0	0.0	0.0	false	0	0	447-1:10	-	-
+GHOST_HUNTER	447	1	Counterattack	self	-	used	500	75000	29.0	0.0	0.0	0.0	false	0	0	447-1:10	-	-
 GHOST_HUNTER	453	1	Escape Shackle	self	-	used	877	15000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	460	1	Symbol of the Assassin	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	531	1	Critical Wound	target	dagger	used	910	8000	43.0	0.0	0.0	0.0	false	0	0	-	531-1:15	-
+GHOST_HUNTER	531	1	Critical Wound	target	dagger	used	910	8000	43.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	623	1	Find Trap	self	-	used	2192	3000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	624	1	Remove Trap	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	821	1	Shadow Step	target	-	used	400	75000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	928	1	Dual Blow	target	dual daggers	used	1093	8000	82.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_HUNTER	991	1	Throwing Dagger	target	dagger	used	655	45000	82.0	0.0	208.0	0.0	false	0	0	-	991-1:6	-
+GHOST_HUNTER	928	1	Dual Blow	target	dual daggers	used	1093	8000	82.0	0.0	693.6684054094803	0.0	false	0	0	-	-	-
+GHOST_HUNTER	991	1	Throwing Dagger	target	dagger	used	655	45000	82.0	0.0	181.0	0.0	false	0	0	-	-	-
 GHOST_HUNTER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	2	19	Confusion	self	-	used	2210	5000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	16	24	Mortal Blow	target	dagger	used	1093	3000	30.0	0.0	93.76060153197614	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	3	9	Power Strike	target	sword	used	1250	3000	17.0	0.0	44.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	16	24	Mortal Blow	target	dagger	used	1093	3000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	19	37	Double Shot	target	bow	used	3592	3000	150.0	0.0	325.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	27	5	Unlock	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	56	24	Power Shot	target	bow	used	3592	6000	67.0	0.0	148.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	70	53	Drain Health	target	-	used	4420	4000	43.78893999999991	0.0	34.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	56	24	Power Shot	target	bow	used	3592	6000	67.0	0.0	162.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	70	53	Drain Health	target	-	used	4420	4000	43.78893999999991	0.0	19.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	77	2	Attack Aura	self	-	used	5893	2000	10.0	0.0	0.0	0.0	false	0	0	77-2:1200	-	-
 GHOST_SENTINEL	91	2	Defense Aura	self	-	used	5893	2000	8.0	0.0	0.0	0.0	false	0	0	91-2:1200	-	-
 GHOST_SENTINEL	96	2	Bleed	target	dagger	used	1093	3000	37.0	0.0	0.0	0.0	false	0	0	-	96-2:10	-
 GHOST_SENTINEL	99	2	Rapid Shot	self	-	used	1315	3000	25.0	0.0	0.0	0.0	false	0	0	99-2:1200	-	-
-GHOST_SENTINEL	101	40	Stun Shot	target	bow	used	3592	3000	109.0	0.0	229.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	105	24	Freezing Strike	target	-	used	4420	2000	60.78893999999991	0.0	23.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	101	40	Stun Shot	target	bow	used	3592	3000	109.0	0.0	199.0	0.0	false	0	0	-	101-40:5	-
+GHOST_SENTINEL	105	24	Freezing Strike	target	-	used	4420	2000	60.78893999999991	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	111	1	Ultimate Evasion	self	-	used	877	900000	13.0	0.0	0.0	0.0	false	0	0	111-1:30	-	-
 GHOST_SENTINEL	115	17	Power Break	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	122	15	Hex	target	-	used	1768	2000	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	129	5	Poison	target	-	used	4420	2000	28.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	78.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	223	49	Sting	target	sword	used	1250	3000	75.0	0.0	93.0	0.0	false	0	0	-	223-49:10	-
 GHOST_SENTINEL	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
 GHOST_SENTINEL	303	4	Soul of Sagittarius	self	-	used	1754	4000	0.0	364.0	0.0	0.0	false	0	0	303-4:1200	-	-
 GHOST_SENTINEL	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	312-20:-1	-	-
-GHOST_SENTINEL	314	16	Fatal Counter	target	bow	used	3592	5000	148.0	0.0	116.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	314	16	Fatal Counter	target	bow	used	3592	5000	148.0	0.0	113.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	323	1	Quiver of Arrow: A Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	324	1	Quiver of Arrow: S Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	334-1:-1	-	-
-GHOST_SENTINEL	343	1	Lethal Shot	target	bow	used	3592	8000	153.0	0.0	420.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	354	1	Hamstring Shot	target	bow	used	3592	15000	78.0	0.0	432.0	0.0	false	0	0	-	354-1:35	-
-GHOST_SENTINEL	369	1	Evade Shot	target	bow	used	3592	75000	114.0	0.0	208.0	0.0	false	0	0	369-1:30	-	-
+GHOST_SENTINEL	343	1	Lethal Shot	target	bow	used	3592	8000	153.0	0.0	437.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	354	1	Hamstring Shot	target	bow	used	3592	15000	78.0	0.0	200.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	369	1	Evade Shot	target	bow	used	3592	75000	114.0	0.0	190.0	0.0	false	0	0	369-1:30	-	-
 GHOST_SENTINEL	414	8	Dead Eye	self	bow	used	1796	75000	35.0	0.0	0.0	0.0	false	0	0	414-8:120	-	-
 GHOST_SENTINEL	415	3	Spirit of Sagittarius	self	-	used	1754	4000	34.0	0.0	0.0	0.0	false	0	0	415-3:1200	-	-
 GHOST_SENTINEL	417	5	Pain of Sagittarius	self	-	used	1754	8000	0.0	407.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	459	1	Symbol of the Sniper	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	933	1	Detection	self	-	used	2192	8000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	987	1	Multiple Shot	target	bow	used	2694	12000	162.0	0.0	1619.0	0.0	false	0	0	-	-	-
-GHOST_SENTINEL	990	1	Death Shot	target	bow	used	3143	12000	165.0	0.0	1082.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	987	1	Multiple Shot	target	bow	used	2694	12000	162.0	0.0	866.0	0.0	false	0	0	-	-	-
+GHOST_SENTINEL	990	1	Death Shot	target	bow	used	3143	12000	165.0	0.0	1184.0	0.0	false	0	0	-	-	-
 GHOST_SENTINEL	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	337	1	Arcane Power	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	337-1:-1	-	-
 STORM_SCREAMER	1011	6	Heal	self	-	used	8951	2400	17.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1009,7 +1009,7 @@ STORM_SCREAMER	1012	1	Cure Poison	self	-	used	7161	3200	8.0	0.0	0.0	0.0	false	0	
 STORM_SCREAMER	1015	3	Battle Heal	self	-	used	3580	-	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1027	3	Group Heal	self	-	used	12532	4800	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1040	1	Shield	self	-	used	7161	1600	8.0	0.0	0.0	0.0	false	0	0	1040-1:1200	-	-
-STORM_SCREAMER	1064	14	Silence	target	-	used	7161	6400	55.0	0.0	0.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1064	14	Silence	target	-	used	7161	6400	55.0	0.0	0.0	0.0	false	0	0	-	1064-14:34	-
 STORM_SCREAMER	1068	1	Might	self	-	used	7161	1600	8.0	0.0	0.0	0.0	false	0	0	1068-1:1200	-	-
 STORM_SCREAMER	1069	42	Sleep	target	-	used	17903	3200	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1074	14	Surrender To Wind	target	-	used	2685	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1019,7 +1019,7 @@ STORM_SCREAMER	1127	12	Servitor Heal	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	
 STORM_SCREAMER	1128	4	Summon Shadow	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1146	1	Mighty Servitor	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1147	6	Vampiric Touch	target	-	used	7161	2400	32.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1148	13	Death Spike	target	-	used	7161	-	40.0	0.0	133.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1148	13	Death Spike	target	-	used	7161	-	40.0	0.0	125.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1151	16	Corpse Life Drain	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1157	5	Body To Mind	self	-	used	7161	4000	0.0	366.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1159	22	Curse Death Link	target	-	used	7161	-	55.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1028,35 +1028,35 @@ STORM_SCREAMER	1167	6	Poisonous Cloud	target	-	used	7161	4000	82.0	0.0	0.0	0.0	f
 STORM_SCREAMER	1168	7	Curse Poison	target	-	used	7161	2400	53.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1169	14	Curse Fear	target	-	used	7161	2400	55.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1172	8	Aura Burn	target	-	used	2685	-	30.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1176	15	Tempest	target	-	used	8951	3200	82.0	0.0	68.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1176	15	Tempest	target	-	used	8951	3200	82.0	0.0	66.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1177	5	Wind Strike	target	-	used	7161	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1178	8	Twister	target	-	used	7161	-	24.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1181	3	Flame Strike	target	-	used	7161	3200	32.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1184	6	Ice Bolt	target	-	used	5908	-	16.0	0.0	0.0	0.0	false	0	0	-	1184-6:30	-
+STORM_SCREAMER	1181	3	Flame Strike	target	-	used	7161	-	32.0	0.0	0.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1184	6	Ice Bolt	target	-	used	5908	1600	16.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1206	5	Wind Shackle	target	-	used	2685	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1216	1	Self Heal	self	-	used	8951	2400	7.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1222	15	Curse Chaos	target	-	used	2685	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1224	17	Surrender To Poison	target	-	used	2685	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1228	4	Summon Silhouette	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1234	28	Vampiric Claw	target	-	used	7161	2400	98.0	0.0	119.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1239	28	Hurricane	target	-	used	7161	-	55.0	0.0	121.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1234	28	Vampiric Claw	target	-	used	7161	2400	98.0	0.0	127.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1239	28	Hurricane	target	-	used	7161	-	55.0	0.0	138.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1266	3	Shadow Spark	target	-	used	8951	6400	30.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1267	14	Shadow Flare	target	-	used	8951	6400	68.0	0.0	137.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1267	14	Shadow Flare	target	-	used	8951	6400	68.0	0.0	169.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1287	1	Seed of Wind	self	-	used	7161	1600	214.75516400000015	0.0	0.0	0.0	false	0	0	1287-1:600	-	-
-STORM_SCREAMER	1288	1	Aura Symphony	target	-	used	7161	240000	214.75516400000015	0.0	173.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1291	1	Demon Wind	target	-	used	7161	240000	214.75516400000015	0.0	182.0	0.0	false	0	0	-	1291-1:80	-
-STORM_SCREAMER	1294	1	Elemental Storm	target	-	used	7161	240000	214.75516400000015	0.0	251.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1288	1	Aura Symphony	target	-	used	7161	240000	214.75516400000015	0.0	93.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1291	1	Demon Wind	target	-	used	7161	240000	214.75516400000015	0.0	161.0	0.0	false	0	0	-	1291-1:80	-
+STORM_SCREAMER	1294	1	Elemental Storm	target	-	used	7161	240000	214.75516400000015	0.0	106.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1338	1	Arcane Chaos	target	-	used	7161	-	57.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1341	1	Wind Vortex	target	-	used	10741	12000	84.0	0.0	183.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1343	1	Dark Vortex	target	-	used	10741	12000	84.0	0.0	160.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1338	1	Arcane Chaos	target	-	used	7161	12000	57.0	0.0	0.0	0.0	false	0	0	-	1338-1:18	-
+STORM_SCREAMER	1341	1	Wind Vortex	target	-	used	10741	12000	84.0	0.0	142.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1343	1	Dark Vortex	target	-	used	10741	12000	84.0	0.0	141.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1417	5	Aura Flash	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1420	1	Cyclone	target	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1456	1	Wind Vortex Slug	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1457	1	Empowering Echo	self	-	used	7161	12000	145.0	0.0	0.0	0.0	false	0	0	1457-1:1200	-	-
 STORM_SCREAMER	1458	1	Throne of Wind	target	-	used	7161	60000	109.0	0.0	0.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1554	1	Aura Blast	target	-	used	5370	12000	17.377582000000075	0.0	216.0	0.0	false	0	0	-	-	-
-STORM_SCREAMER	1555	1	Aura Cannon	target	-	used	3580	8000	0.0	0.0	369.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1554	1	Aura Blast	target	-	used	5370	12000	17.377582000000075	0.0	218.0	0.0	false	0	0	-	-	-
+STORM_SCREAMER	1555	1	Aura Cannon	target	-	used	3580	8000	0.0	0.0	335.0	0.0	false	0	0	-	-	-
 STORM_SCREAMER	1556	1	Arcane Shield	self	-	used	1790	240000	112.0	0.0	0.0	0.0	false	0	0	1556-1:10	-	-
 SPECTRAL_MASTER	33	8	Summon Phantom Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	338	1	Arcane Agility	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	338-1:-1	-	-
@@ -1065,7 +1065,7 @@ SPECTRAL_MASTER	1011	6	Heal	self	-	used	8951	2400	17.0	0.0	0.0	0.0	false	0	0	-	-
 SPECTRAL_MASTER	1012	1	Cure Poison	self	-	used	7161	3200	8.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1015	3	Battle Heal	self	-	used	3580	-	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1027	3	Group Heal	self	-	used	12532	4800	34.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_MASTER	1040	1	Shield	self	-	used	7161	-	8.0	0.0	0.0	0.0	false	0	0	1040-1:1200	-	-
+SPECTRAL_MASTER	1040	1	Shield	self	-	used	7161	1600	8.0	0.0	0.0	0.0	false	0	0	1040-1:1200	-	-
 SPECTRAL_MASTER	1068	1	Might	self	-	used	7161	1600	8.0	0.0	0.0	0.0	false	0	0	1068-1:1200	-	-
 SPECTRAL_MASTER	1069	9	Sleep	target	-	used	17903	3200	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1078	2	Concentration	self	-	used	7161	1600	21.0	0.0	0.0	0.0	false	0	0	1078-2:1200	-	-
@@ -1086,14 +1086,14 @@ SPECTRAL_MASTER	1172	8	Aura Burn	target	-	used	2685	-	30.0	0.0	0.0	0.0	false	0	0
 SPECTRAL_MASTER	1177	5	Wind Strike	target	-	used	7161	-	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1178	8	Twister	target	-	used	7161	-	24.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1181	3	Flame Strike	target	-	used	7161	3200	32.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_MASTER	1184	6	Ice Bolt	target	-	used	5908	1600	16.0	0.0	0.0	0.0	false	0	0	-	-	-
+SPECTRAL_MASTER	1184	6	Ice Bolt	target	-	used	5908	1600	16.0	0.0	0.0	0.0	false	0	0	-	1184-6:30	-
 SPECTRAL_MASTER	1206	19	Wind Shackle	target	-	used	2685	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1216	1	Self Heal	self	-	used	8951	2400	7.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1222	1	Curse Chaos	target	-	used	2685	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1224	3	Surrender To Poison	target	-	used	2685	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1228	18	Summon Silhouette	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1262	5	Transfer Pain	self	-	used	0	-	13.0	0.0	0.0	0.0	false	0	0	1262-5:-1	-	-
-SPECTRAL_MASTER	1266	3	Shadow Spark	target	-	used	8951	-	30.0	0.0	0.0	0.0	false	0	0	-	-	-
+SPECTRAL_MASTER	1266	3	Shadow Spark	target	-	used	8951	6400	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1278	14	Summon Soulless	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1281	9	Summon Spark Cubic	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1299	2	Servitor Empowerment	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1110,10 +1110,10 @@ SPECTRAL_MASTER	1385	5	Mass Surrender to Wind	target	-	used	0	-	0.0	0.0	0.0	0.0	
 SPECTRAL_MASTER	1403	1	Summon Friend	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1408	1	Summon Spectral Lord	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1424	1	Anti-Summoning Field	self	-	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SPECTRAL_MASTER	1530	13	Death Spike	target	-	used	7161	-	40.0	0.0	83.0	0.0	false	0	0	-	-	-
+SPECTRAL_MASTER	1530	13	Death Spike	target	-	used	7161	-	40.0	0.0	73.0	0.0	false	0	0	-	-	-
 SPECTRAL_MASTER	1547	3	Spirit Sharing	self	-	used	7161	1600	52.0	0.0	0.0	0.0	false	0	0	1547-3:1200	-	-
 SPECTRAL_MASTER	1557	1	Servitor Share	self	-	used	1790	48000	35.0	0.0	0.0	0.0	false	0	0	1557-1:1200	-	-
-SPECTRAL_MASTER	1558	24	Dimension Spiral	target	-	used	5370	12000	121.76758199999995	0.0	115.0	0.0	false	0	0	-	-	-
+SPECTRAL_MASTER	1558	24	Dimension Spiral	target	-	used	5370	12000	121.76758199999995	0.0	207.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	336	1	Arcane Wisdom	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	336-1:-1	-	-
 SHILLIEN_SAINT	1011	18	Heal	self	-	used	8951	2400	38.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1012	3	Cure Poison	self	-	used	7161	3200	41.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1125,10 +1125,10 @@ SHILLIEN_SAINT	1027	15	Group Heal	self	-	used	12532	4800	77.0	0.0	0.0	0.0	false	
 SHILLIEN_SAINT	1031	8	Disrupt Undead	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1035	4	Mental Shield	self	-	used	7161	1600	38.0	0.0	0.0	0.0	false	0	0	1035-4:1200	-	-
 SHILLIEN_SAINT	1040	3	Shield	self	-	used	7161	1600	29.0	0.0	0.0	0.0	false	0	0	1040-3:1200	-	-
-SHILLIEN_SAINT	1059	3	Empower	self	-	used	7161	1600	36.0	0.0	0.0	0.0	false	0	0	1059-3:1200	-	-
+SHILLIEN_SAINT	1059	3	Empower	self	-	used	7161	1600	36.0	0.0	0.0	0.0	false	0	0	1059-3:2400	-	-
 SHILLIEN_SAINT	1068	3	Might	self	-	used	7161	1600	26.0	0.0	0.0	0.0	false	0	0	1068-3:1200	-	-
 SHILLIEN_SAINT	1069	9	Sleep	target	-	used	17903	3200	22.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_SAINT	1073	2	Kiss of Eva	self	-	used	7161	1600	45.0	0.0	0.0	0.0	false	0	0	1073-2:1200	-	-
+SHILLIEN_SAINT	1073	2	Kiss of Eva	self	-	used	7161	1600	45.0	0.0	0.0	0.0	false	0	0	1073-2:2400	-	-
 SHILLIEN_SAINT	1077	3	Focus	self	-	used	7161	1600	36.0	0.0	0.0	0.0	false	0	0	1077-3:1200	-	-
 SHILLIEN_SAINT	1078	6	Concentration	self	-	used	7161	1600	48.0	0.0	0.0	0.0	false	0	0	1078-6:1200	-	-
 SHILLIEN_SAINT	1147	2	Vampiric Touch	target	-	used	7161	2400	20.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1149,10 +1149,10 @@ SHILLIEN_SAINT	1303	2	Wild Magic	self	-	used	7161	1600	49.0	0.0	0.0	0.0	false	0	
 SHILLIEN_SAINT	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1354	1	Arcane Protection	self	-	used	7161	2400	53.0	0.0	0.0	0.0	false	0	0	1354-1:1200	-	-
 SHILLIEN_SAINT	1357	1	Prophecy of Wind	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_SAINT	1358	1	Block Shield	target	-	used	7161	6400	53.0	0.0	0.0	0.0	false	0	0	-	1358-1:70	-
+SHILLIEN_SAINT	1358	1	Block Shield	target	-	used	7161	6400	53.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1392	3	Resist Holy	self	-	used	7161	1600	65.0	0.0	0.0	0.0	false	0	0	1392-3:1200	-	-
 SHILLIEN_SAINT	1395	10	Erase	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-SHILLIEN_SAINT	1398	10	Mana Burn	target	-	used	7161	6400	97.0	0.0	0.0	0.0	false	0	0	-	-	-
+SHILLIEN_SAINT	1398	10	Mana Burn	target	-	used	7161	6400	97.0	0.0	0.0	62.16824006777597	false	0	0	-	-	-
 SHILLIEN_SAINT	1428	1	Mass Recharge	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1430	5	Invocation	self	-	used	3580	900000	25.0	0.0	0.0	0.0	false	0	0	1430-5:30	-	-
 SHILLIEN_SAINT	1460	1	Mana Gain	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1163,29 +1163,29 @@ SHILLIEN_SAINT	1539	4	Stigma of Shilien	target	-	used	1821	3000	33.0	0.0	0.0	0.0
 SHILLIEN_SAINT	1550	1	Mass Cure Poison	self	-	used	7161	12000	63.0	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1551	1	Mass Purify	self	-	used	5370	7200	66.76758199999995	0.0	0.0	0.0	false	0	0	-	-	-
 SHILLIEN_SAINT	1553	1	Chain Heal	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-TITAN	3	9	Power Strike	target	sword	used	1343	3000	17.0	0.0	44.0	0.0	false	0	0	-	-	-
-TITAN	29	9	Iron Punch	target	fists	used	1648	4000	20.0	0.0	55.0	0.0	false	0	0	-	-	-
+TITAN	3	9	Power Strike	target	sword	used	1343	-	17.0	0.0	48.0	0.0	false	0	0	-	-	-
+TITAN	29	9	Iron Punch	target	fists	used	1648	4000	20.0	0.0	58.0	0.0	false	0	0	-	-	-
 TITAN	34	3	Bandage	self	-	used	1415	-	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-TITAN	36	37	Whirlwind	target	polearm	used	1567	4000	75.0	0.0	172.0	0.0	false	0	0	-	-	-
+TITAN	36	37	Whirlwind	target	polearm	used	1567	4000	75.0	0.0	161.0	0.0	false	0	0	-	-	-
 TITAN	94	2	Rage	self	-	used	1415	75000	25.0	0.0	0.0	0.0	false	0	0	94-2:90	-	-
-TITAN	100	15	Stun Attack	target	blunt	used	1343	3000	33.0	0.0	58.0	0.0	false	0	0	-	-	-
+TITAN	100	15	Stun Attack	target	blunt	used	1343	3000	33.0	0.0	71.0	0.0	false	0	0	-	-	-
 TITAN	121	6	Battle Roar	self	-	used	1415	150000	33.0	-2552.0	0.0	0.0	false	0	0	121-6:600	-	-
 TITAN	139	3	Guts	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TITAN	176	3	Frenzy	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-TITAN	190	37	Fatal Strike	target	sword	used	1343	3000	75.0	0.0	219.0	0.0	false	0	0	-	-	-
+TITAN	190	37	Fatal Strike	target	sword	used	1343	3000	75.0	0.0	190.0	0.0	false	0	0	-	-	-
 TITAN	226	1	Relax	self	-	used	0	-	2.0	0.0	0.0	0.0	false	0	0	226-1:-1	-	-
 TITAN	245	15	Wild Sweep	target	polearm	used	1565	4000	34.0	0.0	65.0	0.0	false	0	0	-	-	-
-TITAN	255	15	Power Smash	target	sword	used	1343	3000	34.0	0.0	66.0	0.0	false	0	0	-	-	-
+TITAN	255	15	Power Smash	target	sword	used	1343	3000	34.0	0.0	61.0	0.0	false	0	0	-	-	-
 TITAN	256	1	Accuracy	self	-	used	0	-	5.0	0.0	0.0	0.0	false	0	0	256-1:-1	-	-
-TITAN	260	37	Hammer Crush	target	blunt	used	1343	3000	72.0	0.0	147.0	0.0	false	0	0	-	-	-
+TITAN	260	37	Hammer Crush	target	blunt	used	1343	3000	72.0	0.0	161.0	0.0	false	0	0	-	-	-
 TITAN	287	3	Lionheart	self	-	used	1415	150000	29.0	0.0	0.0	0.0	false	0	0	287-3:60	-	-
 TITAN	312	20	Vicious Stance	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	312-20:-1	-	-
-TITAN	315	16	Crush of Doom	target	two-handed sword	used	2347	7000	0.0	261.0	374.0	0.0	false	0	0	-	-	-
+TITAN	315	16	Crush of Doom	target	two-handed sword	used	2347	7000	0.0	261.0	682.0	0.0	false	0	0	-	-	-
 TITAN	320	10	Wrath	target	polearm	used	1565	30000	75.0	0.0	0.0	0.0	false	0	0	-	-	-
 TITAN	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
 TITAN	339	1	Parry Stance	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	339-1:-1	-	-
-TITAN	347	1	Earthquake	target	polearm	used	1565	8000	78.0	340.0	224.0	0.0	false	0	0	-	-	-
-TITAN	362	1	Armor Crush	target	sword	used	1492	4000	35.0	338.0	173.0	0.0	false	0	0	-	-	-
+TITAN	347	1	Earthquake	target	polearm	used	1565	8000	78.0	340.0	222.0	0.0	false	0	0	-	-	-
+TITAN	362	1	Armor Crush	target	sword	used	1492	4000	35.0	338.0	157.0	0.0	false	0	0	-	-	-
 TITAN	420	3	Zealot	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TITAN	422	3	Polearm Accuracy	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	422-3:-1	-	-
 TITAN	423	3	Dark Form	self	-	used	1886	4000	34.0	0.0	0.0	0.0	false	0	0	423-3:300	-	-
@@ -1196,33 +1196,33 @@ TITAN	536	1	Over the Body	self	-	used	1886	900000	143.0	0.0	0.0	0.0	false	0	0	53
 TITAN	994	1	Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TITAN	995	1	Rush Impact	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TITAN	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-GRAND_KHAVATARI	3	9	Power Strike	target	sword	used	1221	3000	17.0	0.0	39.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	3	9	Power Strike	target	sword	used	1221	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	17	34	Force Burst	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-GRAND_KHAVATARI	29	24	Iron Punch	target	fists	used	1500	4000	39.0	0.0	73.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	29	24	Iron Punch	target	fists	used	1500	4000	39.0	0.0	67.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	35	28	Force Storm	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	50	8	Focused Force	self	fists	used	712	-	5.0	20.0	0.0	0.0	false	1	0	-	-	-
 GRAND_KHAVATARI	54	49	Force Blaster	target	fists	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	76	1	Bear Spirit Totem	self	fists	used	1583	23000	25.0	0.0	0.0	0.0	false	0	0	76-1:300	-	-
-GRAND_KHAVATARI	81	3	Punch of Doom	target	fists	used	1424	300000	0.0	499.0	462.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	81	3	Punch of Doom	target	fists	used	1424	300000	0.0	499.0	457.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	83	1	Wolf Spirit Totem	self	fists	used	1583	23000	19.0	0.0	0.0	0.0	false	0	0	83-1:300	-	-
-GRAND_KHAVATARI	95	20	Cripple	target	fists	used	1503	2000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	95	20	Cripple	target	fists	used	1503	2000	34.0	0.0	0.0	0.0	false	0	0	-	95-20:34	-
 GRAND_KHAVATARI	109	1	Ogre Spirit Totem	self	fists	used	1583	30000	41.0	0.0	0.0	0.0	false	0	0	109-1:300	-	-
-GRAND_KHAVATARI	120	15	Stunning Fist	target	fists	used	1500	3000	33.0	0.0	61.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	120	15	Stunning Fist	target	fists	used	1500	3000	33.0	0.0	65.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	222	1	Fury Fists	self	-	used	0	-	8.0	0.0	0.0	0.0	false	0	0	222-1:-1	-	-
 GRAND_KHAVATARI	226	1	Relax	self	-	used	0	-	2.0	0.0	0.0	0.0	false	0	0	226-1:-1	-	-
-GRAND_KHAVATARI	280	37	Burning Fist	target	fists	used	1503	4000	87.0	0.0	171.0	0.0	false	0	0	-	-	-
-GRAND_KHAVATARI	281	37	Soul Breaker	target	fists	used	1385	3000	72.0	0.0	158.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	280	37	Burning Fist	target	fists	used	1503	4000	87.0	0.0	160.0	0.0	false	0	0	-	-	-
+GRAND_KHAVATARI	281	37	Soul Breaker	target	fists	used	1385	3000	72.0	0.0	159.0	0.0	false	0	0	-	281-37:5	-
 GRAND_KHAVATARI	282	1	Puma Spirit Totem	self	fists	used	1583	30000	35.0	0.0	0.0	0.0	false	0	0	282-1:300	-	-
 GRAND_KHAVATARI	284	40	Hurricane Assault	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	292	1	Bison Spirit Totem	self	fists	used	1583	600000	32.0	0.0	0.0	0.0	false	0	0	292-1:60	-	-
 GRAND_KHAVATARI	298	1	Rabbit Spirit Totem	self	fists	used	1583	30000	58.0	0.0	0.0	0.0	false	0	0	298-1:300	-	-
 GRAND_KHAVATARI	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
 GRAND_KHAVATARI	340	1	Riposte Stance	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	340-1:-1	-	-
-GRAND_KHAVATARI	346	1	Raging Force	target	fists	used	1187	-	5.0	50.0	58.0	0.0	false	1	0	-	-	-
+GRAND_KHAVATARI	346	1	Raging Force	target	fists	used	1187	-	5.0	50.0	52.0	0.0	false	1	0	-	-	-
 GRAND_KHAVATARI	420	3	Zealot	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	423	3	Dark Form	self	-	used	1714	4000	34.0	0.0	0.0	0.0	false	0	0	423-3:300	-	-
 GRAND_KHAVATARI	424	3	War Frenzy	self	-	used	0	-	15.0	0.0	0.0	0.0	false	0	0	424-3:-1	-	-
-GRAND_KHAVATARI	425	1	Hawk Spirit Totem	self	fists	used	1583	30000	68.0	0.0	0.0	0.0	false	0	0	425-1:600	-	-
+GRAND_KHAVATARI	425	1	Hawk Spirit Totem	self	fists	used	1583	30000	68.0	0.0	0.0	0.0	false	0	0	425-1:300	-	-
 GRAND_KHAVATARI	441	1	Force Meditation	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	443	1	Force Barrier	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	458	1	Symbol of Energy	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1230,10 +1230,10 @@ GRAND_KHAVATARI	461	2	Break Duress	self	(no loadout fits)	refused	0	-	0.0	0.0	0.
 GRAND_KHAVATARI	994	1	Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	995	1	Rush Impact	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 GRAND_KHAVATARI	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOMINATOR	100	12	Stun Attack	target	blunt	used	1714	3000	29.0	0.0	46.0	0.0	false	0	0	-	-	-
-DOMINATOR	260	35	Hammer Crush	target	blunt	used	1714	3000	70.0	0.0	116.0	0.0	false	0	0	-	-	-
+DOMINATOR	100	12	Stun Attack	target	blunt	used	1714	3000	29.0	0.0	65.0	0.0	false	0	0	-	-	-
+DOMINATOR	260	35	Hammer Crush	target	blunt	used	1714	3000	70.0	0.0	152.0	0.0	false	0	0	-	-	-
 DOMINATOR	337	1	Arcane Power	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	337-1:-1	-	-
-DOMINATOR	927	14	Burning Chop	target	sword	used	1714	3000	19.0	0.0	68.0	0.0	false	0	0	-	927-14:5	-
+DOMINATOR	927	14	Burning Chop	target	sword	used	1714	3000	19.0	0.0	66.0	0.0	false	0	0	-	-	-
 DOMINATOR	1001	10	Soul Cry	self	-	used	0	-	7.0	0.0	0.0	0.0	false	0	0	1001-10:-1	-	-
 DOMINATOR	1002	1	Flame Chant	self	-	used	5862	4000	87.5321600000002	0.0	0.0	0.0	false	0	0	1002-1:1200	-	-
 DOMINATOR	1003	3	Pa'agrian Gift	self	-	used	5862	4000	152.5321600000002	0.0	0.0	0.0	false	0	0	1003-3:1200	-	-
@@ -1247,22 +1247,22 @@ DOMINATOR	1010	3	Soul Shield	self	-	used	5862	-	22.0	0.0	0.0	0.0	false	0	0	1010-
 DOMINATOR	1090	6	Life Drain	target	-	used	9380	1600	59.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1092	19	Fear	target	-	used	9380	4000	52.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1095	3	Venom	target	-	used	9380	2400	15.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOMINATOR	1096	16	Seal of Chaos	target	-	used	3517	1600	85.5321600000002	0.0	0.0	0.0	false	0	0	-	-	-
+DOMINATOR	1096	16	Seal of Chaos	target	-	used	3517	1600	85.5321600000002	0.0	0.0	0.0	false	0	0	-	1096-16:17	-
 DOMINATOR	1097	20	Dreaming Spirit	target	-	used	9380	1600	52.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1099	15	Seal of Slow	target	-	used	9380	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOMINATOR	1100	2	Chill Flame	target	-	used	9380	1600	17.0	0.0	0.0	0.0	false	0	0	-	1100-2:8	-
+DOMINATOR	1100	2	Chill Flame	target	-	used	9380	1600	17.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1101	2	Blaze Quake	target	-	used	9380	3200	51.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1102	2	Aura Sink	target	-	used	9380	2400	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1104	14	Seal of Winter	target	-	used	3517	1600	85.5321600000002	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1105	18	Madness	target	-	used	9380	8000	52.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOMINATOR	1107	2	Frost Flame	target	-	used	9380	1600	30.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOMINATOR	1107	2	Frost Flame	target	-	used	9380	1600	30.0	0.0	0.0	0.0	false	0	0	-	1107-2:8	-
 DOMINATOR	1108	4	Seal of Flame	target	-	used	9380	4000	115.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1208	17	Seal of Binding	target	-	used	9380	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOMINATOR	1209	6	Seal of Poison	target	-	used	9380	3200	74.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOMINATOR	1209	6	Seal of Poison	target	-	used	9380	3200	74.0	0.0	0.0	0.0	false	0	0	-	1209-6:15	-
 DOMINATOR	1210	4	Seal of Gloom	target	-	used	9380	4000	114.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1213	13	Seal of Mirage	target	-	used	9380	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1229	4	Chant of Life	self	-	used	16415	4000	77.0	0.0	0.0	0.0	false	0	0	1229-4:15	-	-
-DOMINATOR	1245	14	Steal Essence	target	-	used	9380	1600	134.0	0.0	124.0	0.0	false	0	0	-	-	-
+DOMINATOR	1245	14	Steal Essence	target	-	used	9380	1600	134.0	0.0	127.0	0.0	false	0	0	-	-	-
 DOMINATOR	1246	12	Seal of Silence	target	-	used	9380	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1247	14	Seal of Scourge	target	-	used	9380	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1248	12	Seal of Suspension	target	-	used	9380	4000	77.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1278,19 +1278,19 @@ DOMINATOR	1306	6	Ritual of Life	self	-	used	11725	4000	91.0	0.0	0.0	0.0	false	0	
 DOMINATOR	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1364	1	Eye of Pa'agrio	self	-	used	5862	4000	255.5321600000002	0.0	0.0	0.0	false	0	0	1364-1:1200	-	-
 DOMINATOR	1365	1	Soul of Pa'agrio	self	-	used	5862	4000	255.5321600000002	0.0	0.0	0.0	false	0	0	1365-1:1200	-	-
-DOMINATOR	1366	1	Seal of Despair	target	-	used	9380	24000	80.0	0.0	0.0	0.0	false	0	0	-	1366-1:18	-
-DOMINATOR	1367	1	Seal of Disease	target	-	used	9380	12000	79.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOMINATOR	1366	1	Seal of Despair	target	-	used	9380	24000	80.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOMINATOR	1367	1	Seal of Disease	target	-	used	9380	12000	79.0	0.0	0.0	0.0	false	0	0	-	1367-1:68	-
 DOMINATOR	1414	1	Victory of Pa'agrio	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1415	1	Pa'agrio's Emblem	self	-	used	5862	240000	259.5321600000002	0.0	0.0	0.0	false	0	0	1415-1:300	-	-
 DOMINATOR	1416	1	Pa'agrio's Fist	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1427	1	Flames of Invincibility	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOMINATOR	1462	1	Seal of Blockade	target	-	used	9380	60000	82.0	0.0	46.0	0.0	false	0	0	-	-	-
+DOMINATOR	1462	1	Seal of Blockade	target	-	used	9380	60000	82.0	0.0	82.0	0.0	false	0	0	-	-	-
 DOMINATOR	1553	1	Chain Heal	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOMINATOR	1563	2	Fury of Pa'agrio	self	-	used	5862	4000	215.5321600000002	0.0	0.0	0.0	false	0	0	1563-2:1200	-	-
-DOOMCRYER	100	12	Stun Attack	target	blunt	used	1714	3000	29.0	0.0	32.0	0.0	false	0	0	-	-	-
-DOOMCRYER	260	35	Hammer Crush	target	blunt	used	1714	3000	70.0	0.0	136.0	0.0	false	0	0	-	-	-
+DOOMCRYER	100	12	Stun Attack	target	blunt	used	1714	3000	29.0	0.0	58.0	0.0	false	0	0	-	-	-
+DOOMCRYER	260	35	Hammer Crush	target	blunt	used	1714	3000	70.0	0.0	256.0	0.0	false	0	0	-	-	-
 DOOMCRYER	336	1	Arcane Wisdom	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	336-1:-1	-	-
-DOOMCRYER	927	14	Burning Chop	target	sword	used	1714	3000	19.0	0.0	67.0	0.0	false	0	0	-	-	-
+DOOMCRYER	927	14	Burning Chop	target	sword	used	1714	3000	19.0	0.0	62.0	0.0	false	0	0	-	927-14:5	-
 DOOMCRYER	1001	10	Soul Cry	self	-	used	0	-	7.0	0.0	0.0	0.0	false	0	0	1001-10:-1	-	-
 DOOMCRYER	1002	3	Flame Chant	self	-	used	5862	4000	182.5321600000002	0.0	0.0	0.0	false	0	0	1002-3:1200	-	-
 DOOMCRYER	1003	1	Pa'agrian Gift	self	-	used	5862	4000	87.5321600000002	0.0	0.0	0.0	false	0	0	1003-1:1200	-	-
@@ -1302,26 +1302,26 @@ DOOMCRYER	1010	3	Soul Shield	self	-	used	5862	-	22.0	0.0	0.0	0.0	false	0	0	1010-
 DOOMCRYER	1090	6	Life Drain	target	-	used	9380	1600	59.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1092	19	Fear	target	-	used	9380	4000	52.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1095	5	Venom	target	-	used	9380	2400	36.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMCRYER	1096	2	Seal of Chaos	target	-	used	3517	1600	17.0	0.0	0.0	0.0	false	0	0	-	1096-2:15	-
+DOOMCRYER	1096	2	Seal of Chaos	target	-	used	3517	1600	17.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1097	20	Dreaming Spirit	target	-	used	9380	1600	52.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1099	1	Seal of Slow	target	-	used	9380	4000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1100	2	Chill Flame	target	-	used	9380	1600	17.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMCRYER	1101	2	Blaze Quake	target	-	used	9380	3200	51.0	0.0	0.0	0.0	false	0	0	-	1101-2:8	-
-DOOMCRYER	1102	6	Aura Sink	target	-	used	9380	2400	74.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOOMCRYER	1101	2	Blaze Quake	target	-	used	9380	3200	51.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOOMCRYER	1102	6	Aura Sink	target	-	used	9380	2400	74.0	0.0	0.0	18.522545680023086	false	0	0	-	1102-6:8	-
 DOOMCRYER	1105	18	Madness	target	-	used	9380	8000	52.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMCRYER	1107	2	Frost Flame	target	-	used	9380	1600	30.0	0.0	0.0	0.0	false	0	0	-	1107-2:8	-
+DOOMCRYER	1107	2	Frost Flame	target	-	used	9380	1600	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1208	3	Seal of Binding	target	-	used	9380	4000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1209	2	Seal of Poison	target	-	used	9380	3200	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1229	18	Chant of Life	self	-	used	16415	4000	181.0	0.0	0.0	0.0	false	0	0	1229-18:15	-	-
 DOOMCRYER	1244	4	Freezing Flame	target	-	used	9380	1600	76.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMCRYER	1245	14	Steal Essence	target	-	used	9380	1600	134.0	0.0	118.0	0.0	false	0	0	-	-	-
+DOOMCRYER	1245	14	Steal Essence	target	-	used	9380	-	134.0	0.0	50.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1251	2	Chant of Fury	self	-	used	5862	4000	182.5321600000002	0.0	0.0	0.0	false	0	0	1251-2:1200	-	-
 DOOMCRYER	1252	3	Chant of Evasion	self	-	used	5862	4000	182.5321600000002	0.0	0.0	0.0	false	0	0	1252-3:1200	-	-
 DOOMCRYER	1253	3	Chant of Rage	self	-	used	5862	4000	182.5321600000002	0.0	0.0	0.0	false	0	0	1253-3:1200	-	-
 DOOMCRYER	1284	3	Chant of Revenge	self	-	used	5862	4000	248.5321600000002	0.0	0.0	0.0	false	0	0	1284-3:1200	-	-
 DOOMCRYER	1308	3	Chant of Predator	self	-	used	5862	4000	228.5321600000002	0.0	0.0	0.0	false	0	0	1308-3:1200	-	-
 DOOMCRYER	1309	3	Chant of Eagle	self	-	used	5862	4000	214.5321600000002	0.0	0.0	0.0	false	0	0	1309-3:1200	-	-
-DOOMCRYER	1310	4	Chant of Vampire	self	-	used	5862	4000	248.5321600000002	0.0	0.0	0.0	false	0	0	1310-4:1200	-	-
+DOOMCRYER	1310	4	Chant of Vampire	self	-	used	5862	-	248.5321600000002	0.0	0.0	0.0	false	0	0	1310-4:1200	-	-
 DOOMCRYER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMCRYER	1362	1	Chant of Spirit	self	-	used	5862	4000	255.5321600000002	0.0	0.0	0.0	false	0	0	1362-1:1200	-	-
 DOOMCRYER	1363	1	Chant of Victory	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1334,50 +1334,50 @@ DOOMCRYER	1549	1	Chant of Elements	self	-	used	5862	4000	259.5321600000002	0.0	0
 DOOMCRYER	1562	2	Chant of Berserker	self	-	used	5862	4000	206.5321600000002	0.0	0.0	0.0	false	0	0	1562-2:1200	-	-
 FORTUNE_SEEKER	30	37	Backstab	target	dagger	used	1144	3000	112.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	34	3	Bandage	self	-	used	1376	-	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	36	37	Whirlwind	target	polearm	used	1527	4000	75.0	0.0	165.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	36	37	Whirlwind	target	polearm	used	1527	4000	75.0	0.0	315.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	42	1	Sweeper	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	60	1	Fake Death	self	-	used	0	3000	200.0	0.0	0.0	0.0	false	0	0	60-1:-1	-	-
-FORTUNE_SEEKER	100	15	Stun Attack	target	blunt	used	1307	3000	33.0	0.0	66.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	190	37	Fatal Strike	target	sword	used	1307	3000	75.0	0.0	201.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	245	15	Wild Sweep	target	polearm	used	1525	4000	34.0	0.0	68.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	100	15	Stun Attack	target	blunt	used	1307	3000	33.0	0.0	55.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	190	37	Fatal Strike	target	sword	used	1307	3000	75.0	0.0	237.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	245	15	Wild Sweep	target	polearm	used	1525	4000	34.0	0.0	58.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	254	11	Spoil	target	-	used	1651	3000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	260	37	Hammer Crush	target	blunt	used	1307	3000	72.0	0.0	196.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	263	37	Deadly Blow	target	dagger	used	1144	-	68.0	0.0	360.42126483084576	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	260	37	Hammer Crush	target	blunt	used	1307	3000	72.0	0.0	182.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	263	37	Deadly Blow	target	dagger	used	1144	3000	68.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	302	9	Spoil Festival	target	-	used	1651	3000	204.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	320	10	Wrath	target	polearm	used	1525	30000	75.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	339	1	Parry Stance	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	339-1:-1	-	-
 FORTUNE_SEEKER	340	1	Riposte Stance	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	340-1:-1	-	-
-FORTUNE_SEEKER	347	1	Earthquake	target	polearm	used	1525	8000	78.0	340.0	255.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	348	1	Spoil Crush	target	sword	used	1307	3000	70.0	0.0	51.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	362	1	Armor Crush	target	sword	used	1452	4000	35.0	338.0	339.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	422	3	Polearm Accuracy	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	422-3:-1	-	-
+FORTUNE_SEEKER	347	1	Earthquake	target	polearm	used	1525	8000	78.0	340.0	264.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	348	1	Spoil Crush	target	sword	used	1307	3000	70.0	0.0	123.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	362	1	Armor Crush	target	sword	used	1452	4000	35.0	338.0	391.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	422	3	Polearm Accuracy	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	422-3:-2	-	-
 FORTUNE_SEEKER	424	3	War Frenzy	self	-	used	0	-	15.0	0.0	0.0	0.0	false	0	0	424-3:-1	-	-
 FORTUNE_SEEKER	440	1	Braveheart	self	-	used	1376	150000	57.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	444	1	Sweeper Festival	self	-	used	500	3000	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	456	1	Symbol of Resistance	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	537	1	Spoil Bomb	target	-	used	1651	15000	72.0	0.0	0.0	0.0	false	0	0	-	537-1:6	-
-FORTUNE_SEEKER	997	25	Crushing Strike	target	sword	used	726	5000	83.0	0.0	321.0	0.0	false	0	0	-	997-25:2	-
+FORTUNE_SEEKER	537	1	Spoil Bomb	target	-	used	1651	15000	72.0	0.0	0.0	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	997	25	Crushing Strike	target	sword	used	704	5000	83.0	0.0	299.0	0.0	false	0	0	6920-1:10	997-25:2	-
 FORTUNE_SEEKER	998	1	Blazing Boost	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	1321	1	Dwarven Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 FORTUNE_SEEKER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-FORTUNE_SEEKER	1560	1	Lucky Blow	target	dual daggers	used	1144	8000	82.0	0.0	668.9955014977459	0.0	false	0	0	-	-	-
+FORTUNE_SEEKER	1560	1	Lucky Blow	target	dual daggers	used	1144	8000	82.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	13	1	Summon Siege Golem	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	25	9	Summon Mechanic Golem	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	34	3	Bandage	self	-	used	1376	-	55.0	0.0	0.0	0.0	false	0	0	-	-	-
-MAESTRO	36	37	Whirlwind	target	polearm	used	1527	4000	75.0	0.0	131.0	0.0	false	0	0	-	-	-
+MAESTRO	36	37	Whirlwind	target	polearm	used	1527	4000	75.0	0.0	345.0	0.0	false	0	0	-	-	-
 MAESTRO	42	1	Sweeper	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MAESTRO	100	15	Stun Attack	target	blunt	used	1307	3000	33.0	0.0	61.0	0.0	false	0	0	-	-	-
-MAESTRO	190	37	Fatal Strike	target	sword	used	1307	3000	75.0	0.0	202.0	0.0	false	0	0	-	-	-
-MAESTRO	245	15	Wild Sweep	target	polearm	used	1525	4000	34.0	0.0	64.0	0.0	false	0	0	-	-	-
+MAESTRO	100	15	Stun Attack	target	blunt	used	1307	3000	33.0	0.0	56.0	0.0	false	0	0	-	-	-
+MAESTRO	190	37	Fatal Strike	target	sword	used	1307	3000	75.0	0.0	197.0	0.0	false	0	0	-	-	-
+MAESTRO	245	15	Wild Sweep	target	polearm	used	1525	4000	34.0	0.0	74.0	0.0	false	0	0	-	-	-
 MAESTRO	254	1	Spoil	target	-	used	1651	3000	12.0	0.0	0.0	0.0	false	0	0	-	-	-
-MAESTRO	260	37	Hammer Crush	target	blunt	used	1307	3000	72.0	0.0	181.0	0.0	false	0	0	-	-	-
+MAESTRO	260	37	Hammer Crush	target	blunt	used	1307	3000	72.0	0.0	164.0	0.0	false	0	0	-	260-37:5	-
 MAESTRO	299	1	Summon Wild Hog Cannon	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	301	5	Summon Big Boom	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	320	10	Wrath	target	polearm	used	1525	30000	75.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	339	1	Parry Stance	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	339-1:-1	-	-
 MAESTRO	340	1	Riposte Stance	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	340-1:-1	-	-
-MAESTRO	347	1	Earthquake	target	polearm	used	1525	8000	78.0	340.0	235.0	0.0	false	0	0	-	-	-
-MAESTRO	362	1	Armor Crush	target	sword	used	1452	4000	35.0	338.0	394.0	0.0	false	0	0	-	-	-
+MAESTRO	347	1	Earthquake	target	polearm	used	1525	8000	78.0	340.0	255.0	0.0	false	0	0	-	-	-
+MAESTRO	362	1	Armor Crush	target	sword	used	1452	4000	35.0	338.0	171.0	0.0	false	0	0	-	362-1:5	-
 MAESTRO	422	3	Polearm Accuracy	self	-	used	0	-	14.0	0.0	0.0	0.0	false	0	0	422-3:-1	-	-
 MAESTRO	424	3	War Frenzy	self	-	used	0	-	15.0	0.0	0.0	0.0	false	0	0	424-3:-1	-	-
 MAESTRO	440	1	Braveheart	self	-	used	1376	150000	57.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1399,11 +1399,11 @@ MAESTRO	1321	1	Dwarven Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MAESTRO	1561	5	Battle Cry	self	-	used	1376	150000	33.0	-2301.0	0.0	0.0	false	0	0	1561-5:600	-	-
 DOOMBRINGER	335	1	Fortitude	self	-	used	0	-	35.0	0.0	0.0	0.0	false	0	0	335-1:-1	-	-
-DOOMBRINGER	468	9	Fallen Attack	target	sword	used	1261	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	468	9	Fallen Attack	target	sword	used	1261	3000	17.0	0.0	42.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	475	1	Strike Back	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	475-1:-1	-	-
-DOOMBRINGER	476	15	Dark Strike	target	sword	used	1261	3000	27.0	0.0	60.0	0.0	false	0	0	-	-	-
-DOOMBRINGER	477	37	Dark Smash	target	ancient sword	used	1367	3000	60.0	0.0	231.0	0.0	false	0	0	-	-	-
-DOOMBRINGER	478	15	Double Thrust	target	rapier	used	1176	3000	27.0	0.0	54.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	476	15	Dark Strike	target	sword	used	1261	3000	27.0	0.0	61.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	477	37	Dark Smash	target	ancient sword	used	1367	3000	60.0	0.0	234.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	478	15	Double Thrust	target	rapier	used	1176	3000	27.0	0.0	38.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	479	1	Hard March	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	479-1:-1	-	-
 DOOMBRINGER	480	1	Dark Blade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	480-1:-1	-	-
 DOOMBRINGER	481	2	Dark Armor	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	481-2:-1	-	-
@@ -1411,23 +1411,23 @@ DOOMBRINGER	482	2	Furious Soul	self	-	used	1769	75000	25.0	0.0	0.0	0.0	false	0	0
 DOOMBRINGER	483	2	Sword Shield	self	-	used	884	900000	24.0	0.0	0.0	0.0	false	0	0	483-2:30	-	-
 DOOMBRINGER	484	1	Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	485	7	Disarm	target	-	used	1327	8000	55.0	0.0	0.0	0.0	false	0	0	-	485-7:3	-
-DOOMBRINGER	492	25	Spread Wing	target	-	used	1592	4000	75.0	0.0	97.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	492	25	Spread Wing	target	-	used	1592	4000	75.0	0.0	105.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	493	28	Storm Assault	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	494	37	Shoulder Charge	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	495	10	Blade Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMBRINGER	496	31	Slashing Blade	target	ancient sword	used	1367	4000	75.0	0.0	196.0	0.0	false	0	0	-	-	-
-DOOMBRINGER	497	16	Crush of Pain	target	ancient sword	used	2050	7000	75.0	0.0	376.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	496	31	Slashing Blade	target	ancient sword	used	1367	4000	75.0	0.0	202.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	497	16	Crush of Pain	target	ancient sword	used	2050	7000	75.0	0.0	370.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	498	12	Contagion	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	499	3	Courage	self	-	used	1769	225000	29.0	0.0	0.0	0.0	false	0	0	499-3:60	-	-
 DOOMBRINGER	500	2	True Berserker	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	500-2:-1	-	-
-DOOMBRINGER	501	12	Violent Temper	target	-	used	1592	2000	34.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	501	12	Violent Temper	target	-	used	1592	2000	34.0	0.0	0.0	0.0	false	0	0	-	501-12:17	-
 DOOMBRINGER	502	5	Life to Soul	self	-	used	796	11000	0.0	328.0	0.0	0.0	false	0	5	-	-	-
 DOOMBRINGER	503	3	Scorn	target	-	used	1592	4000	33.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMBRINGER	526	1	Enuma Elish	target	-	used	1592	75000	78.0	0.0	232.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	526	1	Enuma Elish	target	-	used	1592	75000	78.0	0.0	258.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	538	1	Final Form	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	625	1	Soul Gathering	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	793	1	Rush Impact	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-DOOMBRINGER	794	1	Mass Disarm	target	-	used	1327	150000	58.0	0.0	0.0	0.0	false	0	0	-	-	-
+DOOMBRINGER	794	1	Mass Disarm	target	-	used	1327	150000	58.0	0.0	0.0	0.0	false	0	0	-	794-1:3	-
 DOOMBRINGER	833	1	Body Reconstruction	self	-	used	1327	900000	94.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	834	1	Blood Pact	self	-	used	1327	75000	50.0	0.0	0.0	0.0	false	0	0	834-1:120	-	-
 DOOMBRINGER	939	1	Soul Rage	target	-	used	1327	-	5.0	25.0	0.0	0.0	false	0	1	-	-	-
@@ -1443,142 +1443,142 @@ DOOMBRINGER	1475	1	Erase Mark	self	-	used	3908	4000	12.0	0.0	0.0	0.0	false	0	0	-
 DOOMBRINGER	1510	1	Soul Cleanse	self	-	used	3126	15000	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 DOOMBRINGER	1514	1	Soul Barrier	self	-	used	2345	45000	28.0	0.0	0.0	0.0	false	0	0	1514-1:10	-	-
 DOOMBRINGER	20006	1	Soul Roar	self	-	used	1327	240000	58.0	-691.0	0.0	0.0	false	0	0	20006-1:600	-	-
-MALE_SOUL_HOUND	468	9	Fallen Attack	target	sword	used	1261	3000	17.0	0.0	39.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	468	9	Fallen Attack	target	sword	used	1261	3000	17.0	0.0	37.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	475	1	Strike Back	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	475-1:-1	-	-
-MALE_SOUL_HOUND	476	15	Dark Strike	target	sword	used	1261	3000	27.0	0.0	55.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	478	15	Double Thrust	target	rapier	used	1176	3000	27.0	0.0	87.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	476	15	Dark Strike	target	sword	used	1261	3000	27.0	0.0	59.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	478	15	Double Thrust	target	rapier	used	1176	3000	27.0	0.0	68.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	479	1	Hard March	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	479-1:-1	-	-
 MALE_SOUL_HOUND	480	1	Dark Blade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	480-1:-1	-	-
 MALE_SOUL_HOUND	481	2	Dark Armor	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	481-2:-1	-	-
 MALE_SOUL_HOUND	482	1	Furious Soul	self	-	used	1769	75000	11.0	0.0	0.0	0.0	false	0	0	482-1:90	-	-
 MALE_SOUL_HOUND	483	1	Sword Shield	self	-	used	884	900000	16.0	0.0	0.0	0.0	false	0	0	483-1:30	-	-
 MALE_SOUL_HOUND	484	1	Rush	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	485	1	Disarm	target	-	used	1327	-	25.0	0.0	0.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	492	25	Spread Wing	target	-	used	1592	4000	75.0	0.0	111.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	499	1	Courage	self	-	used	1769	225000	16.0	0.0	0.0	0.0	false	0	0	499-1:60	-	-
+MALE_SOUL_HOUND	485	1	Disarm	target	-	used	1327	8000	25.0	0.0	0.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	492	25	Spread Wing	target	-	used	1592	4000	75.0	0.0	83.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	499	1	Courage	self	-	used	1769	-	16.0	0.0	0.0	0.0	false	0	0	499-1:60	-	-
 MALE_SOUL_HOUND	502	5	Life to Soul	self	-	used	796	11000	0.0	328.0	0.0	0.0	false	0	5	-	-	-
-MALE_SOUL_HOUND	504	37	Triple Thrust	target	rapier	used	1176	3000	60.0	0.0	147.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	504	37	Triple Thrust	target	rapier	used	1176	3000	60.0	0.0	121.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	505	28	Shining Edge	target	rapier	used	1176	3000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	506	4	Checkmate	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	538	1	Final Form	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	625	1	Soul Gathering	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	837	1	Painkiller	self	-	used	1327	300000	53.0	0.0	0.0	0.0	false	0	0	837-1:8	-	-
-MALE_SOUL_HOUND	939	1	Soul Rage	target	-	used	1327	-	5.0	25.0	15.0	0.0	false	0	1	-	-	-
+MALE_SOUL_HOUND	939	1	Soul Rage	target	-	used	1327	-	5.0	25.0	0.0	0.0	false	0	1	-	-	-
 MALE_SOUL_HOUND	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1431	6	Fallen Arrow	target	-	used	1707	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1432	2	Increase Power	self	-	used	2846	1600	25.0	0.0	0.0	0.0	false	0	0	1432-2:1200	-	-
 MALE_SOUL_HOUND	1433	10	Abyssal Blaze	target	-	used	1707	1600	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1434	4	Dark Explosion	target	-	used	2561	3200	42.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1435	10	Death Mark	target	-	used	1707	8800	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1436	30	Soul of Pain	target	-	used	1707	2400	44.0	0.0	43.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1437	26	Dark Flame	target	-	used	2561	3200	89.0	0.0	15.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1438	9	Annihilation Circle	target	-	used	2561	4000	72.0	0.0	47.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1439	5	Curse of Divinity	target	-	used	1992	3200	69.0	0.0	12.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1436	30	Soul of Pain	target	-	used	1707	2400	44.0	0.0	47.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1437	26	Dark Flame	target	-	used	2561	3200	89.0	0.0	27.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1438	9	Annihilation Circle	target	-	used	2561	4000	72.0	0.0	39.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1439	5	Curse of Divinity	target	-	used	1992	3200	69.0	0.0	14.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1440	5	Steal Divinity	target	-	used	1992	12000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1441	3	Soul to Empower	self	-	used	2846	1600	60.0	0.0	0.0	0.0	false	0	0	1441-3:1200	-	-
-MALE_SOUL_HOUND	1442	3	Protection from Darkness	self	-	used	4269	1600	56.515264000000116	0.0	0.0	0.0	false	0	0	1442-3:1200	-	-
-MALE_SOUL_HOUND	1443	1	Dark Weapon	self	-	used	4269	-	33.0	0.0	0.0	0.0	false	0	0	1443-1:1200	-	-
+MALE_SOUL_HOUND	1442	3	Protection from Darkness	self	-	used	4269	1600	56.515264000000116	0.0	0.0	0.0	false	0	0	1442-3:2400	-	-
+MALE_SOUL_HOUND	1443	1	Dark Weapon	self	-	used	4269	1600	33.0	0.0	0.0	0.0	false	0	0	1443-1:1200	-	-
 MALE_SOUL_HOUND	1444	1	Pride of Kamael	self	-	used	4269	24000	35.0	0.0	0.0	0.0	false	0	0	1444-1:180	-	-
 MALE_SOUL_HOUND	1445	18	Surrender to Dark	target	-	used	2134	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1446	11	Shadow Bind	target	-	used	2134	6400	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1447	9	Voice Bind	target	-	used	2134	6400	40.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1448	1	Blink	target	-	used	711	12000	100.0	0.0	0.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1469	1	Leopold	target	-	used	5692	36000	72.51526400000012	0.0	106.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1469	1	Leopold	target	-	used	5692	36000	72.51526400000012	0.0	89.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1473	1	Change Weapon	self	sword	used	7115	12000	23.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1475	3	Erase Mark	self	-	used	3557	3200	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1510	1	Soul Cleanse	self	-	used	2846	12000	32.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1511	8	Curse of Life Flow	target	-	used	4269	12000	33.0	0.0	0.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1512	1	Soul Vortex	target	-	used	4269	12000	72.51526400000012	0.0	52.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1512	1	Soul Vortex	target	-	used	4269	12000	72.51526400000012	0.0	51.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1513	1	Soul Vortex Extinction	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1515	1	Lightning Barrier	self	-	used	2134	1600	37.0	0.0	0.0	0.0	false	0	0	1515-1:1200	-	-
-MALE_SOUL_HOUND	1516	1	Soul Strike	target	-	used	2846	12000	34.0	0.0	65.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1516	1	Soul Strike	target	-	used	2846	12000	34.0	0.0	66.0	0.0	false	0	0	-	-	-
 MALE_SOUL_HOUND	1529	7	Soul Web	target	-	used	3557	12000	56.515264000000116	0.0	0.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1554	1	Aura Blast	target	-	used	4269	12000	103.51526400000012	0.0	89.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1555	1	Aura Cannon	target	-	used	2846	8000	98.0	0.0	139.0	0.0	false	0	0	-	-	-
-MALE_SOUL_HOUND	1556	1	Arcane Shield	self	-	used	1423	240000	112.0	0.0	0.0	0.0	false	0	0	1556-1:20	-	-
+MALE_SOUL_HOUND	1554	1	Aura Blast	target	-	used	4269	12000	103.51526400000012	0.0	71.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1555	1	Aura Cannon	target	-	used	2846	8000	98.0	0.0	141.0	0.0	false	0	0	-	-	-
+MALE_SOUL_HOUND	1556	1	Arcane Shield	self	-	used	1423	240000	112.0	0.0	0.0	0.0	false	0	0	1556-1:10	-	-
 FEMALE_SOUL_HOUND	468	9	Fallen Attack	target	sword	used	1238	3000	17.0	0.0	38.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	469	1	Rapid Attack	self	-	used	2846	1600	14.0	0.0	0.0	0.0	false	0	0	469-1:1200	-	-
 FEMALE_SOUL_HOUND	470	3	Detect Trap	self	-	used	2173	3000	27.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	471	3	Defuse Trap	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	478	15	Double Thrust	target	rapier	used	1156	3000	27.0	0.0	45.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	478	15	Double Thrust	target	rapier	used	1156	3000	27.0	0.0	77.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	479	1	Hard March	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	479-1:-1	-	-
 FEMALE_SOUL_HOUND	480	1	Dark Blade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	480-1:-1	-	-
 FEMALE_SOUL_HOUND	481	2	Dark Armor	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	481-2:-1	-	-
 FEMALE_SOUL_HOUND	482	1	Furious Soul	self	-	used	1739	75000	11.0	0.0	0.0	0.0	false	0	0	482-1:90	-	-
-FEMALE_SOUL_HOUND	487	15	Penetrating Shot	target	crossbow	used	3448	6000	120.0	0.0	120.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	487	15	Penetrating Shot	target	crossbow	used	3448	6000	120.0	0.0	75.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	490	1	Fast Shot	self	-	used	2173	3000	14.0	0.0	0.0	0.0	false	0	0	490-1:1200	-	-
-FEMALE_SOUL_HOUND	492	25	Spread Wing	target	-	used	1565	4000	75.0	0.0	84.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	502	5	Life to Soul	self	-	used	782	11000	0.0	328.0	0.0	0.0	false	0	5	-	-	-
-FEMALE_SOUL_HOUND	504	37	Triple Thrust	target	rapier	used	1156	3000	60.0	0.0	119.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	505	28	Shining Edge	target	rapier	used	1156	3000	60.0	0.0	483.72478467351175	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	492	25	Spread Wing	target	-	used	1565	4000	75.0	0.0	112.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	502	5	Life to Soul	self	-	used	782	-	0.0	328.0	0.0	0.0	false	0	5	-	-	-
+FEMALE_SOUL_HOUND	504	37	Triple Thrust	target	rapier	used	1156	3000	60.0	0.0	105.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	505	28	Shining Edge	target	rapier	used	1156	3000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	506	4	Checkmate	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	514	2	Fire Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	538	1	Final Form	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	622	1	Ultimate Escape	self	-	used	1304	900000	31.0	0.0	0.0	0.0	false	0	0	622-1:20	-	-
+FEMALE_SOUL_HOUND	622	1	Ultimate Escape	self	-	used	1304	900000	31.0	0.0	40.0	0.0	false	0	0	622-1:20	-	-
 FEMALE_SOUL_HOUND	625	1	Soul Gathering	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	627	3	Soul Shock	target	crossbow	used	1551	15000	51.0	0.0	56.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	627	3	Soul Shock	target	crossbow	used	1551	15000	51.0	0.0	55.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	628	1	Warp	self	-	used	426	8000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	837	1	Painkiller	self	-	used	1304	300000	53.0	0.0	0.0	0.0	false	0	0	837-1:8	-	-
-FEMALE_SOUL_HOUND	939	1	Soul Rage	target	-	used	1304	-	5.0	25.0	13.0	0.0	false	0	1	-	-	-
+FEMALE_SOUL_HOUND	939	1	Soul Rage	target	-	used	1304	-	5.0	25.0	0.0	0.0	false	0	1	-	-	-
 FEMALE_SOUL_HOUND	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1431	6	Fallen Arrow	target	-	used	1707	1600	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1433	10	Abyssal Blaze	target	-	used	1707	1600	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1434	4	Dark Explosion	target	-	used	2561	3200	42.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1435	10	Death Mark	target	-	used	1707	8800	35.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1436	30	Soul of Pain	target	-	used	1707	2400	44.0	0.0	23.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1435	10	Death Mark	target	-	used	1707	-	35.0	0.0	0.0	0.0	false	0	0	-	1435-10:15	-
+FEMALE_SOUL_HOUND	1436	30	Soul of Pain	target	-	used	1707	2400	44.0	0.0	49.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1437	26	Dark Flame	target	-	used	2561	3200	89.0	0.0	31.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1438	9	Annihilation Circle	target	-	used	2561	4000	72.0	0.0	47.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1439	5	Curse of Divinity	target	-	used	1992	3200	69.0	0.0	7.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1438	9	Annihilation Circle	target	-	used	2561	4000	72.0	0.0	46.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1439	5	Curse of Divinity	target	-	used	1992	3200	69.0	0.0	13.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1440	5	Steal Divinity	target	-	used	1992	12000	67.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1441	3	Soul to Empower	self	-	used	2846	1600	60.0	0.0	0.0	0.0	false	0	0	1441-3:1200	-	-
 FEMALE_SOUL_HOUND	1442	3	Protection from Darkness	self	-	used	4269	1600	56.3257779999999	0.0	0.0	0.0	false	0	0	1442-3:1200	-	-
 FEMALE_SOUL_HOUND	1443	1	Dark Weapon	self	-	used	4269	1600	33.0	0.0	0.0	0.0	false	0	0	1443-1:1200	-	-
-FEMALE_SOUL_HOUND	1444	1	Pride of Kamael	self	-	used	4269	-	35.0	0.0	0.0	0.0	false	0	0	1444-1:180	-	-
+FEMALE_SOUL_HOUND	1444	1	Pride of Kamael	self	-	used	4269	24000	35.0	0.0	0.0	0.0	false	0	0	1444-1:180	-	-
 FEMALE_SOUL_HOUND	1445	18	Surrender to Dark	target	-	used	2134	1600	69.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1446	11	Shadow Bind	target	-	used	2134	6400	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1447	9	Voice Bind	target	-	used	2134	6400	40.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1448	1	Blink	target	-	used	711	12000	100.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1469	1	Leopold	target	-	used	5692	36000	72.3257779999999	0.0	107.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1469	1	Leopold	target	-	used	5692	36000	72.3257779999999	0.0	106.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1473	1	Change Weapon	self	sword	used	7115	12000	23.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1475	3	Erase Mark	self	-	used	3557	3200	35.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1510	1	Soul Cleanse	self	-	used	2846	12000	32.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1511	8	Curse of Life Flow	target	-	used	4269	12000	33.0	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1512	1	Soul Vortex	target	-	used	4269	12000	72.3257779999999	0.0	47.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1512	1	Soul Vortex	target	-	used	4269	12000	72.3257779999999	0.0	45.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1513	1	Soul Vortex Extinction	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1515	1	Lightning Barrier	self	-	used	2134	1600	37.0	0.0	0.0	0.0	false	0	0	1515-1:1200	-	-
-FEMALE_SOUL_HOUND	1516	1	Soul Strike	target	-	used	2846	12000	34.0	0.0	77.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1516	1	Soul Strike	target	-	used	2846	12000	34.0	0.0	70.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1529	7	Soul Web	target	-	used	3557	12000	56.3257779999999	0.0	0.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1554	1	Aura Blast	target	-	used	4269	12000	103.3257779999999	0.0	87.0	0.0	false	0	0	-	-	-
-FEMALE_SOUL_HOUND	1555	1	Aura Cannon	target	-	used	2846	8000	98.0	0.0	137.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1554	1	Aura Blast	target	-	used	4269	12000	103.3257779999999	0.0	91.0	0.0	false	0	0	-	-	-
+FEMALE_SOUL_HOUND	1555	1	Aura Cannon	target	-	used	2846	8000	98.0	0.0	106.0	0.0	false	0	0	-	-	-
 FEMALE_SOUL_HOUND	1556	1	Arcane Shield	self	-	used	1423	240000	112.0	0.0	0.0	0.0	false	0	0	1556-1:10	-	-
 TRICKSTER	334	1	Focus Skill Mastery	self	-	used	0	-	36.0	0.0	0.0	0.0	false	0	0	334-1:-1	-	-
-TRICKSTER	468	9	Fallen Attack	target	sword	used	1238	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
+TRICKSTER	468	9	Fallen Attack	target	sword	used	1238	3000	17.0	0.0	41.0	0.0	false	0	0	-	-	-
 TRICKSTER	469	1	Rapid Attack	self	-	used	3126	2000	11.0	0.0	0.0	0.0	false	0	0	469-1:1200	-	-
 TRICKSTER	470	7	Detect Trap	self	-	used	2173	3000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	471	7	Defuse Trap	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	478	15	Double Thrust	target	rapier	used	1156	3000	27.0	0.0	30.0	0.0	false	0	0	-	-	-
+TRICKSTER	478	15	Double Thrust	target	rapier	used	1156	3000	27.0	0.0	45.0	0.0	false	0	0	-	-	-
 TRICKSTER	479	1	Hard March	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	479-1:-1	-	-
 TRICKSTER	480	1	Dark Blade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	480-1:-1	-	-
 TRICKSTER	481	2	Dark Armor	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	481-2:-1	-	-
 TRICKSTER	482	1	Furious Soul	self	-	used	1739	75000	11.0	0.0	0.0	0.0	false	0	0	482-1:90	-	-
-TRICKSTER	487	15	Penetrating Shot	target	crossbow	used	3448	6000	120.0	0.0	160.0	0.0	false	0	0	-	-	-
+TRICKSTER	487	15	Penetrating Shot	target	crossbow	used	3448	6000	120.0	0.0	93.0	0.0	false	0	0	-	-	-
 TRICKSTER	489	1	Shift Target	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	490	2	Fast Shot	self	-	used	2173	3000	25.0	0.0	0.0	0.0	false	0	0	490-2:1200	-	-
+TRICKSTER	490	2	Fast Shot	self	-	used	2173	-	25.0	0.0	0.0	0.0	false	0	0	490-2:1200	-	-
 TRICKSTER	502	5	Life to Soul	self	-	used	782	11000	0.0	328.0	0.0	0.0	false	0	5	-	-	-
-TRICKSTER	507	37	Twin Shot	target	crossbow	used	3448	3000	135.0	0.0	256.0	0.0	false	0	0	-	-	-
-TRICKSTER	508	31	Rising Shot	target	crossbow	used	3448	-	202.0	0.0	108.0	0.0	false	0	0	-	-	-
+TRICKSTER	507	37	Twin Shot	target	crossbow	used	3448	3000	135.0	0.0	524.0	0.0	false	0	0	-	-	-
+TRICKSTER	508	31	Rising Shot	target	crossbow	used	3448	6000	202.0	0.0	102.0	0.0	false	0	0	-	-	-
 TRICKSTER	509	34	Bleeding Shot	target	crossbow	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	510	5	Deadly Roulette	target	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	511	1	Temptation	self	-	used	1304	3000	44.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	513	1	Create Dark Seed	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	514	9	Fire Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	515	6	Poison Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
+TRICKSTER	515	6	Poison Trap	self	-	used	1304	45000	50.0	0.0	335.0	0.0	false	0	0	-	-	-
 TRICKSTER	516	6	Slow Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	517	5	Flash Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	518	8	Binding Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	5269-6:17	-
+TRICKSTER	517	5	Flash Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	5269-6:17	-
+TRICKSTER	518	8	Binding Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	5270-5:2	-
 TRICKSTER	519	1	Quiver of Bolts: A-Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	520	1	Quiver of Bolts: S-Grade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	521	8	Sharpshooting	self	crossbow	used	1724	75000	34.0	0.0	0.0	0.0	false	0	0	521-8:120	5270-5:2 5271-8:17	-
+TRICKSTER	521	8	Sharpshooting	self	crossbow	used	1724	75000	34.0	0.0	0.0	0.0	false	0	0	521-8:120	5271-8:17	-
 TRICKSTER	522	4	Real Target	target	-	used	1304	3000	22.0	0.0	0.0	0.0	false	0	0	-	522-4:20	-
 TRICKSTER	523	7	Imbue Dark Seed	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	524	1	Cure Dark Seed	self	-	used	1304	-	59.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1588,14 +1588,14 @@ TRICKSTER	620	1	Quiver of Bolts - Grade B	self	-	used	0	-	0.0	0.0	0.0	0.0	false	
 TRICKSTER	621	1	Create Special Bolt	self	-	used	4690	150000	38.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	622	2	Ultimate Escape	self	-	used	1304	900000	47.0	0.0	0.0	0.0	false	0	0	622-2:20	-	-
 TRICKSTER	625	1	Soul Gathering	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-TRICKSTER	627	40	Soul Shock	target	crossbow	used	1551	15000	109.0	0.0	168.0	0.0	false	0	0	-	627-40:2	-
+TRICKSTER	627	40	Soul Shock	target	crossbow	used	1551	15000	109.0	0.0	145.0	0.0	false	0	0	-	-	-
 TRICKSTER	628	1	Warp	self	-	used	469	10000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	792	1	Betrayal Mark	target	-	used	1876	11000	37.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	835	4	Imbue Seed of Destruction	target	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	836	3	Oblivion Trap	self	-	used	2608	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	939	1	Soul Rage	target	-	used	1304	-	5.0	25.0	0.0	0.0	false	0	1	-	-	-
-TRICKSTER	987	1	Multiple Shot	target	bow	used	2670	12000	162.0	0.0	800.0	0.0	false	0	0	-	-	-
-TRICKSTER	990	1	Death Shot	target	bow	used	3115	12000	165.0	0.0	1205.0	0.0	false	0	0	-	-	-
+TRICKSTER	987	1	Multiple Shot	target	bow	used	2670	12000	162.0	0.0	731.0	0.0	false	0	0	-	-	-
+TRICKSTER	990	1	Death Shot	target	bow	used	3115	12000	165.0	0.0	2333.0	0.0	false	0	0	-	-	-
 TRICKSTER	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	1431	6	Fallen Arrow	target	-	used	1876	2000	15.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	1433	10	Abyssal Blaze	target	-	used	1876	2000	25.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1607,28 +1607,28 @@ TRICKSTER	1473	1	Change Weapon	self	sword	used	7816	15000	23.0	0.0	0.0	0.0	false
 TRICKSTER	1475	1	Erase Mark	self	-	used	3908	4000	12.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	1510	1	Soul Cleanse	self	-	used	3126	15000	25.0	0.0	0.0	0.0	false	0	0	-	-	-
 TRICKSTER	1514	1	Soul Barrier	self	-	used	2345	45000	28.0	0.0	0.0	0.0	false	0	0	1514-1:10	-	-
-JUDICATOR	468	9	Fallen Attack	target	sword	used	1238	3000	17.0	0.0	42.0	0.0	false	0	0	-	-	-
+JUDICATOR	468	9	Fallen Attack	target	sword	used	1238	3000	17.0	0.0	43.0	0.0	false	0	0	-	-	-
 JUDICATOR	469	1	Rapid Attack	self	-	used	2846	1800	14.0	0.0	0.0	0.0	false	0	0	469-1:1200	-	-
 JUDICATOR	470	3	Detect Trap	self	-	used	2173	3000	27.0	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	471	3	Defuse Trap	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	478	15	Double Thrust	target	rapier	used	1156	3000	27.0	0.0	39.0	0.0	false	0	0	-	-	-
+JUDICATOR	478	15	Double Thrust	target	rapier	used	1156	3000	27.0	0.0	51.0	0.0	false	0	0	-	-	-
 JUDICATOR	479	1	Hard March	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	479-1:-1	-	-
 JUDICATOR	480	1	Dark Blade	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	480-1:-1	-	-
 JUDICATOR	481	2	Dark Armor	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	481-2:-1	-	-
 JUDICATOR	482	1	Furious Soul	self	-	used	1739	75000	11.0	0.0	0.0	0.0	false	0	0	482-1:90	-	-
-JUDICATOR	487	15	Penetrating Shot	target	crossbow	used	3448	6000	120.0	0.0	71.0	0.0	false	0	0	-	-	-
+JUDICATOR	487	15	Penetrating Shot	target	crossbow	used	3448	6000	120.0	0.0	66.0	0.0	false	0	0	-	-	-
 JUDICATOR	490	1	Fast Shot	self	-	used	2173	3000	14.0	0.0	0.0	0.0	false	0	0	490-1:1200	-	-
-JUDICATOR	492	25	Spread Wing	target	-	used	1565	4000	75.0	0.0	83.0	0.0	false	0	0	-	-	-
+JUDICATOR	492	25	Spread Wing	target	-	used	1565	4000	75.0	0.0	88.0	0.0	false	0	0	-	-	-
 JUDICATOR	502	5	Life to Soul	self	-	used	782	11000	0.0	328.0	0.0	0.0	false	0	5	-	-	-
-JUDICATOR	504	37	Triple Thrust	target	rapier	used	1156	3000	60.0	0.0	172.0	0.0	false	0	0	-	-	-
-JUDICATOR	505	28	Shining Edge	target	rapier	used	1156	3000	60.0	0.0	451.4764656952757	0.0	false	0	0	-	-	-
+JUDICATOR	504	37	Triple Thrust	target	rapier	used	1156	3000	60.0	0.0	111.0	0.0	false	0	0	-	-	-
+JUDICATOR	505	28	Shining Edge	target	rapier	used	1156	3000	60.0	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	514	2	Fire Trap	self	-	used	1304	45000	50.0	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	538	1	Final Form	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	622	1	Ultimate Escape	self	-	used	1304	900000	31.0	0.0	0.0	0.0	false	0	0	622-1:20	-	-
+JUDICATOR	622	1	Ultimate Escape	self	-	used	1304	900000	31.0	0.0	45.0	0.0	false	0	0	622-1:20	-	-
 JUDICATOR	625	1	Soul Gathering	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	627	3	Soul Shock	target	crossbow	used	1551	15000	51.0	0.0	66.0	0.0	false	0	0	-	-	-
+JUDICATOR	627	3	Soul Shock	target	crossbow	used	1551	15000	51.0	0.0	57.0	0.0	false	0	0	-	-	-
 JUDICATOR	628	1	Warp	self	-	used	426	9000	30.0	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	837	1	Painkiller	self	-	used	1304	300000	53.0	0.0	0.0	0.0	false	0	0	837-1:8	-	-
+JUDICATOR	837	1	Painkiller	self	-	used	1304	-	53.0	0.0	0.0	0.0	false	0	0	837-1:8	-	-
 JUDICATOR	939	1	Soul Rage	target	-	used	1304	-	5.0	25.0	0.0	0.0	false	0	1	-	-	-
 JUDICATOR	1322	1	Common Craft	self	-	used	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	1431	6	Fallen Arrow	target	-	used	1707	1800	15.0	0.0	0.0	0.0	false	0	0	-	-	-
@@ -1644,12 +1644,12 @@ JUDICATOR	1478	2	Protection Instinct	self	-	used	3557	300000	99.52577800000017	0
 JUDICATOR	1479	3	Magic Impulse	self	-	used	3557	300000	116.52577800000017	0.0	0.0	0.0	false	0	0	1479-3:15	-	-
 JUDICATOR	1480	1	Soul Harmony	self	-	used	3557	600000	119.52577800000017	0.0	0.0	0.0	false	0	0	1480-1:15	-	-
 JUDICATOR	1481	7	Oblivion	target	-	used	4269	1800	56.52577800000017	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	1482	4	Weak Constitution	target	-	used	4269	-	57.52577800000017	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	1483	7	Thin Skin	target	-	used	4269	1800	57.52577800000017	0.0	0.0	0.0	false	0	0	-	1483-7:30	-
+JUDICATOR	1482	4	Weak Constitution	target	-	used	4269	1800	57.52577800000017	0.0	0.0	0.0	false	0	0	-	1482-4:30	-
+JUDICATOR	1483	7	Thin Skin	target	-	used	4269	1800	57.52577800000017	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	1484	4	Enervation	target	-	used	4269	1800	56.52577800000017	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	1485	3	Spite	target	-	used	4269	1800	57.52577800000017	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	1486	4	Mental Impoverish	target	-	used	4269	1800	54.0	0.0	0.0	0.0	false	0	0	-	-	-
-JUDICATOR	1487	8	Restoration	self	-	used	3557	2700	57.52577800000017	0.0	0.0	0.0	false	0	0	1487-8:15	-	-
+JUDICATOR	1487	8	Restoration	self	-	used	3557	2700	57.52577800000017	0.0	0.0	0.0	false	0	0	1487-8:30	-	-
 JUDICATOR	1488	3	Restoration Impact	self	(no loadout fits)	refused	0	-	0.0	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	1510	1	Soul Cleanse	self	-	used	2846	13500	32.0	0.0	0.0	0.0	false	0	0	-	-	-
 JUDICATOR	1515	1	Lightning Barrier	self	-	used	2134	1800	37.0	0.0	0.0	0.0	false	0	0	1515-1:1200	-	-

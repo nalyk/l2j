@@ -10,6 +10,7 @@ import java.util.StringJoiner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import org.l2jmobius.commons.util.Rnd;
 import org.l2jmobius.gameserver.data.enums.CategoryType;
 import org.l2jmobius.gameserver.data.xml.CategoryData;
 import org.l2jmobius.gameserver.data.xml.PlayerTemplateData;
@@ -68,6 +69,7 @@ class GearLockTest
 	{
 		_server = TestServer.bootPaused(START, SEED);
 		Arena.checkEmpty();
+		Arena.wake();
 
 		for (PlayerClass playerClass : PlayerClass.values())
 		{
@@ -160,18 +162,35 @@ class GearLockTest
 	}
 
 	/**
-	 * A case's outcome is a function of the case: the same attack, run again after the world has gone on by itself for ten minutes, its own timers drawing on its own stream, lands the same hits at the same moments.
+	 * A case's outcome is a function of the case: the same attack, run again after the world has gone on by itself for ten minutes and its stream has been drawn on a thousand times more, as a world with other scripts or other spawns would have, lands the same hits at the same moments. Both runs find the arena awake, as every case of the sweep does.
 	 */
 	@Test
 	void aCaseComesOutTheSameAfterTheWorldHasMovedOn()
 	{
 		final PlayerClass playerClass = CLASSES.get(0);
+		Arena.wake();
 		final String before = attack(playerClass, armourOf(playerClass), TestGear.WEAPONS.get(0), 1);
 		GameScheduler.advance(600_000);
+		for (int draw = 0; draw < 1000; draw++)
+		{
+			Rnd.nextLong();
+		}
+		Arena.wake();
 		assertEquals(before, attack(playerClass, armourOf(playerClass), TestGear.WEAPONS.get(0), 1));
 	}
 
+	/**
+	 * One case, all of it on its own stream: making and dressing the attacker, setting the scene, the attack, the clean-up. What the scene's setting-up sets going (the regions it wakes) draws on the case's stream too, not on whatever the world has drawn by then.
+	 */
 	private static String attack(PlayerClass playerClass, Wear armour, Weapon weapon, int weaponIndex)
+	{
+		final String[] line = new String[1];
+		Arena.align();
+		_server.withRandom(KeyedRandom.of(SEED, "lock.combat.auto", (playerClass.getId() * 100L) + weaponIndex), () -> line[0] = attackOnItsStream(armour, weapon, playerClass));
+		return line[0];
+	}
+
+	private static String attackOnItsStream(Wear armour, Weapon weapon, PlayerClass playerClass)
 	{
 		final Player attacker = TestPlayers.create(playerClass, LEVEL);
 		final List<Piece> pieces = new ArrayList<>();
@@ -211,13 +230,10 @@ class GearLockTest
 
 		final double mpBefore = attacker.getCurrentMp();
 		final long ammoBefore = ammo(attacker, weapon);
-		_server.withRandom(KeyedRandom.of(SEED, "lock.combat.auto", (playerClass.getId() * 100L) + weaponIndex), () ->
-		{
-			attacker.getAI().setIntentionAttack(target);
-			Arena.runWhile(() -> hits.size() < HITS, ATTACK_LIMIT_MILLIS);
-			attacker.abortAttack();
-			attacker.getAI().setIntentionIdle();
-		});
+		attacker.getAI().setIntentionAttack(target);
+		Arena.runWhile(() -> hits.size() < HITS, ATTACK_LIMIT_MILLIS);
+		attacker.abortAttack();
+		attacker.getAI().setIntentionIdle();
 
 		final String line = String.join("\t", //
 			hits.isEmpty() ? "-" : String.join(" ", hits.subList(0, Math.min(HITS, hits.size()))), //

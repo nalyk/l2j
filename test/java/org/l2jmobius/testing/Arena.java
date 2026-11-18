@@ -11,6 +11,7 @@ import org.l2jmobius.gameserver.entity.WorldRegion;
 import org.l2jmobius.gameserver.entity.actor.Creature;
 import org.l2jmobius.gameserver.entity.actor.Npc;
 import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.entity.actor.instance.Monster;
 import org.l2jmobius.gameserver.entity.actor.templates.NpcTemplate;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
@@ -47,6 +48,29 @@ public final class Arena
 		{
 			throw new IllegalStateException("the arena at " + X + ", " + Y + ", " + Z + " is inside a zone now: " + ZoneManager.getInstance().getZones(X, Y, Z));
 		}
+	}
+
+	/** What every cycle of the server's actor pools that a case meets divides: thinking every 1000 ms, following every 1000 or 500, combat stance and seeing every 1000, moving every 50 or 100, game time every 100. */
+	private static final long POOL_CYCLE_MILLIS = 1000;
+
+	/**
+	 * Lets the world run to the next whole second of game time. The server's actor pools run at fixed instants from when they were made, so a case that starts on a whole second meets each of them at the same point of its cycle, and a monster in it thinks at the same moments, however long the cases before it took. Without this a case's draws interleave differently with its monster's thinking depending on when it starts.
+	 */
+	public static void align()
+	{
+		final long now = GameClock.millis();
+		GameScheduler.advance((((now + POOL_CYCLE_MILLIS) - 1) / POOL_CYCLE_MILLIS * POOL_CYCLE_MILLIS) - now);
+	}
+
+	/**
+	 * Wakes the arena's region and the regions around it, the way a player arriving does, and lets them finish waking. They stay awake until 90 s of game time after the last player leaves, so cases that follow one another closely all find them awake. Without this the first case wakes them itself, and waking puts every NPC there on the idle-animation list with a draw each: the first case would not draw like the others.
+	 */
+	public static void wake()
+	{
+		final Player waker = TestPlayers.create(PlayerClass.PHOENIX_KNIGHT, 1);
+		waker.spawnMe(X, Y, Z);
+		GameScheduler.advance(2_000);
+		waker.deleteMe();
 	}
 
 	/**

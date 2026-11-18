@@ -12,7 +12,7 @@ import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
  * A task draws on the stream of whatever scheduled it, so the hits, casts and effects a case starts draw on the case's stream however late they land, while the world's own timers (doors, script events, spawns) draw on the world's stream even when they fall due inside a case. Neither then moves the other: a change to some script elsewhere in the world does not change a case's draws, and a case does not change the world's.
  * </p>
  * <p>
- * A few tasks of the server serve every actor of their kind at once: thinking, following, combat stance, seeing, idle animation, automation, flagging. In a world with no player near, none of them draws anything, so whatever they draw while a case is open is the case's actors', and they draw on the open case's stream then, on the world's otherwise. Two such tasks are left out because the world keeps them busy with no player near (measured over an idle hour): movement (walking routes, roaming squads) and decay (NPCs that scripts kill). They draw on the world's stream, and so does what they set going; a case actor's draw that happens inside them is the world's too.
+ * A few tasks of the server serve every actor of their kind at once: thinking, following, combat stance, seeing, automation, flagging. In a world with no player near, none of them draws anything, so whatever they draw while a case is open is the case's actors', and they draw on the open case's stream then, on the world's otherwise. The others stay on the world's stream, and so does what they set going; a case actor's draw that happens inside them is the world's too. Movement and decay: the world keeps them busy with no player near (measured over an idle hour), walking routes and roaming squads, NPCs that scripts kill. Idle animation: it keeps every NPC it has ever seen, deleted ones included, drawing when each next turns, so earlier cases' NPCs would draw inside later cases; what it draws for is cosmetic.
  * </p>
  */
 final class CaseStreams implements GameScheduler.TaskContext
@@ -26,7 +26,6 @@ final class CaseStreams implements GameScheduler.TaskContext
 		TASK_MANAGERS + "CreatureFollowTaskManager$CreatureFollowAttackTask", //
 		TASK_MANAGERS + "AttackStanceTaskManager", //
 		TASK_MANAGERS + "CreatureSeeTaskManager", //
-		TASK_MANAGERS + "RandomAnimationTaskManager", //
 		TASK_MANAGERS + "AutoUseTaskManager$AutoUse", //
 		TASK_MANAGERS + "AutoPlayTaskManager$AutoPlay", //
 		TASK_MANAGERS + "AutoPotionTaskManager", //

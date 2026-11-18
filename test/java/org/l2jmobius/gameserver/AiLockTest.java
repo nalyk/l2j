@@ -93,11 +93,7 @@ class AiLockTest
 		_server = TestServer.bootPaused(START, SEED);
 		Arena.checkEmpty();
 
-		// The first player in the arena wakes its region at once and the regions around it a second later, and they stay awake until 90 s after the last one leaves. Waking them before the first case puts every case in the same world.
-		final Player waker = TestPlayers.create(PlayerClass.PHOENIX_KNIGHT, 1);
-		waker.spawnMe(Arena.X, Arena.Y, Arena.Z);
-		GameScheduler.advance(2_000);
-		waker.deleteMe();
+		Arena.wake();
 	}
 
 	@Test
@@ -186,6 +182,7 @@ class AiLockTest
 	private static String meet(NpcTemplate template, IntFunction<Player> opponents)
 	{
 		final StringBuilder line = new StringBuilder();
+		Arena.align();
 		_server.withRandom(KeyedRandom.of(SEED, "lock.ai.meet", template.getId()), () ->
 		{
 			final Player opponent = opponents.apply(template.getLevel());

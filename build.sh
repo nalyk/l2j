@@ -30,6 +30,13 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 		docker build -q -f tools/build/Dockerfile --build-arg JDK_IMAGE="$(pinned_image jdk)" -t "$image" - >/dev/null
 fi
 
+# The fork's delta against upstream must be fully accounted for in CORE_PATCHES.md.
+if git rev-parse -q --verify refs/heads/upstream >/dev/null 2>&1; then
+	tools/intake/check-core-ledger.sh
+else
+	echo "build.sh: no local 'upstream' branch here, core ledger not checked" >&2
+fi
+
 # All output goes to ./build, which ignores itself so no upstream file has to.
 mkdir -p build
 [[ -e build/.gitignore ]] || echo '*' >build/.gitignore

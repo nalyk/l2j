@@ -21,6 +21,7 @@
 package org.l2jmobius.commons.util;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.random.RandomGenerator;
 
 /**
  * @author Mobius
@@ -34,11 +35,53 @@ public class Rnd
 	private static final double MINIMUM_POSITIVE_DOUBLE = Double.longBitsToDouble(0x1L);
 	
 	/**
+	 * Living Chronicle: test and simulation JVMs start with {@code -Dlc.rng.bindable=true} and may bind a deterministic generator to a thread.<br>
+	 * Production starts without it, the constant folds to false, and every draw comes from ThreadLocalRandom exactly as before.
+	 */
+	private static final boolean BINDABLE = Boolean.getBoolean("lc.rng.bindable");
+	private static final ThreadLocal<RandomGenerator> BOUND = new ThreadLocal<>();
+	
+	/**
+	 * Makes every draw on the calling thread come from the given generator until {@link #unbind()}.
+	 * @param generator the generator to draw from.
+	 * @throws IllegalStateException in a JVM that was not started as bindable, so production randomness can never be made predictable.
+	 */
+	public static void bind(RandomGenerator generator)
+	{
+		if (!BINDABLE)
+		{
+			throw new IllegalStateException("Rnd is not bindable: this JVM was started without -Dlc.rng.bindable=true");
+		}
+		BOUND.set(generator);
+	}
+	
+	/**
+	 * Returns the calling thread to ThreadLocalRandom.
+	 */
+	public static void unbind()
+	{
+		BOUND.remove();
+	}
+	
+	private static RandomGenerator generator()
+	{
+		if (BINDABLE)
+		{
+			final RandomGenerator bound = BOUND.get();
+			if (bound != null)
+			{
+				return bound;
+			}
+		}
+		return ThreadLocalRandom.current();
+	}
+	
+	/**
 	 * @return a random boolean value.
 	 */
 	public static boolean nextBoolean()
 	{
-		return ThreadLocalRandom.current().nextBoolean();
+		return generator().nextBoolean();
 	}
 	
 	/**
@@ -47,7 +90,7 @@ public class Rnd
 	 */
 	public static void nextBytes(byte[] bytes)
 	{
-		ThreadLocalRandom.current().nextBytes(bytes);
+		generator().nextBytes(bytes);
 	}
 	
 	/**
@@ -56,7 +99,7 @@ public class Rnd
 	 */
 	public static int get(int bound)
 	{
-		return bound <= 0 ? 0 : ThreadLocalRandom.current().nextInt(bound);
+		return bound <= 0 ? 0 : generator().nextInt(bound);
 	}
 	
 	/**
@@ -66,7 +109,7 @@ public class Rnd
 	 */
 	public static int get(int origin, int bound)
 	{
-		return origin >= bound ? origin : ThreadLocalRandom.current().nextInt(origin, bound == Integer.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_INT);
+		return origin >= bound ? origin : generator().nextInt(origin, bound == Integer.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_INT);
 	}
 	
 	/**
@@ -74,7 +117,7 @@ public class Rnd
 	 */
 	public static int nextInt()
 	{
-		return ThreadLocalRandom.current().nextInt();
+		return generator().nextInt();
 	}
 	
 	/**
@@ -83,7 +126,7 @@ public class Rnd
 	 */
 	public static long get(long bound)
 	{
-		return bound <= 0 ? 0 : ThreadLocalRandom.current().nextLong(bound);
+		return bound <= 0 ? 0 : generator().nextLong(bound);
 	}
 	
 	/**
@@ -93,7 +136,7 @@ public class Rnd
 	 */
 	public static long get(long origin, long bound)
 	{
-		return origin >= bound ? origin : ThreadLocalRandom.current().nextLong(origin, bound == Long.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_LONG);
+		return origin >= bound ? origin : generator().nextLong(origin, bound == Long.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_LONG);
 	}
 	
 	/**
@@ -101,7 +144,7 @@ public class Rnd
 	 */
 	public static long nextLong()
 	{
-		return ThreadLocalRandom.current().nextLong();
+		return generator().nextLong();
 	}
 	
 	/**
@@ -110,7 +153,7 @@ public class Rnd
 	 */
 	public static float get(float bound)
 	{
-		return bound <= 0 ? 0 : ThreadLocalRandom.current().nextFloat(bound);
+		return bound <= 0 ? 0 : generator().nextFloat(bound);
 	}
 	
 	/**
@@ -120,7 +163,7 @@ public class Rnd
 	 */
 	public static float get(float origin, float bound)
 	{
-		return origin >= bound ? origin : ThreadLocalRandom.current().nextFloat(origin, bound == Float.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_FLOAT);
+		return origin >= bound ? origin : generator().nextFloat(origin, bound == Float.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_FLOAT);
 	}
 	
 	/**
@@ -128,7 +171,7 @@ public class Rnd
 	 */
 	public static float nextFloat()
 	{
-		return ThreadLocalRandom.current().nextFloat();
+		return generator().nextFloat();
 	}
 	
 	/**
@@ -137,7 +180,7 @@ public class Rnd
 	 */
 	public static double get(double bound)
 	{
-		return bound <= 0 ? 0 : ThreadLocalRandom.current().nextDouble(bound);
+		return bound <= 0 ? 0 : generator().nextDouble(bound);
 	}
 	
 	/**
@@ -147,7 +190,7 @@ public class Rnd
 	 */
 	public static double get(double origin, double bound)
 	{
-		return origin >= bound ? origin : ThreadLocalRandom.current().nextDouble(origin, bound == Double.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_DOUBLE);
+		return origin >= bound ? origin : generator().nextDouble(origin, bound == Double.MAX_VALUE ? bound : bound + MINIMUM_POSITIVE_DOUBLE);
 	}
 	
 	/**
@@ -155,7 +198,7 @@ public class Rnd
 	 */
 	public static double nextDouble()
 	{
-		return ThreadLocalRandom.current().nextDouble();
+		return generator().nextDouble();
 	}
 	
 	/**
@@ -163,6 +206,6 @@ public class Rnd
 	 */
 	public static double nextGaussian()
 	{
-		return ThreadLocalRandom.current().nextGaussian();
+		return generator().nextGaussian();
 	}
 }

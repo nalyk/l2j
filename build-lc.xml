@@ -75,6 +75,8 @@
 				<fork dir="${runtime.game}" forkMode="perTestClass">
 					<jvmarg line="${server.jvmargs}" />
 					<jvmarg value="-Djava.awt.headless=true" />
+					<!-- Lets a test bind Rnd to a deterministic stream (CORE_PATCHES.md CP-0001). Production never sets this. -->
+					<jvmarg value="-Dlc.rng.bindable=true" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
 				</fork>
 			</testclasses>

@@ -24,3 +24,16 @@ Upstream files use CRLF line endings. Patches keep them.
   `ThreadLocalRandom` method it called before, and `bind` throws, so live randomness can never be made predictable.
 - Proof: `RndContractTest` (range contract, unbound), `RndBindingTest` (determinism, per-thread scope, contract on a bound
   stream), `RndProductionModeTest` (binding refused in a JVM without the flag).
+
+## CP-0002 "Now" is always read through a redirectable call
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/mechanics/announce/EventAnnouncement.java`, `dist/game/data/scripts/ai/areas/Gracia/AI/Lindvior.java`
+- Reason: test JVMs make Mobius read `GameClock` by redirecting its static JDK time calls as classes load (see
+  `TruthAgent`), which is what lets several hundred call sites stay unedited. A constructor that captures the present
+  cannot be redirected that way. These were the only ones: four `new Date()` and one `new GregorianCalendar()`.
+- Change: `new Date()` becomes `new Date(System.currentTimeMillis())`, which is how the JDK defines it. The Lindvior script
+  uses `Calendar.getInstance()` like every other schedule in the datapack; it only ever used the `Calendar` API.
+- Invariant: production behaviour is unchanged, and no Mobius class, core or script, reads the system clock in a way the
+  agent cannot redirect.
+- Proof: `CoreClockCoverageTest` (every compiled core class), `GameServerBootTest.everyLoadedClassReadsTimeThroughTheGameClock`
+  (every script, as loaded), `TruthAgentTest` (the redirect itself).

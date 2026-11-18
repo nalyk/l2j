@@ -20,6 +20,7 @@
 	<property name="runtime.game" location="${build}/runtime/game" />
 	<property name="lock.dir" location="test/lock" />
 	<property name="lock.actual" location="${build}/lock-actual" />
+	<property name="truth.agent" location="${build}/lc-truth-agent.jar" />
 
 	<path id="test.classpath">
 		<pathelement location="${test.bin}" />
@@ -50,6 +51,16 @@
 			<compilerarg value="-Xlint:all" />
 			<compilerarg value="-Werror" />
 		</javac>
+		<!--
+			Test JVMs load this agent so that Mobius code reads GameClock where it
+			was written to read the system clock. Production never loads it.
+		-->
+		<jar destfile="${truth.agent}">
+			<fileset dir="${test.bin}" includes="org/l2jmobius/testing/agent/**" excludes="**/*Test*.class" />
+			<manifest>
+				<attribute name="Premain-Class" value="org.l2jmobius.testing.agent.TruthAgent" />
+			</manifest>
+		</jar>
 	</target>
 
 	<target name="stage" description="Stage a pristine copy of the game runtime for tests to boot from.">
@@ -81,11 +92,13 @@
 					<jvmarg value="-Djava.awt.headless=true" />
 					<!-- Lets a test bind Rnd to a deterministic stream (CORE_PATCHES.md CP-0001). Production never sets this. -->
 					<jvmarg value="-Dlc.rng.bindable=true" />
-					<!-- Lets a test stop and move the game clock. Production never sets this. -->
+					<!-- Lets a test stop and move the game clock, and makes Mobius code read that clock. Production sets neither. -->
 					<jvmarg value="-Dlc.clock.controllable=true" />
+					<jvmarg value="-javaagent:${truth.agent}" />
 					<!-- Goldens print dates. -->
 					<jvmarg value="-Duser.timezone=UTC" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
+					<sysproperty key="lc.classes.dir" value="${build.bin}" />
 					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->
 					<sysproperty key="lc.lock.dir" value="${lock.dir}" />
 					<sysproperty key="lc.lock.actual" value="${lock.actual}" />

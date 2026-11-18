@@ -63,7 +63,7 @@ public class EventAnnouncement implements IAnnouncement
 	@Override
 	public boolean isValid()
 	{
-		final Date now = new Date();
+		final Date now = new Date(System.currentTimeMillis());
 		return (_startDate != null) && (_endDate != null) && !now.before(_startDate) && !now.after(_endDate);
 	}
 	

@@ -21,7 +21,6 @@
 package ai.areas.Gracia.AI;
 
 import java.util.Calendar;
-import java.util.GregorianCalendar;
 
 import org.l2jmobius.gameserver.data.SpawnTable;
 import org.l2jmobius.gameserver.entity.World;
@@ -128,7 +127,7 @@ public class Lindvior extends Script
 	
 	protected long scheduleNextLindviorDate()
 	{
-		final GregorianCalendar date = new GregorianCalendar();
+		final Calendar date = Calendar.getInstance();
 		date.set(Calendar.MINUTE, RESET_MIN);
 		date.set(Calendar.HOUR_OF_DAY, RESET_HOUR);
 		if (System.currentTimeMillis() >= date.getTimeInMillis())

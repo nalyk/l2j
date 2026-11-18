@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -15,6 +16,7 @@ import org.l2jmobius.gameserver.data.xml.ItemData;
 import org.l2jmobius.gameserver.data.xml.SkillData;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.testing.TestServer;
+import org.l2jmobius.testing.agent.TruthAgent;
 
 /**
  * The stock server boots on the pinned toolchain against the stock schema, and complains about exactly what it complained about at the fork point.
@@ -47,6 +49,17 @@ class GameServerBootTest
 		final String workingDirectory = Path.of("").toAbsolutePath() + "/";
 		final List<String> complaints = _server.bootLog().stream().filter(line -> line.level().intValue() >= Level.WARNING.intValue()).map(line -> line.toString().replace(workingDirectory, "")).toList();
 		assertEquals(KNOWN_BOOT_COMPLAINTS, complaints);
+	}
+
+	/**
+	 * Booting loads and compiles every datapack script, so this is the moment the agent has seen all of them.
+	 */
+	@Test
+	void everyLoadedClassReadsTimeThroughTheGameClock()
+	{
+		assertEquals(Set.of(), TruthAgent.failures());
+		assertTrue(TruthAgent.patchedScriptClasses() > 0, "the agent never patched a script class, so it is not seeing the script loader");
+		assertEquals(Set.of(), TruthAgent.unredirectedReads());
 	}
 
 	@Test

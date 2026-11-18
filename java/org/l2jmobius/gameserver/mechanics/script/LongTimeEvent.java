@@ -110,7 +110,7 @@ public class LongTimeEvent extends Script
 		
 		if ((_startDate != null) && (_endDate != null))
 		{
-			final Date now = new Date();
+			final Date now = new Date(System.currentTimeMillis());
 			if (isWithinRange(now))
 			{
 				startEvent();
@@ -276,7 +276,7 @@ public class LongTimeEvent extends Script
 					throw new NullPointerException("WARNING!!! " + getName() + " event: illegal event period");
 				}
 				
-				final Date today = new Date();
+				final Date today = new Date(System.currentTimeMillis());
 				
 				if (_startDate.after(today) || isWithinRange(today))
 				{
@@ -444,7 +444,7 @@ public class LongTimeEvent extends Script
 		_active = true;
 		
 		// Add event drops if within the drop period.
-		if ((_dropStartDate != null) && (_dropEndDate != null) && isWithinDropPeriod(new Date()))
+		if ((_dropStartDate != null) && (_dropEndDate != null) && isWithinDropPeriod(new Date(System.currentTimeMillis())))
 		{
 			EventDropManager.getInstance().addDrops(this, _dropList);
 		}

@@ -266,6 +266,181 @@ class GameSchedulerTest
 	}
 
 	/**
+	 * A task that pauses in game time between two records, as several Mobius tasks do with Thread.sleep.
+	 */
+	private Runnable sleeper(String name, long millis)
+	{
+		return () ->
+		{
+			task(name + "-before").run();
+			try
+			{
+				GameScheduler.sleep(millis);
+			}
+			catch (InterruptedException e)
+			{
+				throw new IllegalStateException(e);
+			}
+			task(name + "-after").run();
+		};
+	}
+
+	@Test
+	void aSleepingTaskDoesNotStopTheWorld()
+	{
+		GameScheduler.schedule(sleeper("s", 1000), 100);
+		GameScheduler.schedule(task("other"), 500);
+
+		GameScheduler.advance(2000);
+		assertEquals(List.of("s-before@100", "other@500", "s-after@1100"), _log);
+		assertEquals(0, GameScheduler.pendingTasks());
+	}
+
+	@Test
+	void aSleepSpansAdvances()
+	{
+		GameScheduler.schedule(sleeper("s", 1000), 100);
+
+		GameScheduler.advance(600);
+		assertEquals(List.of("s-before@100"), _log);
+		assertEquals(1, GameScheduler.pendingTasks());
+		assertEquals(START + 600, GameClock.millis());
+
+		GameScheduler.advance(600);
+		assertEquals(List.of("s-before@100", "s-after@1100"), _log);
+		assertEquals(START + 1200, GameClock.millis());
+	}
+
+	@Test
+	void sleepersWakeInOrderOfTheirWakeTimes()
+	{
+		GameScheduler.schedule(sleeper("long", 900), 0);
+		GameScheduler.schedule(sleeper("short", 100), 0);
+		GameScheduler.schedule(() ->
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				sleeper("loop" + i, 200).run();
+			}
+		}, 50);
+
+		GameScheduler.advance(5000);
+		assertEquals(List.of("long-before@0", "short-before@0", "loop0-before@50", "short-after@100", "loop0-after@250", "loop1-before@250", "loop1-after@450", "loop2-before@450", "loop2-after@650", "long-after@900"), _log);
+	}
+
+	@Test
+	void aWakeAndATaskDueTogetherRunInOrderOfCreation()
+	{
+		GameScheduler.schedule(task("scheduled-first"), 300);
+		GameScheduler.schedule(sleeper("s", 200), 100);
+		GameScheduler.schedule(() -> GameScheduler.schedule(task("scheduled-last"), 100), 200);
+
+		GameScheduler.advance(1000);
+		assertEquals(List.of("s-before@100", "scheduled-first@300", "s-after@300", "scheduled-last@300"), _log);
+	}
+
+	@Test
+	void aSleepingPeriodicTaskKeepsItsRate()
+	{
+		final ScheduledFuture<?> ticking = GameScheduler.scheduleAtFixedRate(sleeper("t", 30), 0, 100);
+		GameScheduler.advance(250);
+		ticking.cancel(false);
+		assertEquals(List.of("t-before@0", "t-after@30", "t-before@100", "t-after@130", "t-before@200", "t-after@230"), _log);
+	}
+
+	@Test
+	void everySimulationThreadIsSetUpBeforeItRunsAnything()
+	{
+		GameScheduler.releaseControl();
+		final List<String> setUp = java.util.Collections.synchronizedList(new ArrayList<>());
+		GameScheduler.takeControl(() -> setUp.add(Thread.currentThread().getName()), java.util.Set.of());
+
+		// Two sleepers at once need a second scheduler thread to keep the world going.
+		GameScheduler.schedule(sleeper("a", 500), 0);
+		GameScheduler.schedule(sleeper("b", 500), 0);
+		GameScheduler.schedule(() -> _log.add("ran on " + Thread.currentThread().getName()), 100);
+		GameScheduler.advance(1000);
+
+		assertTrue(setUp.size() >= 3, () -> "expected three scheduler threads, set up: " + setUp);
+		assertEquals(setUp.size(), setUp.stream().distinct().count(), "a thread was set up twice");
+		assertTrue(_log.stream().filter(line -> line.startsWith("ran on ")).allMatch(line -> setUp.contains(line.substring("ran on ".length()))), () -> _log + " vs " + setUp);
+	}
+
+	@Test
+	void aCooperativeThreadSleepsInGameTime() throws InterruptedException
+	{
+		GameScheduler.releaseControl();
+		GameScheduler.takeControl(() ->
+		{
+		}, java.util.Set.of("cooperative"));
+
+		final List<String> ticks = java.util.Collections.synchronizedList(new ArrayList<>());
+		final Thread thread = new Thread(() ->
+		{
+			try
+			{
+				while (GameScheduler.isControlled())
+				{
+					ticks.add("tick@" + (GameClock.millis() - START));
+					GameScheduler.sleep(100);
+				}
+			}
+			catch (InterruptedException e)
+			{
+				// Ends the thread.
+			}
+		}, "cooperative");
+		thread.setDaemon(true);
+		thread.start();
+		GameScheduler.awaitCooperativeThreads(10_000);
+
+		// It ran once on its own, reached its sleep, and now waits for game time.
+		Thread.sleep(50);
+		assertEquals(List.of("tick@0"), ticks);
+
+		GameScheduler.schedule(task("task"), 100);
+		GameScheduler.advance(350);
+		assertEquals(List.of("tick@0", "tick@100", "tick@200", "tick@300"), ticks);
+
+		// Due at the same instant, the cooperative thread goes first: its order must not depend on a start-up race.
+		assertEquals(List.of("task@100"), _log);
+	}
+
+	@Test
+	void aThreadOutsideTheSimulationSleepsForReal() throws InterruptedException
+	{
+		final long[] elapsedNanos = new long[1];
+		final Thread outsider = new Thread(() ->
+		{
+			final long began = System.nanoTime();
+			try
+			{
+				GameScheduler.sleep(60);
+			}
+			catch (InterruptedException e)
+			{
+				// Leaves elapsed at zero and fails the test.
+			}
+			elapsedNanos[0] = System.nanoTime() - began;
+		}, "outsider");
+		outsider.start();
+		outsider.join(10_000);
+
+		assertTrue(elapsedNanos[0] >= TimeUnit.MILLISECONDS.toNanos(60), () -> "slept only " + elapsedNanos[0] + " ns");
+		assertEquals(START, GameClock.millis());
+		assertEquals(0, GameScheduler.pendingTasks());
+	}
+
+	@Test
+	void advancingFromInsideTheSimulationIsRefused()
+	{
+		GameScheduler.schedule(() -> GameScheduler.advance(10), 0);
+		GameScheduler.advance(100);
+		assertEquals(1, GameScheduler.failures().size());
+		assertTrue(GameScheduler.failures().get(0).contains("from inside the simulation"), GameScheduler.failures().toString());
+	}
+
+	/**
 	 * Runs in a JVM without the flag.
 	 */
 	public static final class Probe

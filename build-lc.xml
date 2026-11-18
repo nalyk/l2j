@@ -81,6 +81,10 @@
 					<jvmarg value="-Djava.awt.headless=true" />
 					<!-- Lets a test bind Rnd to a deterministic stream (CORE_PATCHES.md CP-0001). Production never sets this. -->
 					<jvmarg value="-Dlc.rng.bindable=true" />
+					<!-- Lets a test stop and move the game clock. Production never sets this. -->
+					<jvmarg value="-Dlc.clock.controllable=true" />
+					<!-- Goldens print dates. -->
+					<jvmarg value="-Duser.timezone=UTC" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
 					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->
 					<sysproperty key="lc.lock.dir" value="${lock.dir}" />

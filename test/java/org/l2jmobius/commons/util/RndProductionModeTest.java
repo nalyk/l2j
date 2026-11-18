@@ -2,10 +2,11 @@ package org.l2jmobius.commons.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.jupiter.api.Test;
+
+import org.l2jmobius.testing.ProductionJvm;
 
 /**
  * A JVM started the way production is started cannot have its randomness bound.
@@ -44,11 +45,6 @@ class RndProductionModeTest
 	@Test
 	void bindingIsRefusedWithoutTheFlag() throws Exception
 	{
-		final String java = ProcessHandle.current().info().command().orElseThrow();
-		final Process child = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), Probe.class.getName()).redirectErrorStream(true).start();
-		final String output = new String(child.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
-		assertEquals(0, child.waitFor(), output);
-		assertEquals("REFUSED", output);
+		assertEquals("REFUSED", ProductionJvm.run(Probe.class));
 	}
 }

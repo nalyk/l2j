@@ -18,6 +18,8 @@
 	<property name="test.reports" location="${build}/test-reports" />
 	<property name="test.libs" location="/opt/lc/test-libs" />
 	<property name="runtime.game" location="${build}/runtime/game" />
+	<property name="lock.dir" location="test/lock" />
+	<property name="lock.actual" location="${build}/lock-actual" />
 
 	<path id="test.classpath">
 		<pathelement location="${test.bin}" />
@@ -59,6 +61,7 @@
 
 	<target name="test" depends="compile-tests, stage" description="Run the test suite, one JVM per test class.">
 		<delete dir="${test.reports}" quiet="true" />
+		<delete dir="${lock.actual}" quiet="true" />
 		<mkdir dir="${test.reports}" />
 		<!-- Tests run under the JVM flags production runs under, read from the file production reads. -->
 		<loadfile property="server.jvmargs" srcFile="${datapack}/game/java.cfg" />
@@ -66,7 +69,8 @@
 			Mobius is built from static singletons. A fresh JVM per class is the
 			only way one test cannot leak state into the next.
 		-->
-		<junitlauncher haltOnFailure="true" printSummary="true">
+		<!-- Every class runs even after a failure: a changed behaviour should show everything it broke, not the first thing. -->
+		<junitlauncher failureProperty="tests.failed" printSummary="true">
 			<classpath refid="test.classpath" />
 			<testclasses outputdir="${test.reports}">
 				<fileset dir="${test.bin}" includes="**/*Test.class" />
@@ -78,9 +82,13 @@
 					<!-- Lets a test bind Rnd to a deterministic stream (CORE_PATCHES.md CP-0001). Production never sets this. -->
 					<jvmarg value="-Dlc.rng.bindable=true" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
+					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->
+					<sysproperty key="lc.lock.dir" value="${lock.dir}" />
+					<sysproperty key="lc.lock.actual" value="${lock.actual}" />
 				</fork>
 			</testclasses>
 		</junitlauncher>
+		<fail if="tests.failed" message="Tests failed. Reports: ${test.reports}" />
 	</target>
 
 	<target name="gate" depends="dist, test" description="Everything a change must pass." />

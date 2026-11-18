@@ -49,7 +49,7 @@ public final class TestServer
 
 	private final TestDatabase _database;
 	private final List<LogLine> _bootLog;
-	private KeyedRandom _worldRandom;
+	private SimulationRandom _random;
 
 	/**
 	 * One line of the server's own log file.
@@ -75,23 +75,27 @@ public final class TestServer
 	}
 
 	/**
-	 * Draws on the calling thread come from {@code generator} while {@code action} runs, and from the world's stream again afterwards. For a lock case that needs randomness of its own, independent of how much the world has drawn.
+	 * While {@code action} runs, every draw in the simulation comes from {@code generator}: on the calling thread, and on the scheduler threads running whatever {@code action} advances. Afterwards draws come from where they came from before. For a lock case that needs randomness of its own, independent of how much the world or earlier cases have drawn.
+	 * <p>
+	 * World tasks that fall due while {@code action} advances the scheduler draw from {@code generator} too; a case that advances should keep its span short.
+	 * </p>
 	 */
 	public void withRandom(RandomGenerator generator, Runnable action)
 	{
-		if (_worldRandom == null)
+		if (_random == null)
 		{
 			throw new IllegalStateException("only a paused world has a stream to return to");
 		}
 
-		Rnd.bind(generator);
+		final RandomGenerator previous = _random.source();
+		_random.use(generator);
 		try
 		{
 			action.run();
 		}
 		finally
 		{
-			Rnd.bind(_worldRandom);
+			_random.use(previous);
 		}
 	}
 
@@ -117,13 +121,13 @@ public final class TestServer
 		}
 
 		// One stream for the whole world. It is shared by every thread of the simulation, which is safe because only one of them runs at a time.
-		final KeyedRandom world = KeyedRandom.of(seed, "world", 0);
+		final SimulationRandom random = new SimulationRandom(KeyedRandom.of(seed, "world", 0));
 		GameClock.set(epochMillis);
-		GameScheduler.takeControl(() -> Rnd.bind(world), COOPERATIVE_THREADS);
-		Rnd.bind(world);
+		GameScheduler.takeControl(() -> Rnd.bind(random), COOPERATIVE_THREADS);
+		Rnd.bind(random);
 
 		final TestServer server = boot();
-		server._worldRandom = world;
+		server._random = random;
 
 		// Until its first sleep the game-time thread still runs beside us; from here on it only runs when the simulation wakes it.
 		GameScheduler.awaitCooperativeThreads(10_000);

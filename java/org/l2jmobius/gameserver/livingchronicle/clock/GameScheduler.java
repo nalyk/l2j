@@ -2,6 +2,7 @@ package org.l2jmobius.gameserver.livingchronicle.clock;
 
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -343,6 +344,22 @@ public final class GameScheduler
 	public static int pendingTasks()
 	{
 		return QUEUE.size();
+	}
+
+	/**
+	 * When the next thing will happen: advancing by {@code nextDue() - GameClock.millis()} runs exactly the earliest waiting task or wake-up, and whatever else is due at that same instant. This is how a test steps through a process one event at a time, and learns how long it took, without guessing a step size.
+	 * @return the game time the earliest waiting task or sleeper is due, or {@link Long#MAX_VALUE} if nothing is waiting.
+	 */
+	public static long nextDue()
+	{
+		try
+		{
+			return QUEUE.first()._dueMillis;
+		}
+		catch (NoSuchElementException e)
+		{
+			return Long.MAX_VALUE;
+		}
 	}
 
 	/**

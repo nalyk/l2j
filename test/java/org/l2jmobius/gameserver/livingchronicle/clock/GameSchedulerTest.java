@@ -77,6 +77,26 @@ class GameSchedulerTest
 	}
 
 	@Test
+	void stepsGoFromEventToEvent()
+	{
+		assertEquals(Long.MAX_VALUE, GameScheduler.nextDue());
+
+		GameScheduler.schedule(task("b"), 250);
+		final ScheduledFuture<?> cancelled = GameScheduler.schedule(task("never"), 100);
+		GameScheduler.schedule(task("a"), 150);
+		cancelled.cancel(false);
+		assertEquals(START + 150, GameScheduler.nextDue());
+
+		GameScheduler.advance(GameScheduler.nextDue() - GameClock.millis());
+		assertEquals(List.of("a@150"), _log);
+		assertEquals(START + 250, GameScheduler.nextDue());
+
+		GameScheduler.advance(GameScheduler.nextDue() - GameClock.millis());
+		assertEquals(List.of("a@150", "b@250"), _log);
+		assertEquals(Long.MAX_VALUE, GameScheduler.nextDue());
+	}
+
+	@Test
 	void onlyWhatFallsDueInTheSpanRuns()
 	{
 		GameScheduler.schedule(task("in"), 500);

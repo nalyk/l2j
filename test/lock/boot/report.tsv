@@ -287,7 +287,7 @@ INFO	CharacterBirthday 0 gifts sent.
 INFO	Daily tasks reset completed.
 INFO	MailManager: Loaded 0 messages.
 INFO	PunishmentManager: Loaded 0 active and 0 expired punishments.
-INFO	IdManager: Free ObjectID's remaining: 1879003063
+INFO	IdManager: Free ObjectID's remaining: 1879003060
 INFO	OfflineTraderTable: Loading offline traders...
 INFO	OfflineTraderTable: Loaded 0 offline traders.
 INFO	DeadlockWatcher: Thread started.

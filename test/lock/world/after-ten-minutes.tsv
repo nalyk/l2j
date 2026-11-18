@@ -1,8 +1,8 @@
 # LOCK-WORLD-0002: the same world after 600000 ms of game time.
-task-runs-due-at-boot	3679
-task-runs-in-ten-minutes	151794
-pending-tasks	1026
-objects	46426
+task-runs-due-at-boot	3683
+task-runs-in-ten-minutes	152518
+pending-tasks	1032
+objects	46429
 kind	Adventurer	76
 kind	AirShip	1
 kind	Artefact	11
@@ -33,7 +33,7 @@ kind	Guard	385
 kind	KrateisCubeManager	1
 kind	KrateisMatchManager	3
 kind	Merchant	210
-kind	Monster	40761
+kind	Monster	40764
 kind	OlympiadManager	36
 kind	PetManager	13
 kind	RaceManager	1
@@ -53,7 +53,7 @@ kind	VillageMasterMystic	11
 kind	VillageMasterOrc	15
 kind	VillageMasterPriest	14
 kind	Warehouse	82
-digest	population	0b8e0836cbc5efffa4596d7a17fb65811c77450308455942ba59f15388780bf6
-digest	identity	187d8a8edd38935544e057fa059bc71cb6a9beb725398dd8675856735cc04ec4
-digest	placement	537dbc386e1b048388b2fee4d1f375d1b9808356d53fcc3d3e65e6da1fedba0d
-digest	condition	be8408fa26ca0c60309845f03ef2f80f9311d9b9c8dcbf4fffe9ac19669b129a
+digest	population	a32506f7729ea38d6c4ecb98b7523ff1276e04ae3fae84d89ac45fcc2566a18b
+digest	identity	92e964758b7377e7ea3d6bf44f4e4901ed2cec2a89c88c5a61a34c93dcf1f67d
+digest	placement	87f58ec5be9243899cc68921c67cf20478af4ecf737fa55af137da160d2cdd48
+digest	condition	680f7e758a6705272d894072fff6a0e4ab76ccc2dd48bd052a7eda3d81ea0dd1

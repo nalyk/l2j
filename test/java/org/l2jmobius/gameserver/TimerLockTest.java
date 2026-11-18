@@ -1,5 +1,8 @@
 package org.l2jmobius.gameserver;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -54,6 +57,9 @@ class TimerLockTest
 	private static final long RESPAWN_LIMIT_MILLIS = 3_600_000;
 
 	private static TestServer _server;
+
+	/** The heading each NPC of a territory spawn came back with in the respawn lock. */
+	private static final List<Integer> TERRITORY_HEADINGS = new ArrayList<>();
 
 	@BeforeAll
 	static void boot() throws Exception
@@ -155,9 +161,13 @@ class TimerLockTest
 		final ConsumerEventListener listener = new ConsumerEventListener(Containers.Global(), EventType.ON_NPC_SPAWN, (OnNpcSpawn event) ->
 		{
 			final Npc npc = event.getNpc();
-			if (removedIds.contains(npc.getObjectId()))
+			if (removedIds.contains(npc.getObjectId()) && !back.containsKey(npc.getObjectId()))
 			{
-				back.putIfAbsent(npc.getObjectId(), (GameClock.millis() - start[0]) + (isHome(npc) ? "" : "@" + npc.getX() + "," + npc.getY() + "," + npc.getZ()));
+				back.put(npc.getObjectId(), (GameClock.millis() - start[0]) + (isHome(npc) ? "" : "@" + npc.getX() + "," + npc.getY() + "," + npc.getZ()));
+				if (npc.getSpawn().getSpawnTerritory() != null)
+				{
+					TERRITORY_HEADINGS.add(npc.getHeading());
+				}
 			}
 		}, TimerLockTest.class);
 
@@ -195,6 +205,19 @@ class TimerLockTest
 	}
 
 	/**
+	 * A spawn that places its NPCs at random in a territory turns each of them a random way (CORE_PATCHES.md CP-0005). The -1 that asks for that used to be clamped to 0 on the way into the spawn, and every such NPC faced due east.
+	 */
+	@Test
+	@Order(3)
+	void territoryNpcsComeBackFacingAnyWay()
+	{
+		assertFalse(TERRITORY_HEADINGS.isEmpty(), "no NPC of a territory spawn came back");
+		final long east = TERRITORY_HEADINGS.stream().filter(heading -> heading == 0).count();
+		assertTrue((east * 100) < TERRITORY_HEADINGS.size(), east + " of " + TERRITORY_HEADINGS.size() + " NPCs of territory spawns came back facing due east");
+		assertTrue(new HashSet<>(TERRITORY_HEADINGS).size() > (TERRITORY_HEADINGS.size() / 2), "the NPCs of territory spawns came back facing only " + new HashSet<>(TERRITORY_HEADINGS).size() + " ways");
+	}
+
+	/**
 	 * Whether {@code npc} stands where its spawn puts it: inside the spawn's territory, or on its spot give or take the offset the random spawn system may add (Custom/RandomSpawns.ini).
 	 */
 	private static boolean isHome(Npc npc)
@@ -202,7 +225,8 @@ class TimerLockTest
 		final Spawn spawn = npc.getSpawn();
 		if (spawn.getSpawnTerritory() != null)
 		{
-			return spawn.getSpawnTerritory().isInsideZone(npc.getX(), npc.getY());
+			// In three dimensions, as the territory picks its points: a territory may ban only a band of heights over part of it.
+			return spawn.getSpawnTerritory().isInsideZone(npc.getX(), npc.getY(), npc.getZ());
 		}
 		final Location spot = spot(spawn);
 		final int slack = RandomSpawnsConfig.ENABLE_RANDOM_MONSTER_SPAWNS ? RandomSpawnsConfig.MOB_MAX_SPAWN_RANGE : 0;

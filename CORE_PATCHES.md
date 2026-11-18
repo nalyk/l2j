@@ -11,7 +11,7 @@ Rules (blueprint 02 §5):
 - The ledger is complete by construction: `tools/intake/check-core-ledger.sh` fails the build when the set of `Files:` below
   is not exactly the set of upstream files that differ from the `upstream` branch.
 
-Upstream files use CRLF line endings. Patches keep them.
+Upstream files keep the line endings they have upstream, CRLF in some and LF in others. Patches keep them.
 
 ## CP-0001 Bindable randomness
 
@@ -68,3 +68,22 @@ Upstream files use CRLF line endings. Patches keep them.
 - Invariant: points still reset once a day at the configured hour and minute, now exactly once.
 - Proof: `AiLockTest.theWorldRanThroughMidnightWithoutAFailedTask` (its sweep runs the world through 00:00; before the
   patch the scheduler stopped there with the reset task run a million times without game time moving).
+
+## CP-0005 A spawn's random heading is kept, and a territory's random point stays in the territory
+
+- Files: `java/org/l2jmobius/gameserver/entity/spawns/Spawn.java`
+- Reason: `Spawn` stores -1 as its heading to mean "a random heading each time": the datapack's spawns without a heading
+  (10,077 of them), every territory spawn, and every NPC the random spawn system has moved. `Location.setHeading` clamps a
+  heading into its range, so the -1 is stored as 0 and the branch that turns an NPC a random way can never run: all of those
+  NPCs face due east, which also decides who stands behind them in a fight. The random spawn system's own check for -1 never
+  sees one either, so it adds its offset to a territory's random point too and puts NPCs up to 150 outside their territory.
+  The respawn lock (LOCK-TIMER-0002) recorded 1,679 territory spawns bringing NPCs back outside; with the patch, none.
+- Change: `Spawn` remembers that -1 was asked for and turns those NPCs a random way, and the random spawn system leaves
+  territory spawns alone. The system's check for -1 stays as it is, never true, so spawns on a fixed spot are moved by it
+  at every respawn exactly as before.
+- Invariant: where an NPC on a fixed spot appears is unchanged; an NPC of a territory appears inside it; an NPC whose
+  spawn asks for no particular heading faces a random way. That way is drawn, so the boot draws more than before and every
+  random choice after it (which slot of a spawn group fills, for one) falls differently: the world goldens moved, the
+  isolated case goldens (skills, auto-attacks) did not.
+- Proof: `TimerLockTest.territoryNpcsComeBackFacingAnyWay` (before the patch every one faced due east),
+  `TimerLockTest.everySpawnRespawnsAsRecorded` (no territory NPC comes back outside its territory).

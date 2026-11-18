@@ -87,6 +87,8 @@ public class Spawn extends Location
 	private Location _spawnLocation = null;
 	/** Spawn group this spawn is a slot of, null for regular spawns */
 	private SpawnGroup _group = null;
+	/** Whether the NPCs of this spawn face a random way, which a heading of -1 asks for. Location keeps a heading within its range, so the -1 itself is not kept. */
+	private boolean _randomHeading = false;
 	
 	/**
 	 * Constructor of Spawn.<br>
@@ -437,8 +439,8 @@ public class Spawn extends Location
 		// Check if npc is in water.
 		final WaterZone water = ZoneManager.getInstance().getZone(newlocx, newlocy, newlocz, WaterZone.class);
 		
-		// If random spawn system is enabled.
-		if (RandomSpawnsConfig.ENABLE_RANDOM_MONSTER_SPAWNS && (getHeading() != -1) && npc.isMonster() && !npc.isQuestMonster() && !WalkingManager.getInstance().isTargeted(npc) && (getInstanceId() == 0) && !getTemplate().isUndying() && !npc.isRaid() && !npc.isRaidMinion() && !npc.isFlying() && (water == null) && !RandomSpawnsConfig.MOBS_LIST_NOT_RANDOM.contains(npc.getId()))
+		// If random spawn system is enabled. A territory's random point is already random, and moving it could take it outside the territory.
+		if (RandomSpawnsConfig.ENABLE_RANDOM_MONSTER_SPAWNS && (_spawnTerritory == null) && (getHeading() != -1) && npc.isMonster() && !npc.isQuestMonster() && !WalkingManager.getInstance().isTargeted(npc) && (getInstanceId() == 0) && !getTemplate().isUndying() && !npc.isRaid() && !npc.isRaidMinion() && !npc.isFlying() && (water == null) && !RandomSpawnsConfig.MOBS_LIST_NOT_RANDOM.contains(npc.getId()))
 		{
 			final int randX = newlocx + Rnd.get(RandomSpawnsConfig.MOB_MIN_SPAWN_RANGE, RandomSpawnsConfig.MOB_MAX_SPAWN_RANGE);
 			final int randY = newlocy + Rnd.get(RandomSpawnsConfig.MOB_MIN_SPAWN_RANGE, RandomSpawnsConfig.MOB_MAX_SPAWN_RANGE);
@@ -488,7 +490,7 @@ public class Spawn extends Location
 		npc.setRandomWalking(_randomWalk);
 		
 		// Set the heading of the Npc (random heading if not defined).
-		if (getHeading() == -1)
+		if (_randomHeading)
 		{
 			npc.setHeading(Rnd.get(61794));
 		}
@@ -606,6 +608,16 @@ public class Spawn extends Location
 	public boolean hasRespawnRandom()
 	{
 		return _respawnMinDelay != _respawnMaxDelay;
+	}
+	
+	/**
+	 * Sets the heading the NPCs of this spawn face, -1 for a random one each time.
+	 */
+	@Override
+	public void setHeading(int heading)
+	{
+		_randomHeading = heading == -1;
+		super.setHeading(heading);
 	}
 	
 	public void setChaseRange(int chaseRange)

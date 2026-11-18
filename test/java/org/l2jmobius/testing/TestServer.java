@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
+import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,6 +49,7 @@ public final class TestServer
 
 	private final TestDatabase _database;
 	private final List<LogLine> _bootLog;
+	private KeyedRandom _worldRandom;
 
 	/**
 	 * One line of the server's own log file.
@@ -70,6 +72,27 @@ public final class TestServer
 	public TestDatabase database()
 	{
 		return _database;
+	}
+
+	/**
+	 * Draws on the calling thread come from {@code generator} while {@code action} runs, and from the world's stream again afterwards. For a lock case that needs randomness of its own, independent of how much the world has drawn.
+	 */
+	public void withRandom(RandomGenerator generator, Runnable action)
+	{
+		if (_worldRandom == null)
+		{
+			throw new IllegalStateException("only a paused world has a stream to return to");
+		}
+
+		Rnd.bind(generator);
+		try
+		{
+			action.run();
+		}
+		finally
+		{
+			Rnd.bind(_worldRandom);
+		}
 	}
 
 	/**
@@ -100,6 +123,7 @@ public final class TestServer
 		Rnd.bind(world);
 
 		final TestServer server = boot();
+		server._worldRandom = world;
 
 		// Until its first sleep the game-time thread still runs beside us; from here on it only runs when the simulation wakes it.
 		GameScheduler.awaitCooperativeThreads(10_000);

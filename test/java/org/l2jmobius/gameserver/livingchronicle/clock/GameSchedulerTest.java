@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledFuture;
@@ -331,6 +332,119 @@ class GameSchedulerTest
 		GameScheduler.advance(600);
 		assertEquals(List.of("s-before@100", "s-after@1100"), _log);
 		assertEquals(START + 1200, GameClock.millis());
+	}
+
+	/**
+	 * A context the tests can read: a name, the one current being what a task scheduled now carries.
+	 */
+	private static class Named implements GameScheduler.TaskContext
+	{
+		volatile String _current = "outside";
+
+		@Override
+		public Object capture()
+		{
+			return _current;
+		}
+
+		@Override
+		public void restore(Object context)
+		{
+			_current = (String) context;
+		}
+	}
+
+	private Named controlWithContext(Named context)
+	{
+		GameScheduler.releaseControl();
+		GameScheduler.takeControl(() ->
+		{
+		}, Set.of(), context);
+		return context;
+	}
+
+	@Test
+	void aTaskRunsInTheContextItWasScheduledInAndPassesItOn()
+	{
+		final Named context = controlWithContext(new Named());
+		context._current = "a";
+		GameScheduler.schedule(() ->
+		{
+			_log.add("first in " + context._current);
+			GameScheduler.schedule(() -> _log.add("its child in " + context._current), 10);
+		}, 100);
+		context._current = "b";
+		GameScheduler.scheduleAtFixedRate(() -> _log.add("periodic in " + context._current), 50, 100);
+		context._current = "caller";
+
+		GameScheduler.advance(160);
+		assertEquals(List.of("periodic in b", "first in a", "its child in a", "periodic in b"), _log);
+		assertEquals("caller", context._current, "the caller of advance gets its own context back");
+	}
+
+	@Test
+	void aSleeperWakesInItsOwnContext()
+	{
+		final Named context = controlWithContext(new Named());
+		context._current = "sleeper";
+		GameScheduler.schedule(() ->
+		{
+			try
+			{
+				GameScheduler.sleep(100);
+			}
+			catch (InterruptedException e)
+			{
+				throw new IllegalStateException(e);
+			}
+			_log.add("woke in " + context._current);
+		}, 0);
+		context._current = "other";
+		GameScheduler.schedule(() -> _log.add("meanwhile in " + context._current), 50);
+		context._current = "caller";
+
+		GameScheduler.advance(200);
+		assertEquals(List.of("meanwhile in other", "woke in sleeper"), _log);
+		assertEquals("caller", context._current);
+	}
+
+	/**
+	 * A task the context below sends to a context of its own, as a test sends a pool that serves every actor to whatever case is acting.
+	 */
+	private final class Pooled implements Runnable
+	{
+		private final Named _context;
+
+		Pooled(Named context)
+		{
+			_context = context;
+		}
+
+		@Override
+		public void run()
+		{
+			_log.add("pooled in " + _context._current);
+		}
+	}
+
+	@Test
+	void theContextChoosesWhereATaskRuns()
+	{
+		final Named context = controlWithContext(new Named()
+		{
+			@Override
+			public Object forRun(Runnable runnable, Object scheduled)
+			{
+				return runnable instanceof Pooled ? "pool" : scheduled;
+			}
+		});
+		context._current = "a";
+		GameScheduler.schedule(() -> _log.add("plain in " + context._current), 10);
+		GameScheduler.schedule(new Pooled(context), 20);
+		GameScheduler.schedule(() -> _log.add("then in " + context._current), 30);
+
+		GameScheduler.advance(100);
+		assertEquals(List.of("plain in a", "pooled in pool", "then in a"), _log);
 	}
 
 	@Test

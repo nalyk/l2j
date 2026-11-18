@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
+import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
 import org.l2jmobius.testing.Golden;
 import org.l2jmobius.testing.TestServer;
 import org.l2jmobius.testing.WorldSummary;
@@ -138,5 +141,23 @@ class PausedWorldTest
 	void noScheduledTaskFailed()
 	{
 		assertEquals(List.of(), GameScheduler.failures());
+	}
+
+	/**
+	 * A lock case draws on its own stream only for what it sets going (see CaseStreams): one that sets nothing going, open while the world goes on by itself for ten minutes, draws nothing at all. If this fails, some world task draws on whatever case is open, and every case that advances time depends on the rest of the world.
+	 */
+	@Test
+	@Order(4)
+	void anEmptyCaseDrawsNothingWhileTheWorldGoesOn()
+	{
+		final KeyedRandom stream = KeyedRandom.of(SEED, "lock.world.empty-case", 0);
+		final AtomicInteger draws = new AtomicInteger();
+		final RandomGenerator counting = () ->
+		{
+			draws.incrementAndGet();
+			return stream.nextLong();
+		};
+		_server.withRandom(counting, () -> GameScheduler.advance(TEN_MINUTES));
+		assertEquals(0, draws.get());
 	}
 }

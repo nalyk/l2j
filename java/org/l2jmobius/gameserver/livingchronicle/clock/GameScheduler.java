@@ -68,9 +68,24 @@ public final class GameScheduler
 	/** Released by the simulation when an advance has reached its target. */
 	private static final Semaphore CONTROLLER_GATE = new Semaphore(0);
 
+	private static final TaskContext NO_CONTEXT = new TaskContext()
+	{
+		@Override
+		public Object capture()
+		{
+			return null;
+		}
+
+		@Override
+		public void restore(Object context)
+		{
+		}
+	};
+
 	private static volatile boolean _controlled;
 	private static volatile Thread _controller;
 	private static volatile Runnable _simThreadSetup;
+	private static volatile TaskContext _taskContext = NO_CONTEXT;
 	private static volatile Set<String> _cooperativeThreads = Set.of();
 	private static volatile long _targetMillis;
 	private static volatile RuntimeException _abort;
@@ -80,6 +95,33 @@ public final class GameScheduler
 
 	private GameScheduler()
 	{
+	}
+
+	/**
+	 * What a task carries from the code that scheduled it into its runs, and a simulation thread across its sleeps: for a test, the random stream it draws from, so that what one case sets going draws on that case's stream and the rest of the world on its own. Only one thread of the simulation runs at a time, so a context that is one setting for the whole simulation stays right as long as it is put back every time a thread takes the baton, which the scheduler does.
+	 */
+	public interface TaskContext
+	{
+		/**
+		 * @return the context the code running now is in.
+		 */
+		Object capture();
+
+		/**
+		 * Puts the simulation in {@code context}, for the code about to run.
+		 * @param context one {@link #capture()} returned.
+		 */
+		void restore(Object context);
+
+		/**
+		 * @param runnable a task about to run.
+		 * @param scheduled the context it was scheduled in.
+		 * @return the context it runs in: by default the one it was scheduled in.
+		 */
+		default Object forRun(Runnable runnable, Object scheduled)
+		{
+			return scheduled;
+		}
 	}
 
 	/**
@@ -174,6 +216,7 @@ public final class GameScheduler
 			self = join(thread.getName());
 		}
 
+		final Object resumeIn = _taskContext.capture();
 		QUEUE.add(new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement()));
 		if (holdsBaton)
 		{
@@ -183,6 +226,7 @@ public final class GameScheduler
 
 		// Parked until the event loop reaches our wake time and hands the baton to us.
 		self._resume.acquireUninterruptibly();
+		_taskContext.restore(resumeIn);
 	}
 
 	/**
@@ -191,7 +235,18 @@ public final class GameScheduler
 	 * @param cooperativeThreads names of threads Mobius starts itself that are part of the simulation: their sleeps become game-time sleeps.
 	 * @throws IllegalStateException in a JVM that was not started as controllable, or while the clock is not controlled: a queue ordered by time needs a clock that only moves when told.
 	 */
-	public static synchronized void takeControl(Runnable simThreadSetup, Set<String> cooperativeThreads)
+	public static void takeControl(Runnable simThreadSetup, Set<String> cooperativeThreads)
+	{
+		takeControl(simThreadSetup, cooperativeThreads, NO_CONTEXT);
+	}
+
+	/**
+	 * Takes control, every task carrying the {@link TaskContext} it was scheduled in.
+	 * @param simThreadSetup as {@link #takeControl(Runnable, Set)}.
+	 * @param cooperativeThreads as {@link #takeControl(Runnable, Set)}.
+	 * @param context what tasks carry from where they were scheduled.
+	 */
+	public static synchronized void takeControl(Runnable simThreadSetup, Set<String> cooperativeThreads, TaskContext context)
 	{
 		if (!CONTROLLABLE)
 		{
@@ -208,6 +263,7 @@ public final class GameScheduler
 
 		_simThreadSetup = simThreadSetup;
 		_cooperativeThreads = Set.copyOf(cooperativeThreads);
+		_taskContext = context;
 		_controller = Thread.currentThread();
 		_abort = null;
 		_controlled = true;
@@ -270,6 +326,7 @@ public final class GameScheduler
 		final long end = Math.addExact(GameClock.millis(), millis);
 		_targetMillis = end;
 		_runs = 0;
+		final Object resumeIn = _taskContext.capture();
 		passBatonToAScheduler();
 
 		try
@@ -283,6 +340,10 @@ public final class GameScheduler
 		{
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("interrupted while the simulation was running", e);
+		}
+		finally
+		{
+			_taskContext.restore(resumeIn);
 		}
 
 		final RuntimeException abort = _abort;
@@ -331,6 +392,7 @@ public final class GameScheduler
 		QUEUE.clear();
 		FAILURES.clear();
 		_cooperativeThreads = Set.of();
+		_taskContext = NO_CONTEXT;
 
 		synchronized (IDLE)
 		{
@@ -378,7 +440,7 @@ public final class GameScheduler
 
 	private static Task enqueue(Runnable runnable, long delay, long period)
 	{
-		final Task task = new Task(runnable, Math.addExact(GameClock.millis(), clamp(delay)), period, SEQUENCE.getAndIncrement());
+		final Task task = new Task(runnable, Math.addExact(GameClock.millis(), clamp(delay)), period, SEQUENCE.getAndIncrement(), _taskContext.capture());
 		QUEUE.add(task);
 		return task;
 	}
@@ -525,7 +587,9 @@ public final class GameScheduler
 			}
 
 			_runs++;
-			((Task) event).run();
+			final Task task = (Task) event;
+			_taskContext.restore(_taskContext.forRun(task._runnable, task._scheduledIn));
+			task.run();
 		}
 	}
 
@@ -641,14 +705,17 @@ public final class GameScheduler
 	{
 		private final Runnable _runnable;
 		private final long _periodMillis;
+		/** The {@link TaskContext} it was scheduled in. */
+		private final Object _scheduledIn;
 		private volatile boolean _cancelled;
 		private volatile boolean _done;
 
-		Task(Runnable runnable, long dueMillis, long periodMillis, long sequence)
+		Task(Runnable runnable, long dueMillis, long periodMillis, long sequence, Object scheduledIn)
 		{
 			super(dueMillis, sequence);
 			_runnable = runnable;
 			_periodMillis = periodMillis;
+			_scheduledIn = scheduledIn;
 		}
 
 		void run()

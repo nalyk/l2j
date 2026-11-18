@@ -1,5 +1,7 @@
 package org.l2jmobius.gameserver;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -16,6 +18,7 @@ import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.entity.actor.instance.Monster;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
 import org.l2jmobius.gameserver.mechanics.events.EventType;
 import org.l2jmobius.gameserver.mechanics.events.holders.actor.creature.OnCreatureAttackAvoid;
@@ -154,6 +157,18 @@ class GearLockTest
 			}
 		}
 		Golden.repository().assertMatches("combat/third-class-auto-attack.tsv", lines);
+	}
+
+	/**
+	 * A case's outcome is a function of the case: the same attack, run again after the world has gone on by itself for ten minutes, its own timers drawing on its own stream, lands the same hits at the same moments.
+	 */
+	@Test
+	void aCaseComesOutTheSameAfterTheWorldHasMovedOn()
+	{
+		final PlayerClass playerClass = CLASSES.get(0);
+		final String before = attack(playerClass, armourOf(playerClass), TestGear.WEAPONS.get(0), 1);
+		GameScheduler.advance(600_000);
+		assertEquals(before, attack(playerClass, armourOf(playerClass), TestGear.WEAPONS.get(0), 1));
 	}
 
 	private static String attack(PlayerClass playerClass, Wear armour, Weapon weapon, int weaponIndex)

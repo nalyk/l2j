@@ -50,6 +50,7 @@ public final class TestServer
 	private final TestDatabase _database;
 	private final List<LogLine> _bootLog;
 	private SimulationRandom _random;
+	private CaseStreams _streams;
 
 	/**
 	 * One line of the server's own log file.
@@ -75,10 +76,7 @@ public final class TestServer
 	}
 
 	/**
-	 * While {@code action} runs, every draw in the simulation comes from {@code generator}: on the calling thread, and on the scheduler threads running whatever {@code action} advances. Afterwards draws come from where they came from before. For a lock case that needs randomness of its own, independent of how much the world or earlier cases have drawn.
-	 * <p>
-	 * World tasks that fall due while {@code action} advances the scheduler draw from {@code generator} too; a case that advances should keep its span short.
-	 * </p>
+	 * Runs {@code action} as a lock case drawing on {@code generator}: what it does itself, everything it sets going however late that lands, and the server's actor pools while it runs (see {@link CaseStreams}). The world's own tasks that fall due meanwhile go on drawing on the world's stream, so the case's draws do not depend on how much the world or earlier cases have drawn, nor the world's on the case.
 	 */
 	public void withRandom(RandomGenerator generator, Runnable action)
 	{
@@ -88,6 +86,7 @@ public final class TestServer
 		}
 
 		final RandomGenerator previous = _random.source();
+		final RandomGenerator previousCase = _streams.open(generator);
 		_random.use(generator);
 		try
 		{
@@ -96,6 +95,7 @@ public final class TestServer
 		finally
 		{
 			_random.use(previous);
+			_streams.close(previousCase);
 		}
 	}
 
@@ -108,7 +108,7 @@ public final class TestServer
 	}
 
 	/**
-	 * Boots a world that is standing still: the game clock stopped at {@code epochMillis}, every scheduled task queued instead of run, and all of it drawing from the keyed stream {@code (seed, "world", 0)}.
+	 * Boots a world that is standing still: the game clock stopped at {@code epochMillis}, every scheduled task queued instead of run, and all of it drawing from the keyed stream {@code (seed, "world", 0)}, each task carrying the stream it was scheduled on ({@link CaseStreams}).
 	 * <p>
 	 * Such a world is a function of the code, the datapack, the instant and the seed. Nothing in it moves until the test advances {@link GameScheduler}.
 	 * </p>
@@ -120,14 +120,16 @@ public final class TestServer
 			throw new IllegalStateException("the server is already booted in this JVM");
 		}
 
-		// One stream for the whole world. It is shared by every thread of the simulation, which is safe because only one of them runs at a time.
+		// One generator every thread of the simulation draws from, which is safe because only one of them runs at a time; what it draws on is switched with each task.
 		final SimulationRandom random = new SimulationRandom(KeyedRandom.of(seed, "world", 0));
+		final CaseStreams streams = new CaseStreams(random);
 		GameClock.set(epochMillis);
-		GameScheduler.takeControl(() -> Rnd.bind(random), COOPERATIVE_THREADS);
+		GameScheduler.takeControl(() -> Rnd.bind(random), COOPERATIVE_THREADS, streams);
 		Rnd.bind(random);
 
 		final TestServer server = boot();
 		server._random = random;
+		server._streams = streams;
 
 		// Until its first sleep the game-time thread still runs beside us; from here on it only runs when the simulation wakes it.
 		GameScheduler.awaitCooperativeThreads(10_000);

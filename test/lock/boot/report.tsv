@@ -1,0 +1,296 @@
+# LOCK-BOOT-0001: the server's boot log at 1794216090000, level and message. Figures that describe the machine rather than the game are masked.
+INFO	Network Config: ipconfig.xml exists, using manual configuration...
+INFO	Loaded 6 Filter Words.
+INFO	------------------------------------------------=[ Database ]
+INFO	Database: HikariCP pool initialized successfully.
+INFO	Database: Initialized with a valid connection.
+INFO	----------------------------------------------=[ ThreadPool ]
+INFO	ThreadPool: Initializing.
+INFO	...scheduled pool executor with # high priority threads.
+INFO	...scheduled pool executor with # total threads.
+INFO	...instant pool executor with # total threads.
+INFO	-----------------------------------------------=[ IdManager ]
+INFO	DatabaseIdManager: Cleaned 0 elements in # seconds.
+INFO	DatabaseIdManager: Updated character online status.
+INFO	DatabaseIdManager: Cleaned 0 expired timestamps.
+INFO	IdManager: 102912 ids available.
+INFO	----------------------------------------=[ Scripting Engine ]
+INFO	Loaded 421 files to exclude.
+INFO	---------------------------------------------------=[ World ]
+INFO	InstanceManager: Multiverse Instance created.
+INFO	InstanceManager: Universe Instance created.
+INFO	InstanceManager: Loaded 160 instance names.
+INFO	InstanceManager: Loaded 142 instance templates.
+INFO	World: (256 by 272) World Region Grid set up.
+INFO	MapRegionData: Loaded 57 map regions.
+INFO	GlobalVariablesManager: Loaded 2 variables.
+INFO	----------------------------------------------------=[ Data ]
+INFO	CategoryData: Loaded 180 categories.
+INFO	CubicData: Loaded 109 cubic templates.
+INFO	SecondaryAuthData: Loaded 328 forbidden passwords.
+INFO	--------------------------------------------------=[ Skills ]
+INFO	EffectMasterHandler: Loaded 165 effect handlers.
+INFO	EnchantSkillGroupsData: Loaded 4 groups and 90 routes.
+INFO	SkillTreeData: Loaded 17176 Class Skills for 103 class skill trees.
+INFO	SkillTreeData: Loaded 76 sub-class skills.
+INFO	SkillTreeData: Loaded 77 transfer skills for 3 transfer skill trees.
+INFO	SkillTreeData: Loaded 117 fishing skills, 8 Dwarven only fishing skills.
+INFO	SkillTreeData: Loaded 3 collect skills.
+INFO	SkillTreeData: Loaded 94 clan skills, 64 for clan and 30 residential.
+INFO	SkillTreeData: Loaded 18 sub-pledge skills.
+INFO	SkillTreeData: Loaded 32 transform skills.
+INFO	SkillTreeData: Loaded 8 noble skills.
+INFO	SkillTreeData: Loaded 5 hero skills.
+INFO	SkillTreeData: Loaded 46 game master skills.
+INFO	SkillTreeData: Loaded 46 game master aura skills.
+INFO	SkillData: Loaded 65965 Skill templates from XML files.
+INFO	PetSkillData: Loaded 881 skills.
+INFO	---------------------------------------------------=[ Items ]
+INFO	ItemData: Highest item id used: 50000
+INFO	ItemData: Loaded 11482 etc items.
+INFO	ItemData: Loaded 3825 armor items.
+INFO	ItemData: Loaded 3893 weapon items.
+INFO	ItemData: Loaded 19200 items in total.
+INFO	EnchantItemGroupsData: Loaded 4 item group templates.
+INFO	EnchantItemGroupsData: Loaded 1 scroll group templates.
+INFO	EnchantItemGroupsData: Max weapon enchant is set to 16.
+INFO	EnchantItemGroupsData: Max armor enchant is set to 16.
+INFO	EnchantItemGroupsData: Max accessory enchant is set to 16.
+INFO	EnchantItemData: Loaded 63 enchant scrolls.
+INFO	EnchantItemData: Loaded 20 support items.
+INFO	OptionData: Loaded 24985 options.
+INFO	EnchantItemOptionsData: Loaded 23 items and 1093 options.
+INFO	ElementalAttributeData: Loaded 30 elemental attribute items.
+INFO	EnchantItemHPBonusData: Loaded 6 enchant HP bonuses.
+INFO	MerchantPriceConfigTable: Loaded 28 merchant price configs.
+WARNING	Directory not found: ./data/buylists/custom
+INFO	BuyListData: Loaded 760 buyLists.
+INFO	MultisellData: Loaded 373 multisell lists.
+INFO	RecipeData: Loaded 1000 recipes.
+INFO	ArmorSetData: Loaded 204 armor sets.
+INFO	FishData: Loaded 278 fishes.
+INFO	FishingMonstersData: Loaded 8 fishing monsters.
+INFO	FishingRodsData: Loaded 6 fishing rods.
+INFO	HennaData: Loaded 180 henna data.
+INFO	----------------------------------------------=[ Characters ]
+INFO	ClassListData: Loaded 103 class data.
+INFO	InitialEquipmentData: Loaded 11 initial equipment data.
+INFO	InitialShortcutData: Loaded 5 initial global shortcut data.
+INFO	InitialShortcutData: Loaded 4 initial shortcut data.
+INFO	InitialShortcutData: Loaded 0 macro presets.
+INFO	ExperienceData: Loaded 86 levels.
+INFO	ExperienceData: Max Player Level is 85.
+INFO	ExperienceData: Max Pet Level is 85.
+INFO	ExperienceLossData: Loaded 85 levels.
+INFO	KarmaLossData: Loaded 85 modifiers.
+INFO	HitConditionBonusData: Loaded hit condition bonuses.
+INFO	PlayerTemplateData: Loaded 103 player templates.
+INFO	PlayerTemplateData: Loaded 52530 level up gain records.
+INFO	CharInfoTable: Loaded 0 char names.
+INFO	AdminData: Loaded 10 access levels.
+INFO	AdminData: Loaded 469 access commands.
+INFO	RaidBossPointsManager: Loaded 0 Characters Raid Points.
+INFO	PetDataTable: Loaded 49 pets.
+INFO	---------------------------------------------------=[ Clans ]
+INFO	ForumsBBSManager: Loaded 4 forums. Last forum id used: 4
+INFO	ClanTable: Restored 0 clans from the database.
+INFO	CHSiegeManager: Loaded 6 conquerable clan halls.
+INFO	ClanHallAuctionManager: Loaded 0 auction(s)
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 22
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 23
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 24
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 25
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 26
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 27
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 28
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 29
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 30
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 31
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 32
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 33
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 36
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 37
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 38
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 39
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 40
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 41
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 42
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 43
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 44
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 45
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 46
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 47
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 48
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 49
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 50
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 51
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 52
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 53
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 54
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 55
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 56
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 57
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 58
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 59
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 60
+INFO	ClanHallAuctionManager: Created auction for ClanHall: 61
+INFO	ClanHallTable: Loaded 0 clan halls
+INFO	ClanHallTable: Loaded 38 free clan halls
+INFO	-------------------------------------------------=[ Geodata ]
+INFO	GeoEngine: Loaded 0 regions.
+INFO	GeoEngine: Pathfinding is disabled.
+INFO	----------------------------------------------------=[ NPCs ]
+INFO	ZoneManager 17 by 18 Zone Region Grid set up.
+INFO	NpcData: Loaded 10461 NPCs.
+INFO	NpcData: Loaded 23 custom NPCs.
+INFO	SkillLearnData: Loaded 256 skill learn data.
+INFO	GrandBossManager: Gigantic Chaos Golem(25512) status is 0.
+INFO	GrandBossManager: Queen Ant(29001) status is 0.
+INFO	GrandBossManager: Core(29006) status is 0.
+INFO	GrandBossManager: Orfen(29014) status is 0.
+INFO	GrandBossManager: Baium(29020) status is 0.
+INFO	GrandBossManager: Valakas(29028) status is 0.
+INFO	GrandBossManager: Antharas(29068) status is 0.
+INFO	GrandBossManager: Beleth(29118) status is 0.
+INFO	GrandBossManager: Loaded 8 Instances
+INFO	ZoneManager: Loaded 32 zone classes and 2860 zones.
+INFO	ZoneManager: Last static id 200224.
+INFO	DoorData: Loaded 1301 doors.
+INFO	FenceData: Loaded 1 fences.
+INFO	Soul crystal data : Loaded 54
+INFO	Npc leveling crystal data : Loaded 240
+INFO	WalkingManager: Loaded 123 walking routes.
+INFO	StaticObjectData: Loaded 51 static object templates.
+INFO	ItemAuctionInstance: Loaded 82 item(s) and registered 0 auction(s) for instance 32320.
+INFO	ItemAuctionInstance: Schedule next auction 1 on 17:00:00 13.11.26 for instance 32320
+INFO	ItemAuctionInstance: Loaded 82 item(s) and registered 0 auction(s) for instance 32321.
+INFO	ItemAuctionInstance: Schedule next auction 2 on 17:00:00 09.11.26 for instance 32321
+INFO	ItemAuctionInstance: Loaded 82 item(s) and registered 0 auction(s) for instance 32322.
+INFO	ItemAuctionInstance: Schedule next auction 3 on 17:00:00 11.11.26 for instance 32322
+INFO	ItemAuctionManager: Loaded 3 instance(s).
+INFO	CastleManager: Loaded 9 castles
+INFO	SchemeBufferTable: Loaded 8 categories and 142 entries.
+INFO	SchemeBufferTable: Loaded 0 scheme entries from database.
+INFO	SchemeBufferTable: Loaded 0 players and 92 available skills.
+INFO	GrandBossManager: Initialized 8 Grand Boss Zones
+INFO	------------------------------------------------=[ Olympiad ]
+INFO	Olympiad System: Loading....
+INFO	Olympiad System: Currently in Olympiad Period
+INFO	Olympiad System: 22 days, 2 hours and 38 mins until period ends.
+INFO	Olympiad System: Next weekly change is in 6 days, 23 hours and 50 mins.
+INFO	Olympiad System: Loaded 0 Nobles
+INFO	Olympiad System: Competition Period Starts in 0 days, 8 hours and 39 mins.
+INFO	Olympiad System: Event starts/started: Mon Nov 09 18:00:30 UTC 2026
+INFO	Hero System: Loaded 0 Heroes.
+INFO	Hero System: Loaded 0 all time Heroes.
+INFO	---------------------------------------------=[ Seven Signs ]
+INFO	SevenSigns: Currently in the Competition (Quest Event) period!
+INFO	SevenSigns: The Seal of Avarice remains unclaimed.
+INFO	SevenSigns: The Seal of Gnosis remains unclaimed.
+INFO	SevenSigns: The Seal of Strife remains unclaimed.
+INFO	SevenSigns: The competition, if the current trend continues, will end in a tie this week.
+INFO	SevenSigns: Next period change set to Mon Nov 09 18:00:30 UTC 2026
+INFO	SevenSigns: Next period begins in 8 hours, 39 minutes
+INFO	---------------------------------------------------=[ Cache ]
+INFO	Cache[HTML]: Running lazy cache.
+INFO	CrestTable: Loaded 0 Crests.
+INFO	TeleporterData: Loaded 195 npc teleporters.
+INFO	AugmentationData: Loaded 33960 augmentations.
+INFO	AugmentationData: Loaded 2754 accessory augmentations.
+INFO	CursedWeaponsManager: Loaded : 2 cursed weapon(s).
+INFO	TransformData: Loaded 111 transform templates.
+INFO	BotReportTable: Loaded 0 bot reports
+INFO	-------------------------------------------------=[ Scripts ]
+INFO	AirShipManager: Loaded 0 private airships
+INFO	Seed of Destruction Manager: Loaded. Current stage is: 1
+INFO	Seed of Infinity Manager: Loaded. Current stage is: 1
+INFO	Loading server scripts...
+INFO	Loading Handlers...
+INFO	ActionClickHandler: Loaded 10 handlers.
+INFO	ActionShiftHandler: Loaded 6 handlers.
+INFO	AdminCommandHandler: Loaded 481 handlers.
+INFO	BypassHandler: Loaded 53 handlers.
+INFO	ChatHandler: Loaded 14 handlers.
+INFO	CommunityBoardHandler: Loaded 24 handlers.
+INFO	ItemHandler: Loaded 30 handlers.
+INFO	PunishmentHandler: Loaded 3 handlers.
+INFO	UserCommandHandler: Loaded 17 handlers.
+INFO	VoicedCommandHandler: Loaded 9 handlers.
+INFO	TargetHandler: Loaded 34 handlers.
+INFO	Handlers Loaded...
+INFO	GraciaLoader: Loading Gracia related scripts.
+INFO	Fantasy Isle: MC show script starting at 09/11/2026 21:42:30 and is scheduled each next 4 hours.
+INFO	Handy's Block Checker Event is enabled
+INFO	Fantasy Isle: Parade starting at 2026/11/09 13:20 and is scheduled each next 1 hours.
+INFO	HellboundLoader: Loading Hellbound related scripts:
+INFO	HellboundPointData: Loaded 47 trust point reward data.
+INFO	HellboundSpawns: Loaded 598 Hellbound spawns.
+INFO	HellboundEngine: Level: 11
+INFO	HellboundEngine: Trust: 4000000
+INFO	HellboundEngine: Status: unlocked.
+INFO	RaidBossSpawnManager: Loaded 188 Instances
+INFO	RaidBossSpawnManager: Scheduled 0 Instances
+INFO	[Four Sepulchers] Loaded 762 spawn zones data.
+INFO	NpcBuffersData: Loaded 33 buffers data.
+CONFIG	Beast Farm siege scheduled for Mon Nov 23 12:00:00 UTC 2026.
+CONFIG	Fortress of the Dead siege scheduled for Mon Nov 23 12:00:00 UTC 2026.
+CONFIG	Bandit StrongHold siege scheduled for Mon Nov 23 12:00:00 UTC 2026.
+CONFIG	Devastated Castle siege scheduled for Mon Nov 23 12:00:00 UTC 2026.
+CONFIG	Rainbow Springs siege scheduled for Mon Nov 23 12:00:00 UTC 2026.
+CONFIG	Fortress of Resistance siege scheduled for Mon Nov 23 12:00:00 UTC 2026.
+INFO	Event Gift of Vitality has passed... Ignored 
+INFO	Event L2 Day has passed... Ignored 
+INFO	Event Love Your Gatekeeper has passed... Ignored 
+INFO	Event Freya Celebration has passed... Ignored 
+INFO	Event Master of Enchanting has passed... Ignored 
+INFO	Event Saving Santa has passed... Ignored 
+INFO	Event Valentine Event has passed... Ignored 
+INFO	Event Heavy Medal has passed... Ignored 
+INFO	Event Watermelon Ninja has passed... Ignored 
+INFO	TerritoryWarSuperClass: Siege date: Sun Nov 22 22:00:00 UTC 2026
+INFO	SpawnData: Initializing spawns...
+INFO	SpawnData: 429 spawn groups initialized.
+INFO	SpawnData: 187 spawn files parsed.
+INFO	SpawnData: 40379 spawns have been initialized!
+INFO	DayNightSpawnManager: Removed 0 night creatures
+INFO	DayNightSpawnManager: Spawned 452 day creatures
+INFO	DimensionalRiftManager: Loaded 7 room types with 56 rooms.
+INFO	DimensionalRiftManager: Loaded 462 dimensional rift spawns, 0 errors.
+INFO	---------------------------------------------------=[ Siege ]
+INFO	SiegeScheduleData: Loaded 9 siege schedulers.
+INFO	Siege of Gludio: Sun Nov 22 16:00:00 UTC 2026
+INFO	Siege of Dion: Sun Nov 22 20:00:00 UTC 2026
+INFO	Siege of Giran: Sun Nov 22 16:00:00 UTC 2026
+INFO	Siege of Oren: Sun Nov 22 20:00:00 UTC 2026
+INFO	Siege of Aden: Sun Nov 22 16:00:00 UTC 2026
+INFO	Siege of Innadril: Sun Nov 22 20:00:00 UTC 2026
+INFO	Siege of Goddard: Sun Nov 22 16:00:00 UTC 2026
+INFO	Siege of Rune: Sun Nov 22 20:00:00 UTC 2026
+INFO	Siege of Schuttgart: Sun Nov 22 16:00:00 UTC 2026
+INFO	FortManager: Loaded 21 fortress
+INFO	CastleManorManager: Loaded 258 seeds.
+INFO	CastleManorManager: Manor data loaded.
+INFO	MercTicketManager: Loaded 0 Mercenary Tickets
+INFO	ScriptManager: Loaded 539 quests.
+INFO	ScriptManager: Loaded 308 scripts.
+INFO	MonsterRace: loaded 0 records, currently on race #1
+INFO	SevenSignsFestival: The first Festival of Darkness cycle begins in 2 minute(s).
+INFO	AutoSpawnHandler: Loaded 129 handlers in total.
+INFO	FishingChampionshipManager : new event period start.
+INFO	KrateisCubeManager: Loaded 3 arena templates.
+INFO	UndergroundColiseumManager: Loaded 5 coliseum arenas.
+INFO	UndergroundColiseumManager: Starts at 13/11/2026 21:00:00
+INFO	DailyResetManager: Daily task will run now.
+INFO	Starting reset of daily tasks...
+INFO	Daily skill reuse cleaned.
+INFO	CharacterBirthday 0 gifts sent.
+INFO	Daily tasks reset completed.
+INFO	MailManager: Loaded 0 messages.
+INFO	PunishmentManager: Loaded 0 active and 0 expired punishments.
+INFO	IdManager: Free ObjectID's remaining: 1879003063
+INFO	OfflineTraderTable: Loading offline traders...
+INFO	OfflineTraderTable: Loaded 0 offline traders.
+INFO	DeadlockWatcher: Thread started.
+INFO	GameServer: Started, using # of # MB total memory.
+INFO	GameServer: Maximum number of connected players is 2000.
+INFO	GameServer: Server loaded in # seconds.

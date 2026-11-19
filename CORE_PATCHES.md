@@ -1,8 +1,8 @@
 # Core patches
 
 Every file that exists upstream and differs in this fork is listed here, with the reason it had to change, the invariant the
-change protects and the test that proves it. Upstream intake (blueprint 03 §3) replays this ledger: after merging `upstream`,
-each patch must still apply, still be needed, and still pass its proof.
+change protects and the test that proves it. Upstream intake (blueprint 03 §3, `tools/intake/intake.sh`) replays this ledger:
+after merging `upstream`, each patch must still apply, still be needed, and still pass its proof.
 
 Rules (blueprint 02 §5):
 

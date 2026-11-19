@@ -1,6 +1,6 @@
 # SPEC-ACTOR — Actor Identity
 
-- Status: draft (revision 6: a Signal clarification to AT-ACTOR-09 after the round-5 sign-off; under review with aden-signal.md; record in §12)
+- Status: reviewed (revision 6; its Signal clarification signed off with aden-signal.md in Signal's round 5; record in §12)
 - Blueprint: 04 §2 (Actor Identity); 02 §3 (game logic never branches on "is this a citizen"), §12 (never trust the client);
   10 (Citizens of Aden); 13 §… (Signal reports human / synthetic / mixed); 17 (history's humans-only filter); consensus §3.
 - DDL: `sql/migrations/V007__lc_actor.sql` (after the Fact Journal, before the Asset Service).
@@ -140,8 +140,9 @@ and fails on a forbidden read of origin, activity or profile, in code or in SQL,
 (AT-ACTOR-05).
 
 **Origin is never shown in the world.** No packet a player receives about another character differs because of its
-origin: no overhead marker (10 §6), no label in Signal's candidates (13 §2); only aggregate reports and history's
-humans-only filter use it (AT-ACTOR-09).
+origin, with one exception the viewer chooses: no overhead marker (10 §6), no label in Signal's candidates (13 §2); only
+aggregate reports, history's humans-only filter, and the Signal candidate lists of a viewer who chose not to be offered
+citizens (aden-signal.md §4.2, rate-limited) use it (AT-ACTOR-09).
 
 ## 4. Operations
 
@@ -242,6 +243,7 @@ the account row), `lc policy <module>`.
 
 ## 12. Review record
 
+- Revision 6 signed off with aden-signal.md in Signal's round 5, with §3's explanatory passage qualified the same way.
 - Revision 6 (after the round-5 sign-off): Aden Signal lets a viewer choose not to be offered citizens, which by
   construction changes that viewer's candidate lists by origin. ACTOR-R09 and AT-ACTOR-09 now state that exception (the
   viewer's own explicit, rate-limited preference); everything a third player receives otherwise stays equal. Under review

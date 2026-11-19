@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: draft (revision 7: Signal's presence and region operations added after the revision-6 sign-off; under review with aden-signal.md; record in §12)
+- Status: reviewed (revision 7; signed off with aden-signal.md in Signal's round 5; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -412,6 +412,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Revision 7 signed off with aden-signal.md in Signal's round 5.
 - Revision 7 (after the revision-6 sign-off): Aden Signal needs a presence lifecycle and a region read bound to mutual
   introductions (§4.9). Under review with aden-signal.md.
 - Revision 6 signed off with black-ledger.md in the Ledger's round 6.

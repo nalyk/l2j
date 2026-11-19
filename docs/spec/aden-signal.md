@@ -1,6 +1,6 @@
 # SPEC-SIG — Aden Signal
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: reviewed (revision 6; signed off with wording fixes by Codex, a different model family, in round 5; record in §12)
 - Blueprint: 13 (Aden Signal); 02 §1 (we do not break the game), §4 (production checks), §9 (tests decide); 03 §4.4
   (`ON_PLAYER_PARTY_JOIN`, `ON_PLAYER_PARTY_LEAVE`); 04 §4 (Intel Service), §5 (Codex), §7 (keyed randomness); 10
   (citizens as candidates); 12 (Aden Remembers consumes demand); 14 (Wayfarer's collaborators); 17 (Gazette); 20 §1
@@ -137,8 +137,9 @@ and from B's **declared** regions to A's declared regions within B's (B's actual
 changes nothing A can see or be offered); and B's party has room (9, `network/clientpackets/RequestJoinParty.java:217`) and allows joining.
 
 **The synthetic preference** changes at most once per `SyntheticToggleDays` (a new intent version), and is a viewer's own
-filter: packets about a character never depend on its origin (actor-identity.md AT-ACTOR-09, whose candidate-list
-comparison is between viewers with the default preference). A viewer who disallows citizens sees lists without them by
+filter, the one exception to "packets about a character never depend on its origin" (actor-identity.md §3, AT-ACTOR-09,
+whose candidate-list comparison is between viewers with the default preference): for that viewer only, a citizen is left
+out of the lists. A viewer who disallows citizens sees lists without them by
 construction; the rate limit keeps comparisons of the two settings days apart, with different intents.
 
 ### 4.3 Score
@@ -331,6 +332,11 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 
 ## 12. Review record
 
+- Round 5 (Codex), **SIGN-OFF WITH FIXES**: the explanatory passages of actor-identity.md §3 and this spec's §4.2 still
+  stated an absolute rule; both now name the viewer's own synthetic preference as the exception (revision 6). The Intel
+  Service's revision 7 and Actor Identity's revision 6 were reviewed in the same rounds. Remaining are named
+  implementation obligations: the introduction locks and Intel coupling, the party and invitation seams, the verifier,
+  instrumentation and the acceptance tests.
 - Round 4 (Codex), NO SIGN-OFF: one open, Actor Identity's AT-ACTOR-09 still requiring every candidate list equal.
   Revision 5: actor-identity.md (its revision 6) states the viewer's own synthetic preference as the one exception.
 - Round 3 (Codex), NO SIGN-OFF: open were invitations invisible to the party seams and no equivalent healer/buffer

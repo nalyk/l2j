@@ -48,7 +48,7 @@ class ActorSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(account("varn02", "SYNTHETIC_CITIZEN", "NULL", 2)));
 			assertThrows(SQLException.class, () -> statement.execute(account("alice", "HUMAN", "NULL", 3)));
 			assertThrows(SQLException.class, () -> statement.execute(account("bob", "HUMAN", "NULL", 2)), "a human in a citizen household");
-			assertThrows(SQLException.class, () -> statement.execute(account("bob", "HUMAN", "NULL", 1)), "a human sharing another human's principal");
+			assertThrows(SQLException.class, () -> statement.execute(account("bob", "HUMAN", "NULL", 1)), "a human sharing another human's principal (a unique key, so concurrent inserts cannot both pass)");
 			assertThrows(SQLException.class, () -> statement.execute(account("varn02", "SYNTHETIC_CITIZEN", "'TEST'", 1)), "a citizen with a human principal");
 
 			// Id, login and origin never change; a row is never deleted.
@@ -57,15 +57,36 @@ class ActorSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET account_id = 999 WHERE login = 'alice'"));
 			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_account WHERE login = 'alice'"));
 
-			// A citizen's profile changes only with its audit row named in the session; a SQL tool without one is refused.
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY' WHERE login = 'varn01'"));
-			statement.execute("INSERT INTO lc_identity_audit (audit_id, account_id, field, before_value, after_value, admin, reason, at) VALUES (77, (SELECT account_id FROM lc_account WHERE login = 'varn01'), 'SIM_PROFILE', 'RESIDENT', 'SCENARIO_ADVERSARY', 'admin', 'scenario', NOW(3))");
+			// A citizen's profile changes only with an unused audit row for that account, field and value, and the next identity version.
+			final String varn = "(SELECT account_id FROM (SELECT account_id FROM lc_account WHERE login = 'varn01') a)";
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY', identity_ver = 1 WHERE login = 'varn01'"), "no audit row");
+			statement.execute("INSERT INTO lc_identity_audit (audit_id, account_id, field, before_value, after_value, admin, reason, at) VALUES (77, " + varn + ", 'SIM_PROFILE', 'RESIDENT', 'SCENARIO_ADVERSARY', 'admin', 'scenario', NOW(3))");
 			statement.execute("SET @lc_identity_audit = 77");
-			statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY' WHERE login = 'varn01'");
-			// Even with an audit row, a principal of the wrong kind is refused.
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET principal_id = 3 WHERE login = 'varn01'"));
-			statement.execute("UPDATE lc_account SET principal_id = 4 WHERE login = 'varn01'");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'TEST', identity_ver = 1 WHERE login = 'varn01'"), "an audit row for another value");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY' WHERE login = 'varn01'"), "without the next identity version");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET principal_id = 4, identity_ver = 1 WHERE login = 'varn01'"), "a profile audit row used for a principal");
+			statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY', identity_ver = 1 WHERE login = 'varn01'");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'RESIDENT', identity_ver = 2 WHERE login = 'varn01'"), "an audit row used twice");
+
+			// A principal change needs its own audit row, and a principal of the right kind.
+			statement.execute("INSERT INTO lc_identity_audit (audit_id, account_id, field, before_value, after_value, admin, reason, at) VALUES (78, " + varn + ", 'PRINCIPAL', '2', '3', 'admin', 'move', NOW(3)), (79, " + varn + ", 'PRINCIPAL', '2', '4', 'admin', 'move', NOW(3))");
+			statement.execute("SET @lc_identity_audit = 78");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET principal_id = 3, identity_ver = 2 WHERE login = 'varn01'"), "a human principal for a citizen");
+			statement.execute("SET @lc_identity_audit = 79");
+			statement.execute("UPDATE lc_account SET principal_id = 4, identity_ver = 2 WHERE login = 'varn01'");
+
+			// Retirement is audited and one-way; audit rows are only ever marked used.
+			statement.execute("INSERT INTO lc_identity_audit (audit_id, account_id, field, before_value, after_value, admin, reason, at) VALUES (80, " + varn + ", 'RETIRED', 'FALSE', 'TRUE', 'admin', 'retire', NOW(3)), (81, " + varn + ", 'RETIRED', 'TRUE', 'FALSE', 'admin', 'undo', NOW(3))");
+			statement.execute("SET @lc_identity_audit = 80");
+			statement.execute("UPDATE lc_account SET retired = TRUE, identity_ver = 3 WHERE login = 'varn01'");
+			statement.execute("SET @lc_identity_audit = 81");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET retired = FALSE, identity_ver = 4 WHERE login = 'varn01'"), "un-retiring, even audited");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_identity_audit SET after_value = 'RESIDENT' WHERE audit_id = 77"));
+			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_identity_audit WHERE audit_id = 77"));
 			statement.execute("SET @lc_identity_audit = NULL");
+
+			// A principal keeps its kind.
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_principal SET kind = 'HUMAN_ACCOUNT' WHERE principal_id = 4"));
 
 			try (ResultSet result = statement.executeQuery("SELECT origin, sim_profile FROM lc_account WHERE login = 'varn01'"))
 			{

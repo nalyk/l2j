@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -78,7 +78,7 @@ lc_fact_type(type SMALLINT PK, name VARCHAR(64) UNIQUE, schema_ver SMALLINT, dur
              delivery {OUTBOX|CAPTURED}, family VARCHAR(32), sensitivity TINYINT, retention_days INT NULL, owner_module VARCHAR(16))
 lc_replay_snapshot(projector VARCHAR(48), last_fact_id BIGINT, taken_at TIMESTAMP(3), store_ref VARCHAR(128),
                    PRIMARY KEY(projector, last_fact_id))
-lc_journal_retention(id TINYINT PK, max_dropped_fact_id BIGINT)
+lc_journal_retention(family VARCHAR(32) PK, max_dropped_fact_id BIGINT)
 ```
 
 - `lc_fact` is immutable: the game server's database user may `INSERT` and `SELECT` it and nothing else (§8), and nothing
@@ -93,7 +93,7 @@ lc_journal_retention(id TINYINT PK, max_dropped_fact_id BIGINT)
   fact is never read under a configuration it was not produced under, whatever the relay order (§4.1).
 - `captured_at` is when the fact was staged or captured (wall clock); lag is measured from it (§4.6). `source_outbox_id`
   names the staged row a relayed fact came from, so no staged row can be relayed twice unnoticed (INV03).
-- `lc_journal_retention` holds the highest fact id ever dropped with a partition (§4.5).
+- `lc_journal_retention` holds, per family, the highest fact id of that family ever dropped with a partition (§4.5).
 - `lc_effect_outbox` turns a projector's decision into an effect exactly once (§4.4); `lc_config_version` binds
   configuration to facts (§4.1); `lc_replay_snapshot` records copies of derived state by the log position they cover
   (§4.5).
@@ -141,9 +141,9 @@ cell). The current window is a buffer of preallocated arrays indexed by (region 
 A fact whose meaning depends on a state change is staged in the transaction that makes the change: the caller locks its
 stream's head row, takes the next `stream_seq` numbers, inserts the facts into `lc_fact_outbox` and advances the head,
 all before its `COMMIT`. A staged fact exists exactly when its change does (INV03); the writer relays it into the log
-within `RelayMillis`.
+by the relay.
 
-**Relay.** Every `RelayMillis` the writer selects every committed staged row, oldest `outbox_id` first, up to
+**Relay.** Every `RelayMillis` (a polling cadence, not a deadline) the writer selects every committed staged row, oldest `outbox_id` first, up to
 `WriterBatchMax`, with no high-water mark: a row whose transaction commits late is simply found at the next poll. Within a
 stream, a later number was staged only after the earlier one committed (the head lock serialises them), so `outbox_id`
 order is stream order. The selection, its contents and its batch id are kept until the batch is resolved: the batch
@@ -173,8 +173,9 @@ it, without blocking, without I/O and without allocating. Mobius's own event obj
 returns the live field, `WorldObject.java:748-751`), and async listeners run later on a pool with an unbounded queue
 (`gameserver/mechanics/events/EventDispatcher.java:159`; `commons/threads/ThreadPool.java:86`).
 
-- **Claim, fill, publish.** A capture claims a slot, fills it inside a `try`, and publishes it in the `finally`: filled, or
-  marked **void** if filling threw. A void slot counts as a refusal of its family, so a capture that failed half-way is a
+- **Claim, fill, publish.** A capture claims a slot (the slot carries a generation number, advanced each time the slot is
+  reused, and the phase), fills it inside a `try`, and publishes it in the `finally`: filled, or marked **void** if filling
+  threw. A void slot counts as a refusal of its family, so a capture that failed half-way is a
   gap, never a silent loss, and the writer never waits on a slot that was claimed and left.
 - **A full ring refuses** the capture and counts it for its family in the current phase, with the earliest and latest
   logical time refused. Mobius's file logger is the precedent for a writer behind a bounded queue whose offer never blocks
@@ -200,17 +201,21 @@ current and then watches *p*'s stripes; once they are all zero, no capture can s
 **One phase, one batch, gaps first.** The writer commits captured facts only by closed phase: the batch for phase *p*
 holds, in this order, *p*'s gap records (`Journal.Gap`: family, count, logical-time span, reason `QUEUE_FULL`), then *p*'s
 facts, and records *p* and its **frontier** (the logical time at which *p* was closed). A projector therefore meets a
-phase's gaps before any of its facts, and stops before acting on anything from a phase that lost something. Captured
-facts wait at most one phase (`HeartbeatMillis`) before they are committed.
+phase's gaps before any of its facts, and stops before acting on anything from a phase that lost something. **Latency**, with the store available and no backlog: a captured fact is committed within `HeartbeatMillis` +
+`PhaseDrainMillis` + one batch transaction; a staged fact within `RelayMillis` + one batch transaction. With a backlog, a
+staged fact waits `RelayMillis` more for every `WriterBatchMax` rows staged before it. With the store down, nothing is
+committed and §7 applies. These bounds, not the cadences, are what lag (§4.6) and its tests measure.
 
 **The writer's loop** never blocks on a phase: each iteration relays the outbox if `RelayMillis` has passed, checks the
 closing phase's stripes without waiting, and commits a phase once it has drained. It runs under a supervisor that
 restarts it if it dies; the restarted writer first resolves any unresolved batch (§3.1).
 
 - A phase whose stripes are not all zero after `PhaseDrainMillis` (a producer stuck, or its `finally` failed) is written
-  as a `STALLED` gap (count unknown) for every family, followed by whatever of its facts the ring holds, and its counters
-  and telemetry buffer are **retired for good**: never reused, so a producer that wakes up late writes only into storage
-  nothing reads again. Stripes and buffers come from fixed pools sized at startup; if a pool runs out, capture of the
+  as a `STALLED` gap (count unknown) for every family, followed by whatever of its facts the ring holds, and its counters,
+  its telemetry buffer and every ring slot it claimed but did not publish are **retired for good**: never reused (a retired
+  slot keeps its generation, and a late publish into it, whose generation or phase no longer matches, is ignored), so a
+  producer that wakes up late writes only into storage nothing reads again; the ring is that many slots smaller until
+  restart. Stripes and buffers come from fixed pools sized at startup; if a pool runs out, capture of the
   affected kind is refused (counted as refusals) until restart.
 
 - A stripe that is not zero after `PhaseDrainMillis` (a producer stuck, or one whose `finally` itself failed) does not
@@ -294,13 +299,17 @@ A projector never calls the Asset Service or an actuator directly. It writes eac
 
 ### 4.5 Replay and retention
 
-Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot: one whose `last_fact_id` is at or
-beyond `lc_journal_retention.max_dropped_fact_id`, so that every fact after it is still in the log; the newest usable one
-is chosen, or the log's first fact if nothing was ever dropped.
+Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot: for projector *P*, one whose
+`last_fact_id` is at or beyond the highest `max_dropped_fact_id` of every family *P* consumes, so that every fact *P* needs
+after it is still in the log; the newest usable one is chosen, or the log's first fact if none of *P*'s families ever
+lost a partition.
 Facts are kept per type for `retention_days` (`NULL`: for ever). A monthly partition is dropped only when every fact in it
 is past its type's retention, every projector's checkpoint is past its last id, and every projector reading its families
-has a snapshot whose `last_fact_id` is at or beyond that last id; the drop advances `max_dropped_fact_id` in the same
-maintenance run, which retires every snapshot that falls below it. The maintenance job creates partitions at least two months ahead every day and alarms if the
+has a snapshot whose `last_fact_id` is at or beyond that last id. The drop is done in this order, so an interruption at
+any point leaves replay safe: (1) in one transaction, advance `max_dropped_fact_id` of every family present in the
+partition to the partition's last id; (2) only then drop the partition. Between (1) and (2) the facts are still there but
+no snapshot below the watermark is used: conservative, never wrong. A snapshot is retired only when no projector can use
+it any more, judged against the families its own projector consumes. The maintenance job creates partitions at least two months ahead every day and alarms if the
 catch-all partition holds a row.
 
 ### 4.6 Lag
@@ -408,17 +417,17 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 | Test | Kind | What it does |
 |---|---|---|
 | AT-FACT-00 | integration | the journal's migration applies; monthly partitions start exactly at midnight UTC on the first of each month, contiguous, ending in a catch-all; keys and checks reject what this spec forbids |
-| AT-FACT-01 | integration, fault | a staged fact and its change commit together or not at all, under faults at each statement; relaying, with its commit cut both ways, a lower `outbox_id` committing late, and a relay backlog, puts each staged fact into the log exactly once, in stream order, within `RelayMillis` once the backlog clears |
+| AT-FACT-01 | integration, fault | a staged fact and its change commit together or not at all, under faults at each statement; relaying, with its commit cut both ways, a lower `outbox_id` committing late, and a relay backlog, puts each staged fact into the log exactly once, in stream order, within the latency bound of §3.3 for its backlog |
 | AT-FACT-02 | integration | Asset operations over several characters, custodies, items, mail and streams, concurrently, with outbox writers to shared streams: no deadlock outside the retry path, no wait past `LockWaitMillis`; the log's ids grow in commit order |
 | AT-FACT-03 | unit | hot-path capture benchmark at full load, phase admission and telemetry included: p99 within 2 µs, zero allocation (first use of every family and every thread included), never blocks; bulk facts within budget and chunked at the cap; locations read during movement, teleport and two concurrent writers are coherent or flagged torn |
 | AT-FACT-04 | integration | a full ring: refused captures counted per family, and the gap record is in the log at or before the batch whose frontier passes them; game threads unaffected |
 | AT-FACT-05 | fault, restart | the writer killed mid-batch, a batch commit cut after it was sent (committed and not), the JVM killed with a full ring: no batch twice; a `RESTART` gap |
-| AT-FACT-06 | unit | captures and telemetry under concurrent producers across many phase changes, with a producer admitted just as its phase closes, one throwing between claim and publish, and one stuck then resuming: every capture in the log or a gap of its phase; every add in exactly one window or the window flagged stalled; a retired buffer never read again; the writer never blocks the relay |
+| AT-FACT-06 | unit | captures and telemetry under concurrent producers across many phase changes and ring wraps, with a producer admitted just as its phase closes, one throwing between claim and publish, and one stuck after claiming a slot then resuming after its phase was written: every capture in the log or a gap of its phase; every add in exactly one window or the window flagged stalled; a retired buffer never read again; the writer never blocks the relay |
 | AT-FACT-07 | integration | every registered type has no coordinate or expiring field; the game server's user cannot read the expiring tables |
 | AT-FACT-08 | integration | expiring rows deleted on time; a restore deletes rows already expired before the server starts; backups of the expiring tables older than their life are refused |
 | AT-FACT-09 | integration | a projector run twice, and with a crash between derived write and checkpoint: identical derived state and intents |
 | AT-FACT-10 | integration | a gap record and an unclean epoch boundary each stop a projector and freeze its effects; acknowledgement resumes it |
-| AT-FACT-11 | integration | replay into an isolated schema after partitions were dropped under §4.5: equal derived state from the newest usable snapshot; a snapshot below the highest dropped id refused; no effect written |
+| AT-FACT-11 | integration | replay into an isolated schema after partitions were dropped under §4.5: equal derived state from the newest usable snapshot; a snapshot below its families' highest dropped id refused; a projector of other families keeps its snapshots; maintenance interrupted between watermark and drop leaves replay correct; no effect written |
 | AT-FACT-12 | unit, integration | an upcaster chain reads every stored version; an unregistered type is refused; the game server's user cannot update or delete `lc_fact` |
 | AT-FACT-13 | unit | every capture record holds only primitives and immutable snapshots (reflection over the sealed hierarchy) |
 | AT-FACT-14 | sim | 800-citizen siege benchmark: lag p99 within 5 s; a caught-up projector reports zero |
@@ -450,6 +459,11 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: most of round 3 fixed; open were a global deletion watermark retiring an unrelated
+  projector's snapshot, a watermark advanced after the drop (an interruption leaving deleted history behind it), cadences
+  presented as deadlines, and ring slots of a stalled producer. Revision 5: watermarks per family and usability per
+  projector; watermark before drop; latency bounds stated with their conditions, separate from cadences; claimed slots of
+  a stalled phase retired with generation checks.
 - Round 3 (Codex), NO SIGN-OFF: confirmed the single log (no inversion of capture numbers, outbox frontiers gone,
   timestamps as data), effect order and refunded attempts, the row-lock order, the location version; found phase
   admission racing a closing phase, a capture failing after its slot claim, abandoned buffers written late, gaps

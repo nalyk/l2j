@@ -231,11 +231,11 @@ CREATE TABLE lc_replay_snapshot (
 	PRIMARY KEY (projector, last_fact_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- The highest fact id ever dropped with a partition: a replay snapshot is usable only at or beyond it (spec §4.5).
+-- Per family, the highest fact id ever dropped with a partition: a projector's snapshot is usable only at or beyond the
+-- watermarks of the families it consumes (spec §4.5). Advanced, and committed, before the partition is dropped.
 CREATE TABLE lc_journal_retention (
-	id TINYINT NOT NULL,
+	family VARCHAR(32) NOT NULL,
 	max_dropped_fact_id BIGINT NOT NULL,
-	PRIMARY KEY (id),
-	CONSTRAINT chk_retention_single CHECK (id = 1),
+	PRIMARY KEY (family),
 	CONSTRAINT chk_retention_id CHECK (max_dropped_fact_id >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

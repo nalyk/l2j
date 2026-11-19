@@ -85,9 +85,10 @@ class FactSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 0, "'{}'")));
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'not json'")));
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'").replace(", 12, 1, '{}', 1, 1, ", ", 12, 9, '{}', 1, 1, ")), "sensitivity out of range");
-			// The retention record is a single row.
-			statement.execute("INSERT INTO lc_journal_retention (id, max_dropped_fact_id) VALUES (1, 0)");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_retention (id, max_dropped_fact_id) VALUES (2, 0)"));
+			// One retention watermark per family, never negative.
+			statement.execute("INSERT INTO lc_journal_retention (family, max_dropped_fact_id) VALUES ('kill', 0)");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_retention (family, max_dropped_fact_id) VALUES ('kill', 5)"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_retention (family, max_dropped_fact_id) VALUES ('asset', -1)"));
 			statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'"));
 
 			// One head per outbox stream, never negative; a staged fact has a positive number, one per stream and number.

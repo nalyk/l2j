@@ -1,6 +1,6 @@
 # SPEC-AR — Aden Remembers
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 12 (Aden Remembers); 01 §2.5 (rumors are content); 02 §3 (game logic never branches on origin), §4, §6
   (budgets: hot-path seams ≤ 2 µs p99, never per tick); 03 §4.2 (the loot routing patch); 04 §1 (Fact Journal,
   telemetry), §3 (Asset Service), §6 (`lc why`), §7 (keyed randomness), §8 (degradation); 10 §8 (Genesis: Aden Remembers
@@ -132,9 +132,13 @@ lc_caravan_escort(caravan_id, char_id, contract_id, joined_at, presence_seconds)
 
 - Each Guild town has a **warehouse** custody (real goods) and a **pool** custody (Adena) (asset-service.md §2.2, `POOL`).
 - **No loop gains Adena through the Guild**: for every item, every town's buy price and every open order's unit price is
-  below every town's sell price. Triggers check it on every write of a price or an order, after locking the item's family
-  row, so concurrent writers serialise; the only writer is Aden Remembers' effect dispatcher, which runs one effect at a
-  time (fact-journal.md §4.4).
+  below every town's sell price. Triggers check it on every write of a price or an order: a writer must run in
+  `READ COMMITTED` (the trigger refuses any other isolation); the trigger first locks the item's row in
+  `lc_resource_item`, so writers of one item serialise, and then reads the other prices and orders, each read taking a
+  fresh snapshot after the lock is held, so a transaction that read prices before another writer committed still
+  validates against that writer's rows. (Locking reads of the trigger's own table are what one would reach for, and
+  MariaDB refuses them, error 1442.) The only writer is Aden Remembers'
+  effect dispatcher, one effect at a time (fact-journal.md §4.4); the triggers hold the rule for any writer.
 - `lc_guild_stock` is the projector's view of each warehouse, built from the Guild's facts (§5), so decisions read a
   history, not a live custody; the verifier compares it with the custody (§4.11).
 
@@ -194,11 +198,17 @@ use (§4.5), not a state.
 |---|---|---|---|
 | — | dispatch (§4.6) | `SCHEDULED` | warehouse → manifest (Asset transfer); escort contract issued with its payment escrowed from the pool |
 | `SCHEDULED` | `depart_at`, module running | `EN_ROUTE` | spawned at the origin node, walked from node 0 |
-| `SCHEDULED` | freeze, disable, or the origin's pool cannot fund the escort | `RECALLED` | manifest → origin warehouse; escort escrow refunded |
+| `SCHEDULED` | disable, or the origin's pool cannot fund the escort | `RECALLED` | manifest → origin warehouse; escort escrow refunded |
 | `EN_ROUTE` | the last node reached (the arrival seam, §4.6) | `ARRIVED` | manifest → destination warehouse; escort settled by PACT |
 | `EN_ROUTE` | the Caravan Master killed | `RAIDED` | `raid`: share dropped once after commit, the rest lost to the road; escort escrow refunded |
-| `EN_ROUTE` | not arrived by `depart_at` + `CaravanTimeoutFactor` × scheduled, freeze, or disable | `RECALLED` | manifest → origin warehouse; escort escrow refunded; despawned |
+| `EN_ROUTE` | not arrived by `depart_at` + `CaravanTimeoutFactor` × scheduled (time parked excluded), or disable | `RECALLED` | manifest → origin warehouse; escort escrow refunded; despawned |
 | `ARRIVED`, `RAIDED`, `RECALLED` | its history settled | `SETTLED` | — |
+
+**Freeze parks caravans.** While the module is frozen the Asset Service commits no operation on its custodies except
+corrective admin operations (asset-service.md §4.2, rule 7), so a freeze moves no manifest: `SCHEDULED` caravans do not
+depart, `EN_ROUTE` caravans are despawned where they are with `last_node` kept, and the timeout clock stops (the parked
+time is recorded in `outcome`); at the unfreeze they depart or re-spawn at `last_node` and go on. A disable, by contrast,
+happens while the module still runs: its recalls are ordinary operations, run before the module stops acting.
 
 **Terminal resolution**: arrival, the Master's death and the timeout can race; each tries one transaction that changes
 the caravan from `EN_ROUTE` (a conditional update) and runs its Asset operation under the key `CARAVAN/<id>/terminal`.
@@ -255,6 +265,27 @@ median baseline unless stated), so a whole server's growth or decline moves noth
 
 Distinct counts are of principals (actor-identity.md §2.2), so one account's characters count once.
 
+**Arithmetic.** A daily value *x* of a key is its source's sum for the day. Its **baseline** is the median of its last 28
+daily values, once at least 7 exist; before that (Genesis, a new region, a new family), or while the median is 0, the key
+is neutral (1000) and no situation can open on it (**cold start**). A key's value is round(1000 × EWMA(*x*) ÷ baseline),
+the EWMA with the half-life in the table, evaluated at its step. Two keys are computed differently:
+
+- `supply_health_<f>` (town) is **days of cover** in ‰: 1000 × (Guild stock of the family's items in `lc_guild_stock` +
+  the 7-day mean of units of the family sold in the town's private stores per day) ÷ max(1, the 7-day mean of units of the
+  family consumed by crafts in the town per day × the Signal factor), where the Signal factor is 1.10, 1.25 or 1.50 when
+  the territory's latest `CRAFTING` or `MATERIALS` demand cell is 5-9, 10-19 or 20+ (aden-signal.md §4.8), and 1 without
+  one. `SHORTAGE` reads it directly (§4.4); `craft_demand_<f>` is the denominator's daily units.
+- `conflict` is the absolute count of the territory's sieges, Territory War battles and ward captures in the last 14 days.
+
+**Influence** of a clan in a territory is the EWMA (half-life 14 days) of daily points: 100 for owning its castle, 25 per
+fortress in it, 20 per ward captured there, 1 per hour of members' escort presence on caravans through it, 10 per day with
+the clan's Manor procure or crops in its castle, 5 per public PACT contract of the clan completed there, and 1 per
+distinct member principal active there that day.
+
+**History significance** of a candidate event is: distinct participant principals + 2 × duration in hours + value in
+millions of Adena (manifests, contract totals, treasuries moved) + 100 if it is a first or a record + 200 if it changed an
+owner or a law; it is promoted when ≥ `HistorySignificance`.
+
 ### 4.3 Actuators
 
 Every actuator has a kind, bounds, a rate, a recovery, exclusions, a kill switch, a reason code and an application id;
@@ -266,19 +297,28 @@ A share *r* ∈ [0, R] per mille (R = the family's `max_relocate_permille`, defa
 patch** PACT's Loot Charter uses (03 §4.2; pact.md §4.5): in `Attackable.doItemDrop`, after the death-drop list and the
 spoil list are computed and before any item reaches the ground or an inventory (`entity/actor/Attackable.java:1173`,
 `:1176-1191`), and after a Loot Charter has taken its items, each **family item** of the kill from a monster of that
-subregion is relocated if an independent keyed roll (04 §7, seeded by the kill key) falls below *r*: it goes, with exactly
-the count retail gave it, into the warehouse of the destination town decided for (subregion, family), through one Asset
-operation per kill under the kill key (source `RELOCATED_DROP`, an amendment like `LOOT_DROP`, asset-service.md §2.5). If
-the operation cannot commit, the items return to retail, which drops them as it would have.
+subregion is selected if an independent keyed roll (04 §7, seeded by the kill key) falls below *r*. The selected items go,
+with exactly the counts retail gave them, into the warehouse of the destination town decided for (subregion, family),
+through **one Asset operation per kill**, under the kill key, source `RELOCATED_DROP` (an amendment like `LOOT_DROP`,
+asset-service.md §2.5), run exactly as the Loot Charter runs its `route` (pact.md §4.5): **synchronously on the thread
+that is dropping the kill's loot**, inside the hook, before the hook returns. Its outcome decides the items: `COMMITTED`
+— relocated; aborted (anything short of commit, asset-service.md §3.2) — the hook hands them back to retail, which drops
+them as it would have; `UNCERTAIN` — the Asset Service resolves it on that thread before returning (§3.2: a locking read,
+never a timeout abort), so the hook always ends knowing which. Until then the items belong to the hook's local list and
+nowhere else. **Stated limit**, the Loot Charter's: if the JVM dies between the kill and the commit, the selected items
+are lost with it, as retail's own ground drops of that kill are without `SaveDroppedItem`; no fact claims them. At most
+`RelocationOpsPerSecond` operations run server-wide; beyond it a kill's selection is skipped (its items go to retail,
+counted), so relocation never queues on the kill path.
 
 - **The retail roll is untouched**, so every item's probability, every group's one-per-group behaviour, protected items
   and Adena are exactly retail; only the destination of a rolled family item changes.
-- **Supply is conserved exactly**: every family item retail rolls exists, on the ground, in an inventory or in a
-  warehouse. No budget is needed and none can be broken by rates, champions, premium bonuses or player bonuses.
+- **Supply is conserved exactly** while the server runs: every family item retail rolls is dropped, auto-looted or
+  relocated, never two of them (the stated limit above is the only exception). No budget is needed and none can be broken
+  by rates, champions, premium bonuses or player bonuses.
 - Excluded: protected items (§2.2); kills of raid and grand bosses and of their minions; kills outside every subregion.
 - Hot path: one array read `share[subregion][family]` from an immutable snapshot swapped at each step, the item → family
-  `int[]`, and a keyed roll only for family items of a subregion whose share is above zero; the Asset operation is
-  enqueued, as the Loot Charter's is.
+  `int[]`, and a keyed roll only for family items of a subregion whose share is above zero (≤ 2 µs). The Asset operation
+  runs only for kills with a selected item, on the same terms and budget as the Loot Charter's, and is rate-limited.
 - Perception: hunters there find fewer of the family; the destination's Guild offers them; Guild prices; rumors.
 
 #### 4.3.2 Limited merchant stock (`STOCK`, per town and product)
@@ -286,7 +326,8 @@ the operation cannot commit, the items return to retail, which drops them as it 
 For buy-list products with a limited count (`dist/game/data/buylists/*.xml`, the `count` attribute: 2 072 entries,
 mostly clan-hall scrolls, strider food and enchant scrolls), the restock delay may be scaled by [700, 1500] per mille,
 through a factor read where a sale schedules the restock (`mechanics/buylist/Product.java:107`); the count, the price and
-the item never change. A restock already scheduled keeps its time; a disable makes the next restock retail.
+the item never change. A restock already scheduled keeps its time, so after a disable each product is retail **from its
+next restock** (a stated limit; AT-AR-09 checks exactly this).
 Perception: "sold out" more or less often.
 
 #### 4.3.3 Guild prices (`GUILD_BUY`, `GUILD_SELL`, per town and item)
@@ -307,8 +348,8 @@ keys (§4.2). Every kind's parameters are here; changing one is a spec change.
 
 | Kind | Region | Cause | Confirm / release | Asks |
 |---|---|---|---|---|
-| `OVERHARVEST` | subregion | `resource_pressure_<f>` ≥ 1500 | 6 / 12 hourly steps (release below 1200) | `RELOCATE` share = min(R, (pressure − 1000) ÷ 10) ‰, destination the neighbouring Guild town with the lowest `supply_health_<f>`; that town's Guild buy price for the family + 100 ‰ |
-| `SHORTAGE` | town | `craft_demand_<f>` ÷ `supply_health_<f>` ≥ 2.0 | 2 / 2 daily steps (release below 1.2) | Guild orders for the family's catch-in items (quantity: the demand gap, capped by the pool), caravans from neighbours whose stock of the family is ≥ 2 days of their own demand |
+| `OVERHARVEST` | subregion | `resource_pressure_<f>` ≥ 1500 (cold start: never) | 6 / 12 hourly steps (release below 1200) | `RELOCATE` share = min(R, (pressure − 1000) ÷ 10) ‰, destination the neighbouring Guild town with the lowest `supply_health_<f>`; that town's Guild buy price for the family + 100 ‰ |
+| `SHORTAGE` | town | `supply_health_<f>` < 500 (less than half a day of cover) while `craft_demand_<f>` ≥ `MinDemandUnits` | 2 / 2 daily steps (release at ≥ 1500) | Guild orders for the family's catch-in items (quantity: the demand gap, capped by the pool), caravans from neighbours whose stock of the family is ≥ 2 days of their own demand |
 | `TRADE_SHIFT` | territory | its castle's tax raised by ≥ 5 points, then its town's `trade_activity` ≤ 850 while a neighbour's ≥ 1100 | 3 / 3 daily steps (release within 950–1050) | rumors and proclamations on prices; Guild sell prices − 50 ‰ in the gaining neighbours |
 | `OUTLAW_PRESSURE` | territory | `outlaw` ≥ 2000 | 2 / 3 daily | escort payment + 250 ‰ for caravans through it; caravans route around it unless Open Roads; rumors |
 | `BOSS_ECOLOGY` | subregion with a raid or grand boss lair | `kills_lair_<boss>` ≥ 2000 | 2 / 2 daily | Guild orders for preparation consumables (`data/lc/preparation_items.csv`) in the territory's town; caravans of them; scouts' rumors |
@@ -334,7 +375,7 @@ Codex Laws tab, recorded in history. A law never changes combat, rates or PK mec
 | Bounty Endowment | tops up `CURSED_WEAPON` Writs on cursed-weapon holders in the territory, and only those (black-ledger.md §4.3) | committed treasury Adena in custody; `EndowmentCapAdena` per weapon life as the Ledger defines it |
 | Market Charter | the territory's Notarius fees × `CharterFactorPermille` for the payer (the factor of pact.md §2.2) | the custody pays the rest into `FEE_NOTARIUS`, so the sink receives the full fee; exhausted → the law ends |
 | Caravan Protection | escort payments for Guild caravans through the territory × (1 + `ProtectionBonusPermille`) | committed custody |
-| Amnesty | the territory's Magistrates refuse a new `KARMA` Writ on a mark whose `lc_world_pk.last_pk_fact_id` is below the law's `proclaimed_fact_id` (a predicate the Ledger asks at `open`, black-ledger.md §4.3); a mark never recorded counts as before; while the projector is stopped the predicate answers "no amnesty" | no money; `AmnestyInfluenceCost` influence spent (§2.4); once per reign |
+| Amnesty | the territory's Magistrates refuse a new `KARMA` Writ on a mark with no PK since the law's proclamation (a predicate the Ledger asks at `open`, black-ledger.md §4.3), decided on the **absence** of a captured fact as the journal requires (fact-journal.md §3.3): at an `open` at time *T* the predicate waits, at most `AmnestyBarrierMillis`, until Aden Remembers' checkpoint has passed a committed phase whose frontier is ≥ *T*; then it answers "amnesty" only if `lc_world_pk.last_pk_fact_id` (or no row) is below `proclaimed_fact_id` **and** no gap record of the PK family overlaps the span from the proclamation to *T*; otherwise (not reached in time, a gap, the projector stopped) it answers "no amnesty" and the Writ opens: failing closed means a mark is never shielded on missing evidence | no money; `AmnestyInfluenceCost` influence spent (§2.4); once per reign |
 | Gatekeeper Levy | `LevyPermille` of the retail fee added to teleports from the territory's gatekeepers, credited to the treasury (`mechanics/siege/Castle.java:333`, `addToTreasuryNoTax`) | charged only if, **at the charge**, the law is enacted, the module running, and castle tax % + levy % ≤ the current Seven Signs cap (`managers/CastleManager.java:216-245`: 5, 25 or 15), all read synchronously in the teleport seam; the levy is destroyed with the fee and the treasury credited after, so a crash between can only lose it |
 | Open Roads | Guild caravans route through the territory when an alternative exists; road wardens (an existing guard template) walk its caravan routes | committed custody pays `WardenWageAdena` per warden-hour into the `CROWN_UPKEEP` sink |
 
@@ -379,8 +420,12 @@ and pack animals are new NPC templates on existing client models (`displayId`), 
   it advances `last_node` (monotonic, a trigger) and, at the route's last node, starts the arrival transaction (§3.4).
   After a restart an `EN_ROUTE` caravan is spawned at `last_node` and walked from it.
 - **Escort**: a Caravan Escort contract (pact.md §4.2, issuer the Caravan Guild), escrowed from the pool (plus Caravan
-  Protection's custody) at dispatch, settled on arrival by participation (`lc_caravan_escort.presence_seconds`), refunded
-  to the pool on a raid or a recall.
+  Protection's custody) at dispatch, settled on arrival by participation, refunded to the pool on a raid or a recall.
+  **Participation**: while the caravan is `EN_ROUTE`, every `EscortSampleSeconds` (30) each signed escort who is alive,
+  online and within `EscortRadius` (1500) of the Caravan Master is credited the interval (`presence_seconds`); at arrival
+  the escrow is split among escorts whose presence is at least `EscortMinSharePermille` (300) of the travel time, in
+  proportion to their presence, the remainder (all of it if nobody qualifies) refunded to the pool. PACT settles the
+  contract with these shares (pact.md §4.2's Caravan Escort: "delivery + participation").
 - **Raid**: killing the Caravan Master is the `RAIDED` transition (§3.4): `raid` drops `RaidSharePermille` (default 300) of
   the manifest once, after commit, at the Master's position (`lc_raid_drop`, asset-service.md ASSET-R25), the rest lost to
   the road (`ROAD_LOSS`). Killing NPCs gives no karma in Mobius; raiders who kill escorts or bystanders get karma and flags
@@ -433,19 +478,26 @@ seven days or more), long dominance, laws, caravan disasters. `publishable` mark
 
 - **Kill switch** per kind: its values neutral in the next snapshot.
 - **Freeze** (`lc_module_state` `WORLD`): on a verifier violation (§4.11) or a projector stop (fact-journal.md §4.3);
-  every value neutral, open situations `CLOSED` (`FROZEN`), relocation off, Guild trading and dispatch paused (custodies
-  kept), `SCHEDULED` and `EN_ROUTE` caravans recalled, laws suspended (§3.3); until an admin unfreezes with a reason.
-- **Disable** (`Enabled = false`): as freeze, with reason `DISABLED`. The world is then retail: drops land where retail
-  puts them, restocks are retail from the next one, no Guild trade, no caravan, no levy, a charter factor of 1, no
-  endowment, no wardens, no rumor lines (12 §10 `AR-DISABLE`).
+  every value neutral, open situations `CLOSED` (`FROZEN`), relocation off, Guild trading and dispatch paused, caravans
+  parked (§3.4), laws suspended (§3.3); no Asset operation on its custodies is attempted; until an admin unfreezes with a
+  reason.
+- **Disable** (`Enabled = false`), while the module runs: first every caravan is recalled (ordinary operations), then
+  everything a freeze stops is stopped, with reason `DISABLED`. The world is then retail: drops land where retail puts
+  them, each limited product restocks retail from its next restock, no Guild trade, no caravan, no levy, a charter factor
+  of 1, no endowment, no wardens, no rumor lines (12 §10 `AR-DISABLE`).
 
 ### 4.11 Production checks
 
-A verifier runs at each daily step: every applied value within bounds and rate; no relocation of a protected item (the
-day's relocated items against `lc_resource_protected`); every kill's rolled family items equal its dropped plus relocated
-ones (from the `ar_yield` sums); every pool and warehouse equals its Asset custody and `lc_guild_stock`; the no-loop rule
-over prices and open orders; every rumor's params pass the field rules; no pool's recycle above the previous day's recorded
-sink share. A violation is an alarm and a freeze.
+A verifier runs at each daily step: every applied value within bounds and rate; no relocation of a protected item (each
+`World.Relocated` fact's items against `lc_resource_protected`); **per kill**, every `World.Relocated` fact matches one
+committed `RELOCATED_DROP` operation under its kill key with the same items and counts, and no such operation lacks its
+fact; every pool and warehouse equals `lc_guild_stock` **at one boundary**: the projection as of its checkpoint fact *F*
+against the custody's postings whose operations' facts are at or below *F* (the Asset Service writes an operation's facts
+in its commit, so the two agree exactly at *F*); the no-loop rule over prices and open orders; every rumor's params pass
+the field rules; no recycle above the previous day's recorded sink share. A violation is an alarm and a freeze. **Honest
+limit**: the `ar_yield` sums are aggregates; they can show a day's totals agree, not that each kill's retail delivery was
+exact. Per-kill exactness of the split (relocated or retail, never both, never neither) is proven by AT-AR-01 over the
+hook, not observed in production.
 
 ### 4.12 Determinism
 
@@ -482,7 +534,7 @@ Emitted, durable: `World.SituationChanged`, `World.ActuatorDecided` (kind, regio
 | AR-INV05 | live and replay give the same decisions | §4.12; AT-AR-06 |
 | AR-INV06 | no interface returns a state value; rumors and rows carry only rule-allowed fields | the interface list; the verifier; AT-AR-08 |
 | AR-INV07 | laws within funding, caps, reigns and the Ledger's limits | keys, triggers, charge-time checks; AT-AR-07 |
-| AR-INV08 | disabled, the world is retail | AT-AR-09 |
+| AR-INV08 | disabled, the world is retail (limited stock from each product's next restock) | AT-AR-09 |
 | AR-INV09 | a caravan's manifest has exactly one terminal disposition | the terminal key; AT-AR-04 |
 
 ## 7. Failure model
@@ -495,6 +547,9 @@ Emitted, durable: `World.SituationChanged`, `World.ActuatorDecided` (kind, regio
 | crash between an effect's intent and its application | applied once after restart (fact-journal.md §4.4) |
 | crash between a levy's charge and the treasury credit | the levy is lost (a sink), never minted |
 | restart with caravans en route | re-spawned at `last_node`, walked from it; recalled past the timeout |
+| freeze with caravans out | parked where they are, no manifest moved; resumed at the unfreeze |
+| JVM death between a kill and its relocation commit | the selected items are lost with the kill (the Loot Charter's limit) |
+| Amnesty asked while the projector lags or a PK gap overlaps | "no amnesty"; the Writ opens |
 | arrival, raid and timeout at once | one terminal transaction commits |
 | Asset Service frozen | Guild trading, dispatch, relocation and law funding refused (items to retail); values kept |
 | a pool exhausted | purchases and orders refused; no dispatch without escort funding |
@@ -517,6 +572,8 @@ fact (fact-journal.md §4.1).
 | `CaravansPerTownDay`, `ManifestMaxValueAdena`, `RaidSharePermille`, `CaravanTimeoutFactor`, `CaravanNoticeMinutes` | 0–12, 0–1e9, 0–500, 2–5, 30–1440 | 2, 20000000, 300, 3, 120 | as default everywhere | AT-AR-04 |
 | `MaxLawsPerCastle`, `CharterFactorPermille`, `ProtectionBonusPermille`, `LevyPermille`, `WardenWageAdena`, `HoldingUpkeepPermille`, `FortWeightPermille`, `AmnestyInfluenceCost` | 0–6, 500–1000, 0–1000, 0–500, 0–100000, 0–1000, 0–1000, 0–1e6 | 3, 800, 250, 100, 2000, 250, 250, 1000 | as default everywhere | AT-AR-07 |
 | `RumorDelayMinutes`, `RumorLifeHours`, `HistorySignificance` | 60–2880, 1–168, 1–1000 | 360, 48, 500 | as default everywhere | AT-AR-08 |
+| `RelocationOpsPerSecond`, `MinDemandUnits`, `AmnestyBarrierMillis` | 1–1000, 1–10000, 100–60000 | 50, 20, 5000 | as default everywhere | AT-AR-01, AT-AR-10, AT-AR-07 |
+| `EscortSampleSeconds`, `EscortRadius`, `EscortMinSharePermille` | 10–120, 300–5000, 0–1000 | 30, 1500, 300 | as default everywhere | AT-AR-04 |
 
 ## 9. Interface
 
@@ -537,7 +594,7 @@ Nothing else shows any state.
 | AR-R06 | Decisions MUST be identical live and on replay over the inputs of §4.12. | AT-AR-06 |
 | AR-R07 | Every Crown Law MUST respect its funding, the levy cap at each charge, its reign, the Ledger's limits, Amnesty's predicate and spend, proclamation and history. | AT-AR-07 |
 | AR-R08 | No interface MUST return a state value; rumors and publication rows MUST carry only rule-allowed fields after their delay. | AT-AR-08 |
-| AR-R09 | Disabled, Aden Remembers MUST leave retail behaviour. | AT-AR-09 |
+| AR-R09 | Disabled, Aden Remembers MUST leave retail behaviour, each limited product from its next restock. | AT-AR-09 |
 | AR-R10 | Situations MUST follow their machine with the parameters of §4.4, and each MUST produce its declared asks. | AT-AR-10 |
 | AR-R11 | Every applied value MUST be explainable by `lc why` from its rows and facts. | AT-AR-11 |
 | AR-R12 | A verifier MUST run the checks of §4.11 daily and freeze on a violation. | AT-AR-12 |
@@ -545,19 +602,19 @@ Nothing else shows any state.
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-AR-00 | integration | the migration applies; triggers and keys refuse: a protected item in a family (insert or update, both tables); an actuator row outside its bounds or its kind's ceiling, changed or deleted; a second open situation of a kind and region; a situation inserted other than `EMERGING`; a state change without its newest transition row; a transition outside the machine; `ACTIVE → CLOSED` without `FROZEN`/`DISABLED`; a second enacted law of a kind per castle; a second Amnesty in a reign; an ended law changed or deleted; a Guild buy price or order price at or above any sell price; concurrent price writers (the second waits for the first's lock, then is refused); a caravan transition outside its machine or a node going back; a rumor beyond its life |
-| AT-AR-01 | integration, sim | `AR-OVERHARVEST`: 10⁶ kills of a drop list with groups, protected items, Adena and champions, with relocation at its ceiling and off: every item's frequency (relocated counted as dropped) equal between the two within a chi-square test at p ≥ 0.001; per kill, rolled family items = dropped + relocated exactly; a failed operation returns the items to retail; the overharvest situation opens at the declared threshold and windows and recovers after pressure stops |
+| AT-AR-00 | integration | the migration applies; triggers and keys refuse: a transition row after the first with no predecessor state; a protected item in a family (insert or update, both tables); an actuator row outside its bounds or its kind's ceiling, changed or deleted; a second open situation of a kind and region; a situation inserted other than `EMERGING`; a state change without its newest transition row; a transition outside the machine; `ACTIVE → CLOSED` without `FROZEN`/`DISABLED`; a second enacted law of a kind per castle; a second Amnesty in a reign; an ended law changed or deleted; a Guild buy price or order price at or above any sell price; concurrent price writers (the second waits for the first's lock, then is refused, also when it read prices before the first's commit); a price writer outside `READ COMMITTED`; a caravan transition outside its machine or a node going back; a rumor beyond its life |
+| AT-AR-01 | integration, sim | `AR-OVERHARVEST`: 10⁶ kills of a drop list with groups, protected items, Adena and champions, with relocation at its ceiling and off: every item's frequency (relocated counted as dropped) equal between the two within a chi-square test at p ≥ 0.001; per kill, rolled family items = dropped + relocated exactly, and none both; an aborted operation returns the items to retail; an uncertain commit resolved either way leaves each item in exactly one place; past `RelocationOpsPerSecond` selections are skipped to retail; the overharvest situation opens at the declared threshold and windows and recovers after pressure stops |
 | AT-AR-02 | unit, integration | property test over random situations: every value within bounds and rate, recovery to neutral, kill switch and freeze neutral at once |
 | AT-AR-03 | unit | actor-identity.md's static scan passes over Aden Remembers; no code writes rates, skills, stats, spawns, respawn times, prices or Hellbound or seed state; the actuator set is exactly §4.3's |
-| AT-AR-04 | integration, restart, fault | `AR-CARAVAN-*`: arrival, raid (the share dropped once, after commit, under a crash at each step), recall on timeout, freeze and disable (also from `SCHEDULED`); arrival, raid and timeout raced: one disposition; a restart en route resumes at `last_node`; escort paid by presence on arrival, refunded otherwise |
+| AT-AR-04 | integration, restart, fault | `AR-CARAVAN-*`: arrival, raid (the share dropped once, after commit, under a crash at each step), recall on timeout and disable (also from `SCHEDULED`); a freeze parks caravans with no Asset operation and the unfreeze resumes them with the parked time excluded from the timeout; arrival, raid and timeout raced: one disposition; a restart en route resumes at `last_node`; escorts paid in proportion to sampled presence above the minimum share, the rest refunded |
 | AT-AR-05 | integration, sim | the economy monitor over a week of Guild trading: no source except `RELOCATED_DROP` equal to rolled items and `SINK_RECYCLE` ≤ the recorded share; pools equal recycles plus receipts minus payments; refused trades when a pool is short; no profitable sequence through any towns and orders |
 | AT-AR-06 | integration | a replay from a snapshot reproduces §4.12's outputs exactly, with telemetry windows written late and effects dispatched slowly in the live run |
-| AT-AR-07 | integration | `AR-LAW-*`: each law enacted, funded, proclaimed, listed, recorded; repealed and expired on an owner change with the remainder returned; a teleport charged without levy when tax + levy exceeds the cap; negative tax clamped; an endowment refused for a non-cursed Writ; Amnesty refuses a Writ for a mark with no PK since and allows one after a new PK, spends influence once, refused a second time in the reign; upkeep by alliance holding weight |
+| AT-AR-07 | integration | `AR-LAW-*`: each law enacted, funded, proclaimed, listed, recorded; repealed and expired on an owner change with the remainder returned; a teleport charged without levy when tax + levy exceeds the cap; negative tax clamped; an endowment refused for a non-cursed Writ; Amnesty refuses a Writ for a mark with no PK since, allows one after a new PK even when the PK's fact is still in the writer's ring at `open` (the barrier waits for it), allows one when a PK gap overlaps the span or the barrier times out, spends influence once, refused a second time in the reign; upkeep by alliance holding weight |
 | AT-AR-08 | integration, sim | `AR-PERCEPTION`: observer citizens with client knowledge only detect each actuator within its window (relocation 48 h, stock 72 h, Guild prices at once, caravans at departure, laws at proclamation); every Codex, website and NPC response scanned: no state value; rumors carry only allowed fields and start after their delay |
-| AT-AR-09 | integration | `AR-DISABLE`: disabled mid-situation with laws enacted and caravans scheduled and en route: drops, restocks, teleport fees, Notarius fees and NPC pages equal a server without Aden Remembers |
+| AT-AR-09 | integration | `AR-DISABLE`: disabled mid-situation with laws enacted and caravans scheduled and en route: every caravan recalled; drops, teleport fees, Notarius fees and NPC pages equal a server without Aden Remembers; each limited product's restock retail from its next one, a pending scaled one kept |
 | AT-AR-10 | sim | each of the eight kinds, driven by synthetic inputs: opens at its threshold after its confirmation steps, makes its asks, recedes and closes after its release steps; `AR-CATCHIN`: a mature world with new characters gets orders for catch-in items within 2 days of a shortage; `AR-TRADESHIFT`: a tax raise moves trade to neighbours within 3 days |
 | AT-AR-11 | integration | for random applied rows, `lc why` returns the situations, facts and windows behind them, and recomputing from those gives the value |
-| AT-AR-12 | integration | a planted out-of-bounds row, a relocated protected item, a custody mismatch, a looping price, an over-share recycle and a rumor with a forbidden field: alarm and freeze |
+| AT-AR-12 | integration | a planted out-of-bounds row, a relocated protected item, a `World.Relocated` fact without its operation, a custody mismatch at the boundary, a looping price, an over-share recycle and a rumor with a forbidden field: alarm and freeze; a trade committed but not yet projected raises no alarm |
 | AT-AR-13 | sim, fault | the 800-citizen benchmark: the relocation lookup and each telemetry seam ≤ 2 µs p99 (the enqueued Asset operation is not on the hot path); an exception injected in each seam leaves the retail outcome |
 
 ## 11. Upstream constraints
@@ -584,12 +641,22 @@ Nothing else shows any state.
   operation; the `RELOCATED_DROP` and `SINK_RECYCLE` sources and the `CROWN_UPKEEP` sink, with their sites.
 - pact.md: the `MERCHANT_GUILD` issuer with a custody as receiver and refund on expiry; Caravan Escort escrowed from a
   Guild pool and refunded on raid or recall; the Market Charter's factor and custody payment (§4.5).
-- black-ledger.md §4.3: the Amnesty predicate at `open`.
+- black-ledger.md §4.3: the Amnesty predicate at `open`, with its frontier barrier and its fail-closed "no amnesty".
+- asset-service.md §4.2 rule 7 is kept as it is: a freeze parks caravans and moves no custody (§3.4).
 - actor-identity.md is unchanged: Aden Remembers calls nothing on its list, and relocation runs at the loot routing patch
   after the retail calculation, as the Loot Charter does.
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: twelve of twenty fixed; open were validation reads under an old snapshot, Amnesty
+  deciding on a PK fact not yet projected, relocation's handoff (queued items, uncertain commits, the crash limit),
+  arithmetic for supply, cold starts, influence, significance and escort participation, a NULL path through the
+  transition trigger, a verifier claiming per-kill evidence from aggregates and comparing custody without a common
+  boundary, the disable promise against kept restock deadlines, and a freeze-time recall the Asset Service's freeze rule
+  forbids. Revision 3: locking validation reads; Amnesty's frontier barrier, failing closed; relocation synchronous on the
+  dropping thread like the Loot Charter, uncertain commits resolved there, the crash limit adopted, a rate cap; the
+  formulas, cold start and escort sampling in §4.2 and §4.6; the trigger fails on NULL; per-kill fact-to-operation checks
+  and a checkpoint boundary, with the aggregate limit stated; disable scoped to the next restock; freeze parks caravans.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 20 findings: a group-drop factor that shifts later items' odds;
   clipping at high final chances; a budget over historical weights that conserves no current supply; budget and rate
   limits that can be infeasible together; a spawn tempo that raises a family's supply; telemetry with no subregion or

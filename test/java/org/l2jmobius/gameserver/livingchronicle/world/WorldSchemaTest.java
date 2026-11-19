@@ -67,6 +67,7 @@ class WorldSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_situation SET state = 'ACTIVE' WHERE situation_id = 1"), "a state change without its transition row");
 			assertThrows(SQLException.class, () -> statement.execute(transition(1, 2, "'EMERGING'", "'RECEDING'", "'PRESSURE'")), "emerging straight to receding");
 			assertThrows(SQLException.class, () -> statement.execute(transition(1, 3, "'EMERGING'", "'ACTIVE'", "'PRESSURE'")), "a gap in the sequence");
+			assertThrows(SQLException.class, () -> statement.execute(transition(1, 2, "NULL", "'ACTIVE'", "'PRESSURE'")), "a later transition with no predecessor state");
 			statement.execute(transition(1, 2, "'EMERGING'", "'ACTIVE'", "'CONFIRMED'"));
 			statement.execute("UPDATE lc_situation SET state = 'ACTIVE' WHERE situation_id = 1");
 			assertThrows(SQLException.class, () -> statement.execute(transition(1, 3, "'ACTIVE'", "'CLOSED'", "'PRESSURE'")), "active to closed without a freeze");
@@ -90,8 +91,10 @@ class WorldSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_law WHERE law_id = 50"), "deleting a law");
 			statement.execute("INSERT INTO lc_law (castle_id, kind, reign_key, enacted_by, enacted_at, params) VALUES (3, 'AMNESTY', '3/1002/900', 268477001, NOW(3), '{}')");
 
-			// The Guild: buy and order prices below every sell price, across towns.
+			// The Guild: written in READ COMMITTED only; buy and order prices below every sell price, across towns.
 			statement.execute("INSERT INTO lc_guild_town (town_id, territory_id, warehouse_custody_id, pool_custody_id) VALUES (9, 1, 1, 2), (10, 2, 3, 4)");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1870, 10, 20, " + APP + ")"), "a price writer in repeatable read");
+			statement.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
 			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1870, 10, 20, " + APP + ")");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 22, 30, " + APP + ")"), "buying above another town's sell price");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 5, 9, " + APP + ")"), "selling below another town's buy price");
@@ -128,15 +131,18 @@ class WorldSchemaTest
 		{
 			statement.execute("INSERT INTO lc_region (region_id, kind, name_key) VALUES (21, 'TERRITORY', 'dion'), (22, 'TERRITORY', 'aden')");
 			statement.execute("INSERT INTO lc_resource_family (family_id, name_key, catch_in, max_relocate_permille, max_rate_permille_day, recovery_days) VALUES (5, 'skins', TRUE, 50, 10, 14)");
-			statement.execute("INSERT INTO lc_resource_item (item_id, family_id) VALUES (1867, 5)");
+			statement.execute("INSERT INTO lc_resource_item (item_id, family_id) VALUES (1867, 5), (1868, 5)");
 			statement.execute("INSERT INTO lc_guild_town (town_id, territory_id, warehouse_custody_id, pool_custody_id) VALUES (21, 21, 11, 12), (22, 22, 13, 14)");
-			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (21, 1867, 10, 20, " + APP + "), (22, 1867, 12, 19, " + APP + ")");
+			statement.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (21, 1867, 10, 20, " + APP + "), (22, 1867, 12, 19, " + APP + "), (21, 1868, 10, 20, " + APP + "), (22, 1868, 12, 19, " + APP + ")");
 		}
 		try (Connection first = _database.connect();
 			Connection second = _database.connect();
 			Statement one = first.createStatement();
 			Statement two = second.createStatement())
 		{
+			one.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+			two.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
 			first.setAutoCommit(false);
 			second.setAutoCommit(false);
 			two.execute("SET SESSION innodb_lock_wait_timeout = 1");
@@ -147,6 +153,23 @@ class WorldSchemaTest
 			first.commit();
 			// After the first commits, the same write is refused: it would let a buy at 18 meet a sell at 17.
 			assertThrows(SQLException.class, () -> two.execute("UPDATE lc_guild_price SET sell_price = 17 WHERE town_id = 22 AND item_id = 1867"), "the write the first made unsafe");
+			second.rollback();
+		}
+		try (Connection first = _database.connect();
+			Connection second = _database.connect();
+			Statement one = first.createStatement();
+			Statement two = second.createStatement())
+		{
+			one.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+			two.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+			first.setAutoCommit(false);
+			second.setAutoCommit(false);
+			// The second transaction reads the prices before the first writes and commits.
+			two.executeQuery("SELECT COUNT(*) FROM lc_guild_price WHERE item_id = 1868").close();
+			one.execute("UPDATE lc_guild_price SET buy_price = 18 WHERE town_id = 21 AND item_id = 1868");
+			first.commit();
+			// It read a buy price of 10, but the trigger's reads, taken after the lock, see the committed 18.
+			assertThrows(SQLException.class, () -> two.execute("UPDATE lc_guild_price SET sell_price = 17 WHERE town_id = 22 AND item_id = 1868"), "validation against what it read earlier");
 			second.rollback();
 		}
 	}

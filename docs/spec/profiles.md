@@ -1,6 +1,6 @@
 # SPEC-PRO — Profiles and Mobius custom modules
 
-- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
+- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
 - Blueprint: 02 §8 (configuration is a liability; the canonical ruleset is the default; every key has an owner, range,
   default and test), 03 §8 (Mobius H5 custom modules: canonical policy), 10 §5.4 and §9 (citizens' own bounds), 11 §3
   (the `truth` profile), 20 §1.
@@ -24,6 +24,8 @@ It does not own any module's own keys or their meaning (their specs do), nor the
 ```text
 dist/game/config/**, dist/login/config/**  the canonical configuration, as upstream ships it plus Living Chronicle's
 dist/game/data/scripts/**/config.xml       event configuration files (TvT, Deathmatch, the seasonal events), also canonical
+dist/game/{log,console,java}.cfg, dist/login/{log,console}.cfg, dist/login/banned_ip.cfg   the servers' root files, also canonical
+dist/game/profiles/machine_keys.csv        the files and keys machine staging may set (database, addresses), nothing else
 dist/game/profiles/<profile>/**            overlays: for an .ini, only the keys the profile changes; any other file
                                            (XML, txt) replaced whole; same relative paths
 dist/game/profiles/canonical.sha256        the hash of every canonical file
@@ -31,8 +33,10 @@ dist/game/data/lc/custom_policy.csv        every key of the 44 custom files: mod
 <server root>/config/                      the materialised tree the server reads (§4.1), read-only
 ```
 
-- **The canonical set** is both servers' `config/` trees and every `config.xml` under the datapack's scripts (event
-  schedules and settings, read by the events themselves, e.g. `dist/game/data/scripts/custom/events/TeamVsTeam/TvT.java:179`);
+- **The canonical set** is both servers' `config/` trees, every `config.xml` under the datapack's scripts (event
+  schedules and settings, read by the events themselves, e.g. `dist/game/data/scripts/custom/events/TeamVsTeam/TvT.java:179`),
+  and the root files the servers open (`log.cfg`, `gameserver/GameServer.java:204`, `loginserver/LoginServer.java:142`;
+  `banned_ip.cfg`, `LoginServer.java:265`; `console.cfg`, `java.cfg`);
   a test scans the datapack and both servers' code for files they open as configuration and fails on one outside the set.
 - Overlays live outside `config/`, so the configuration lock (LOCK-CONFIG-0001, `test/java/org/l2jmobius/gameserver/
   ConfigLockTest.java:36-38`, which reads every `.ini` under `config`) sees only canonical files and the materialised
@@ -60,10 +64,12 @@ before the server starts, **materialises** the profile: it copies the canonical 
 overlay replaces whole **logical properties**, parsed as Java properties are (a value continued over several physical
 lines, such as `SkillDurationList` in `dist/game/config/Player.ini:69`, is replaced whole and written as one logical
 property), refusing a key the canonical file does not have; any other overlay file replaces its canonical file or, where
-the canonical tree has none, creates it), then applies the **machine staging** (the database settings, `ipconfig.xml`,
-which `gameserver/config/ServerConfig.java:420` looks for instead of the shipped `default-ipconfig.xml`, and the test
-harness's own staging, `test/java/org/l2jmobius/testing/TestServer.java:154`), writes the result read-only, and records the
-hash of every materialised file but the machine-staged ones. For `truth` the overlay step is `TruthProfile.apply` run on
+the canonical tree has none, creates it), then applies the **machine staging**: only the files and keys `machine_keys.csv` lists (the database URL, user and
+password in both servers' `Database.ini`; the addresses of `ipconfig.xml`, which `gameserver/config/ServerConfig.java:420`
+looks for instead of the shipped `default-ipconfig.xml`; the test harness's own staging of exactly these,
+`test/java/org/l2jmobius/testing/TestServer.java:154`), writes the result read-only, and records every file's hash. The
+expected result of materialisation is therefore canonical + overlay + staging of listed keys only; a staged change to any
+other key is a difference. For `truth` the overlay step is `TruthProfile.apply` run on
 the staged copy before it is made read-only, exactly as the lock runs it; Living Chronicle's own `.ini` files are in the
 canonical tree, so the lock's recursive golden includes them with their `truth` values. Every reader, whatever its method, then reads the profile's values. This is what `TruthProfile.apply`
 already does to the behaviour lock's staged copy; the same code produces every profile.
@@ -72,9 +78,11 @@ already does to the behaviour lock's staged copy; the same code produces every p
 
 Before the world loads, the profile check refuses to start, naming every difference, unless:
 
-1. every canonical file's hash equals `canonical.sha256` (a hand edit of a canonical file is visible, and the canonical
-   files themselves are locked by LOCK-CONFIG-0001 in CI);
-2. every materialised file equals the materialisation of the canonical tree with the profile's overlay (recomputed);
+1. every canonical file's hash equals `canonical.sha256`, which is committed and checked in CI by its own test
+   (AT-PRO-07), so changing a canonical file is a reviewed change of the manifest in the same commit (LOCK-CONFIG-0001
+   locks only the materialised `truth` values of `.ini` files, not the canonical files);
+2. every materialised file equals the materialisation of the canonical tree with the profile's overlay and the listed
+   machine keys (recomputed), and no other key of a staged file differs;
 3. every key of the 44 custom files has the value `custom_policy.csv` gives for the profile, and every Living Chronicle key
    the value its spec's §8 gives;
 4. in `truth`, Living Chronicle starts **no module**: its bootstrap reads the profile and, for `truth`, initialises
@@ -84,9 +92,13 @@ Before the world loads, the profile check refuses to start, naming every differe
 The profile, the overlay's hash and the materialised hashes are written as a `config` fact (fact-journal.md §4.1).
 **Reloads**: Mobius re-runs `ConfigLoader.init()` from an admin command and the GUI (`dist/game/data/scripts/handlers/
 chat/commands/admin/AdminReload.java:169`, `gameserver/ui/Gui.java:198`), and the same admin command reloads
-`DynamicExpRates.xml` and `SecondaryAuth.xml` directly (`AdminReload.java:199`, `:463`); the profile core patch runs the
-same check before each of the four and refuses the reload on any difference, so a reload rereads the same materialised
-files or nothing.
+`DynamicExpRates.xml`, `SecondaryAuth.xml`, the access levels and admin commands, the siege schedule and others directly
+(`AdminReload.java:199`, `:463`, `:145`, `:475`); the profile core patch runs the same check at the **entry** of the admin
+reload command (`AdminReload.onCommand`, `:112`), before any subcommand, and before the GUI's reload, and refuses on any
+difference, so every reload rereads the same materialised files or nothing. **Runtime setting**: `admin_setconfig`
+assigns configuration fields in memory without any file (`dist/game/data/scripts/handlers/chat/commands/admin/
+AdminAdmin.java:285`); the patch refuses it in every profile but `dev` ("configuration is the profile's"), so no running
+value can drift from the materialised one outside development.
 
 ### 4.3 The custom modules
 
@@ -107,7 +119,7 @@ profiles; `dev` and `sim` equal `hobby` unless stated; `truth` is always `TruthP
 | ClassBalance | every multiplier empty (neutral) | empty | the behaviour lock |
 | CommunityBoard (`CustomCommunityBoard` and `CommunityEnableMultisells`, `…Teleports`, `…Buffs`, `…Heal`, `…Delevel`, which ship true and register services on their own, `dist/game/data/scripts/handlers/bypass/communityboard/HomeBoard.java:79-88`, `:109-114`) | off | off | the board belongs to the Codex; no buff, teleport or shop bypass of the world |
 | CustomMailManager | off | **off** | a deviation, below |
-| DualboxCheck | as `TruthProfile` (0: no limit) | `DualboxCheckMaxPlayersPerIP` 2, `DualboxCheckMaxOlympiadParticipantsPerIP` 1, `DualboxCheckMaxL2EventParticipantsPerIP` 1, `DualboxCheckMaxOfflinePlayPerIP` and `…PremiumPerIP` 0, the citizen runner's address in `DualboxCheckWhitelist` as `address,RunnerAllowance` (upstream adds that number to every limit for the address, `gameserver/managers/AntiFeedManager.java:285-295`, and reads a zero as −1, `DualboxCheckConfig.java:66`; `RunnerAllowance` is the Citizens spec's maximum of citizens online, 1000 until it is specified) | explicit, not disabled; Olympiad and events limited for humans (0 would bypass the check, `gameserver/managers/OlympiadManager.java:546`); upstream keys the whitelist by address (`gameserver/config/custom/DualboxCheckConfig.java:62-77`), so the runner's per-principal limits, Olympiad and events included, are the citizens' own policy (10 §5.4, the Citizens spec) |
+| DualboxCheck | as `TruthProfile` (0: no limit) | `DualboxCheckMaxPlayersPerIP` 2, `DualboxCheckMaxOlympiadParticipantsPerIP` 1, `DualboxCheckMaxL2EventParticipantsPerIP` 1, `DualboxCheckMaxOfflinePlayPerIP` and `…PremiumPerIP` 0, the citizen runner's address in `DualboxCheckWhitelist` as `address,RunnerAllowance` (upstream adds that number to every limit for the address, `gameserver/managers/AntiFeedManager.java:170`, `:285-295`, and reads a zero as −1, `DualboxCheckConfig.java:66`; `RunnerAllowance` is the Citizens spec's maximum of citizens online, 1000 until it is specified). **Stated plainly**: for the runner's address the per-address Olympiad and event limits are then effectively off (upstream has one allowance for every check), and the binding limits on citizens' Olympiad and event participation are the Citizens spec's per-principal policy, enforced by the runner, not by this file | explicit, not disabled; Olympiad and events limited for humans (0 would bypass the check, `gameserver/managers/OlympiadManager.java:546`); upstream keys the whitelist by address (`gameserver/config/custom/DualboxCheckConfig.java:62-77`), so the runner's per-principal limits, Olympiad and events included, are the citizens' own policy (10 §5.4, the Citizens spec) |
 | FactionSystem, FakePlayers, FindPvP, FreeMounts, HellboundStatus | off | off | factions emerge socially; citizens replace fake players; location certainty against the Ledger; geography; Hellbound learned diegetically |
 | MultilingualSupport | off | on, `MultiLangAllowed` `en;ro;ru`, `MultiLangDefault` `en` | the Codex and Chronicle render EN, RO, RU; Mobius's own pages fall back to English until RO and RU packs exist (`dist/game/data/lang/` holds only `el`) |
 | NpcStatMultipliers | off | off | the behaviour lock |
@@ -148,11 +160,13 @@ profiles; `dev` and `sim` equal `hobby` unless stated; `truth` is always `TruthP
 ### 4.5 The welcome line
 
 With `ScreenWelcomeMessageEnable` on, the text shown at login (`gameserver/network/clientpackets/EnterWorld.java:632-634`
-sends the configured text) is replaced by the **lead headline** of the latest issue: its first entry in section order
+sends the configured text) is replaced by the **lead headline** of the latest issue that still has a current entry (an
+entry whose row was later withdrawn is skipped; one later corrected renders its final row): its first current entry in
+section order
 (Realm, Law and Disorder, History, Roads, Markets, Arena, Obituaries, Letters; within a section, issue order), rendered as
 that entry's template title line in the player's language with names resolved through Chronicle's name view. An issue is
 composed only with at least one entry (chronicle.md §4.3), so the latest issue always has a lead; with no issue yet, the
-canonical text. The seam belongs to Chronicle (an amendment
+canonical text (also when every issue's entries have been withdrawn). The seam belongs to Chronicle (an amendment
 to chronicle.md §4.3, §11).
 
 ## 5. Facts
@@ -198,15 +212,17 @@ None for players. Admin: `lc config <file> <key>` prints the canonical, overlay 
 | PRO-R06 | The profile and the materialised hashes MUST be recorded as a `config` fact at startup and at every reload. | AT-PRO-01 |
 | PRO-R07 | No custom NPC 03 §8 keeps out of the world MUST be spawned by data. | AT-PRO-05 |
 | PRO-R08 | The welcome line MUST be the latest issue's headline in the player's language, or the canonical text without an issue. | AT-PRO-06 |
+| PRO-R09 | The canonical files MUST equal their committed manifest. | AT-PRO-07 |
 
 | Test | Kind | What it does |
 |---|---|---|
 | AT-PRO-01 | integration | each profile: a value changed by its overlay is the one read by `ConfigReader`, by `FortSiegeManager`'s own `Properties`, by the LoginServer's `LoginConfig`, by an event's `config.xml` (replaced whole) and by `ServerConfig`'s `chatfilter.txt`; an overlay of `SkillDurationList` replaces the whole continued value; an overlay creating a file the canonical tree lacks creates it; the `config` fact holds the hashes; the scan finds no configuration file outside the canonical set |
-| AT-PRO-02 | integration | a hand edit of a canonical file, an overlay with an unknown key, an unknown profile, no profile at all (neither server starts), a materialised file changed before each of the four reloads: each refused with the difference named |
+| AT-PRO-02 | integration | a hand edit of a canonical file, an overlay with an unknown key, an unknown profile, no profile at all (neither server starts), a materialised file changed before an admin reload (each subcommand reading configuration: the generic one, `DynamicExpRates.xml`, `SecondaryAuth.xml`, access levels, siege schedule) and before a GUI reload; machine staging of an unlisted key; `admin_setconfig` outside `dev`: each refused with the difference named |
 | AT-PRO-03 | unit, integration | the committed `truth` overlay equals `TruthProfile`'s rule over the canonical files; LOCK-CONFIG-0001 passes on the materialised `truth` tree; a `truth` server starts no Living Chronicle module |
 | AT-PRO-04 | unit | `custom_policy.csv` covers every key of the 44 files of `TruthProfile.MODULES`; each profile's materialisation yields exactly its column, numeric keys included; "off" leaves no switch true (Community Board services, `BankingAutoConvert`) |
 | AT-PRO-05 | unit | no spawn file of `dist/game/data/spawns` places NPC 50008 |
-| AT-PRO-06 | integration | with no issue, the canonical text; an issue with a Law and a History entry leads with the Law entry's title line, in EN, RO and RU by the player's language; a headline naming a withdrawn character shows it unnamed |
+| AT-PRO-07 | unit | every canonical file's hash equals `canonical.sha256`; a changed canonical file without its manifest line fails |
+| AT-PRO-06 | integration | with no issue, the canonical text; an issue with a Law and a History entry leads with the Law entry's title line, in EN, RO and RU by the player's language; the Law row withdrawn, it leads with the History entry; all withdrawn, the previous issue's lead or the canonical text; a headline naming a withdrawn character shows it unnamed |
 
 ## 11. Upstream constraints
 
@@ -224,6 +240,13 @@ per-principal Olympiad and event limits.
 
 ## 12. Review record
 
+- Round 3 (Codex), NO SIGN-OFF: root files (`log.cfg`, `banned_ip.cfg`) outside the set; the canonical hashes claimed
+  locked by a lock that does not read them; the runner's Olympiad and event limits; the frozen tree against the lock
+  harness; reload subcommands beyond four; a welcome lead that could be withdrawn; machine staging against the equality
+  check; `admin_setconfig` mutating values in memory. Revision 4: the root files canonical; the manifest's own test
+  (AT-PRO-07); the runner limits stated as the Citizens spec's; the guard at the reload command's entry; current leads
+  only; staging of listed machine keys only; `admin_setconfig` refused outside `dev`. (The lock harness keeps staging a
+  mutable copy and calling `TruthProfile.apply` on it before freezing, as §4.1 says.)
 - Round 2 (Codex), NO SIGN-OFF: event `config.xml` files and the LoginServer's config outside the materialised tree; a
   runner whitelist entry without its number; the lock harness and machine staging unplaced; two direct XML reloads; no
   rule for the welcome headline; no rule for creating a file or for continued properties; a no-profile fallback to

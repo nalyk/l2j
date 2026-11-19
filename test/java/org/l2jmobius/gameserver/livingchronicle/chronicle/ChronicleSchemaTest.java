@@ -24,9 +24,9 @@ class ChronicleSchemaTest
 	/** Every publication type with its delay, location flag and field rules, as the specs list them. */
 	private static final Set<String> REGISTRY = new TreeSet<>(Set.of(
 		// PACT (pact.md §4.10)
-		"pact_registered 0 0 contract_type:TEXT_FROM_FACT day:DAY parties:PUBLIC_ENTITY",
-		"pact_completed 0 0 contract_type:TEXT_FROM_FACT day:DAY outcome:TEXT_FROM_FACT parties:PUBLIC_ENTITY",
-		"pact_completed_terms 0 0 clause_kinds:TEXT_FROM_FACT contract_type:TEXT_FROM_FACT day:DAY outcome:TEXT_FROM_FACT parties:PUBLIC_ENTITY totals:COUNT",
+		"pact_registered 0 0 contract_type:TEXT_FROM_FACT day:DAY party_characters:NAME_TOKEN party_clans:PUBLIC_ENTITY",
+		"pact_completed 0 0 contract_type:TEXT_FROM_FACT day:DAY outcome:TEXT_FROM_FACT party_characters:NAME_TOKEN party_clans:PUBLIC_ENTITY",
+		"pact_completed_terms 0 0 clause_kinds:TEXT_FROM_FACT contract_type:TEXT_FROM_FACT day:DAY outcome:TEXT_FROM_FACT party_characters:NAME_TOKEN party_clans:PUBLIC_ENTITY totals:COUNT",
 		// The Ledger (black-ledger.md §4.12)
 		"ledger_wanted 0 0 cause:TEXT_FROM_FACT day:DAY mark:LEDGER_WRIT_MARK open_total:COUNT",
 		"ledger_legend 1440 1 alias:LEDGER_ALIAS day:DAY mark:LEDGER_LEGEND_MARK outcome:TEXT_FROM_FACT territory:AREA_TERRITORY value_band:TEXT_FROM_FACT",
@@ -95,24 +95,41 @@ class ChronicleSchemaTest
 			statement.execute(row(4, "'chr_realm'", "NOW(3)", 2));
 			statement.execute(row(5, "'chr_history'", "NOW(3) - INTERVAL 2 DAY", 1));
 
-			// Frozen; superseded once, by a later row of the same type; never deleted.
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET fields = '{\"kind\":\"other\"}' WHERE pub_row_id = 2"), "changing a row");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 3, supersede_reason = 'CORRECTION' WHERE pub_row_id = 2"), "superseded by another type");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 1, supersede_reason = 'CORRECTION' WHERE pub_row_id = 3"), "superseded by an earlier row");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 4, supersede_reason = 'CORRECTION', pub_row_id = 40 WHERE pub_row_id = 2"), "a changed id");
-			statement.execute("UPDATE lc_pub_row SET superseded_by = 4, supersede_reason = 'CORRECTION' WHERE pub_row_id = 2");
-			statement.execute("UPDATE lc_pub_row SET superseded_by = 5, supersede_reason = 'WITHDRAWAL' WHERE pub_row_id = 3");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 5, supersede_reason = 'CORRECTION' WHERE pub_row_id = 2"), "superseded twice");
-			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_pub_row WHERE pub_row_id = 4"), "deleting a row");
-			assertEquals("1,4,5", one(statement, "SELECT GROUP_CONCAT(pub_row_id ORDER BY pub_row_id) FROM lc_pub_visible"), "the view hides superseded rows");
-			assertEquals("2>4", one(statement, "SELECT GROUP_CONCAT(CONCAT(old_row_id, '>', next_row_id)) FROM lc_pub_successor"), "corrections are followed; withdrawals are not");
+			// A supplied future written_at is overridden by the clock: still refused before its delay.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pub_row (pub_row_id, pub_type, written_at, event_at, fields, source_fact_from, source_fact_to) VALUES (9, 'chr_history', NOW(3) + INTERVAL 2 DAY, NOW(3), '{}', 1, 2)"), "a future written_at");
+			statement.execute(row(6, "'chr_realm'", "NOW(3)", 2));
+			statement.execute(row(7, "'chr_realm'", "NOW(3)", 2));
 
-			// Names resolve only while their basis holds and their row is current.
-			statement.execute("INSERT INTO lc_pub_name (char_id, name, opted_in, changed_at) VALUES (268477000, 'Slava', TRUE, NOW(3)), (268477001, 'Ghost', FALSE, NOW(3))");
-			statement.execute("INSERT INTO lc_pub_name_ref (token, pub_row_id, char_id, basis) VALUES (UNHEX('A1000000000000000000000000000000'), 1, 268477000, 'OPTED_IN'), (UNHEX('A2000000000000000000000000000000'), 1, 268477001, 'OPTED_IN'), (UNHEX('A3000000000000000000000000000000'), 4, 268477001, 'CASTLE_LORD'), (UNHEX('A4000000000000000000000000000000'), 3, 268477000, 'OPTED_IN')");
-			assertEquals("Slava,Ghost", one(statement, "SELECT GROUP_CONCAT(name ORDER BY token) FROM lc_pub_name_visible"), "opted in, and a lord on his reign's row; not the unconsented, not a withdrawn row");
-			statement.execute("UPDATE lc_pub_name SET opted_in = FALSE WHERE char_id = 268477000");
+			// Frozen; corrected once by a later current row of its type, or withdrawn once; never deleted.
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET fields = '{\"kind\":\"other\"}' WHERE pub_row_id = 2"), "changing a row");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 3 WHERE pub_row_id = 2"), "corrected by another type");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 1 WHERE pub_row_id = 3"), "corrected by an earlier row");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 4, pub_row_id = 40 WHERE pub_row_id = 2"), "a changed id");
+			statement.execute("UPDATE lc_pub_row SET superseded_by = 6 WHERE pub_row_id = 4");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 4 WHERE pub_row_id = 2"), "corrected by a row that is no longer current");
+			statement.execute("UPDATE lc_pub_row SET superseded_by = 6 WHERE pub_row_id = 2");
+			statement.execute("UPDATE lc_pub_row SET superseded_by = 7 WHERE pub_row_id = 6");
+			statement.execute("UPDATE lc_pub_row SET withdrawn_at = NOW(3) WHERE pub_row_id = 3");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET withdrawn_at = NOW(3) WHERE pub_row_id = 2"), "withdrawing a corrected row");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pub_row SET superseded_by = 5 WHERE pub_row_id = 3"), "correcting a withdrawn row");
+			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_pub_row WHERE pub_row_id = 5"), "deleting a row");
+			assertEquals("1,5,7", one(statement, "SELECT GROUP_CONCAT(pub_row_id ORDER BY pub_row_id) FROM lc_pub_visible"), "the view hides corrected and withdrawn rows");
+			assertEquals("2>7,4>7,6>7", one(statement, "SELECT GROUP_CONCAT(CONCAT(old_row_id, '>', next_row_id) ORDER BY old_row_id) FROM lc_pub_successor"), "every correction leads to the final current row");
+
+			// Names: bases only on their row types; an opt-in token only of the current consent; re-consent revives nothing.
+			statement.execute("INSERT INTO lc_pub_name (char_id, name, opted_in, consent_gen, page_key, changed_at) VALUES (268477000, 'Slava', TRUE, 0, UNHEX('B1000000000000000000000000000000'), NOW(3)), (268477001, 'Ghost', FALSE, 0, UNHEX('B2000000000000000000000000000000'), NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute(token("A9", 1, 268477000, "'HERO'", 0)), "a hero basis on a history row");
+			assertThrows(SQLException.class, () -> statement.execute(token("A8", 1, 268477000, "'OPTED_IN'", 5)), "an opt-in of another consent generation");
+			statement.execute(token("A1", 1, 268477000, "'OPTED_IN'", 0));
+			statement.execute(token("A2", 1, 268477001, "'OPTED_IN'", 0));
+			statement.execute(token("A3", 7, 268477001, "'CASTLE_LORD'", 0));
+			assertEquals("Slava,Ghost", one(statement, "SELECT GROUP_CONCAT(name ORDER BY token) FROM lc_pub_name_visible"), "opted in, and a lord on his reign's row; not the unconsented");
+			assertEquals("Slava", one(statement, "SELECT GROUP_CONCAT(name) FROM lc_pub_character_page WHERE page_key = UNHEX('B1000000000000000000000000000000')"), "the opted-in character's page");
+			statement.execute("UPDATE lc_pub_name SET opted_in = FALSE, consent_gen = consent_gen + 1, page_key = UNHEX('B3000000000000000000000000000000') WHERE char_id = 268477000");
 			assertEquals("Ghost", one(statement, "SELECT GROUP_CONCAT(name ORDER BY token) FROM lc_pub_name_visible"), "withdrawal unnames at once");
+			statement.execute("UPDATE lc_pub_name SET opted_in = TRUE WHERE char_id = 268477000");
+			assertEquals("Ghost", one(statement, "SELECT GROUP_CONCAT(name ORDER BY token) FROM lc_pub_name_visible"), "opting in again revives no old token");
+			assertEquals(null, one(statement, "SELECT GROUP_CONCAT(name) FROM lc_pub_character_page"), "no page until a new token");
 
 			// Days and issues: one per day; entries of their sections' types, written before composition, in one issue.
 			statement.execute("INSERT INTO lc_chr_day (day, closed_at, fact_id) VALUES (CURDATE() - INTERVAL 1 DAY, NOW(3), 10)");
@@ -120,7 +137,7 @@ class ChronicleSchemaTest
 			statement.execute("INSERT INTO lc_chr_issue (issue_no, day, composed_at) VALUES (1, CURDATE() - INTERVAL 1 DAY, NOW(3) + INTERVAL 1 MINUTE)");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_issue (issue_no, day, composed_at) VALUES (2, CURDATE() - INTERVAL 1 DAY, NOW(3))"), "a second issue for a day");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (1, 1, 1, 'REALM')"), "history in the realm section");
-			statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (1, 1, 1, 'HISTORY'), (1, 2, 4, 'REALM')");
+			statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (1, 1, 1, 'HISTORY'), (1, 2, 7, 'REALM')");
 			statement.execute("INSERT INTO lc_chr_day (day, closed_at, fact_id) VALUES (CURDATE() - INTERVAL 2 DAY, NOW(3), 12)");
 			statement.execute("INSERT INTO lc_chr_issue (issue_no, day, composed_at) VALUES (2, CURDATE() - INTERVAL 2 DAY, NOW(3) - INTERVAL 1 DAY)");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (2, 1, 5, 'HISTORY')"), "a row written after its issue's composition");
@@ -129,7 +146,7 @@ class ChronicleSchemaTest
 			// Monuments: for a written, current history row; once per row, application and standing slot.
 			statement.execute("INSERT INTO lc_chr_monument_slot (town_id, slot, x, y, z, heading) VALUES (7, 1, 81000, 148000, -3400, 0), (7, 2, 81100, 148000, -3400, 0)");
 			assertThrows(SQLException.class, () -> statement.execute(monument(3, 1, "UNHEX('AA000000000000000000000000000009')")), "a monument for a withdrawn row");
-			assertThrows(SQLException.class, () -> statement.execute(monument(4, 1, "UNHEX('AA000000000000000000000000000008')")), "a monument for a realm row");
+			assertThrows(SQLException.class, () -> statement.execute(monument(7, 1, "UNHEX('AA000000000000000000000000000008')")), "a monument for a realm row");
 			statement.execute(monument(1, 1, "UNHEX('AA000000000000000000000000000001')"));
 			assertThrows(SQLException.class, () -> statement.execute(monument(5, 2, "UNHEX('AA000000000000000000000000000001')")), "one application twice");
 			assertThrows(SQLException.class, () -> statement.execute(monument(1, 2, "UNHEX('AA000000000000000000000000000002')")), "one history row twice");
@@ -165,25 +182,37 @@ class ChronicleSchemaTest
 	@Test
 	void theReadersSeeOnlyTheViews() throws SQLException
 	{
-		try (Connection connection = _database.connect();
-			Statement statement = connection.createStatement())
+		for (String role : new String[] { "lc_chronicle_web", "lc_chronicle_narrator" })
 		{
-			statement.execute("CREATE USER IF NOT EXISTS 'chronicle_web'@'%' IDENTIFIED BY 'web'");
-			statement.execute("GRANT lc_chronicle_web TO 'chronicle_web'@'%'");
-			statement.execute("SET DEFAULT ROLE lc_chronicle_web FOR 'chronicle_web'@'%'");
-		}
-		try (Connection reader = _database.connectAs("chronicle_web", "web");
-			Statement statement = reader.createStatement())
-		{
-			statement.executeQuery("SELECT COUNT(*) FROM lc_pub_visible").close();
-			statement.executeQuery("SELECT COUNT(*) FROM lc_pub_successor").close();
-			statement.executeQuery("SELECT COUNT(*) FROM lc_pub_name_visible").close();
-			statement.executeQuery("SELECT COUNT(*) FROM lc_chr_prose").close();
-			for (String table : new String[] { "lc_pub_row", "lc_pub_name", "lc_pub_name_ref", "lc_chr_pending", "lc_chr_battle_sample", "lc_chr_saga", "lc_chr_letter", "lc_fact" })
+			final String user = role.substring(3);
+			try (Connection connection = _database.connect();
+				Statement statement = connection.createStatement())
 			{
-				assertThrows(SQLException.class, () -> statement.executeQuery("SELECT COUNT(*) FROM " + table).close(), "the web role reading " + table);
+				statement.execute("CREATE USER IF NOT EXISTS '" + user + "'@'%' IDENTIFIED BY 'pw'");
+				statement.execute("GRANT " + role + " TO '" + user + "'@'%'");
+				statement.execute("SET DEFAULT ROLE " + role + " FOR '" + user + "'@'%'");
 			}
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_prose (dto_hash, lang, style, choices, checked_at) VALUES (UNHEX(SHA2('x', 256)), 'EN', 'plain', '[]', NOW(3))"), "the web role writing prose");
+			try (Connection reader = _database.connectAs(user, "pw");
+				Statement statement = reader.createStatement())
+			{
+				for (String view : new String[] { "lc_pub_visible", "lc_pub_successor", "lc_pub_name_visible", "lc_pub_character_page", "lc_chr_prose" })
+				{
+					statement.executeQuery("SELECT COUNT(*) FROM " + view).close();
+				}
+				for (String table : new String[] { "lc_pub_row", "lc_pub_name", "lc_pub_name_ref", "lc_chr_pending", "lc_chr_battle_sample", "lc_chr_saga", "lc_chr_letter", "lc_fact", "lc_ledger_contract" })
+				{
+					assertThrows(SQLException.class, () -> statement.executeQuery("SELECT COUNT(*) FROM " + table).close(), role + " reading " + table);
+				}
+				final String insert = "INSERT INTO lc_chr_prose (dto_hash, lang, style, choices, checked_at) VALUES (UNHEX(SHA2('" + role + "', 256)), 'EN', 'plain', '[]', NOW(3))";
+				if (role.equals("lc_chronicle_narrator"))
+				{
+					statement.execute(insert);
+				}
+				else
+				{
+					assertThrows(SQLException.class, () -> statement.execute(insert), "the web role writing prose");
+				}
+			}
 		}
 	}
 
@@ -194,6 +223,11 @@ class ChronicleSchemaTest
 			result.next();
 			return result.getString(1);
 		}
+	}
+
+	private static String token(String hex, long row, int character, String basis, int generation)
+	{
+		return "INSERT INTO lc_pub_name_ref (token, pub_row_id, char_id, basis, consent_gen) VALUES (UNHEX('" + hex + "000000000000000000000000000000'), " + row + ", " + character + ", " + basis + ", " + generation + ")";
 	}
 
 	private static String fact(long id, String at)

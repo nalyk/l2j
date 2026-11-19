@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: reviewed (revision 7; signed off with aden-signal.md in Signal's round 5; record in §12)
+- Status: draft (revision 8: publication rules for chronicle.md, under review; revision 7 was signed off; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -59,7 +59,9 @@ lc_disclosure(target_char INT, witness_ref VARCHAR(32), at TIMESTAMP(3), units I
               PRIMARY KEY(target_char, witness_ref, at))
 lc_disclosure_cell(target_char INT, at TIMESTAMP(3), cell INT, expires_at TIMESTAMP(3), PRIMARY KEY(target_char, at, cell))
 lc_pub_type(pub_type VARCHAR(48) PK, min_delay_minutes INT, location_related BOOLEAN)
-lc_pub_field_rule(pub_type VARCHAR(48), field VARCHAR(48), rule {PUBLIC_ENTITY|AREA_TERRITORY|DAY|COUNT|TEXT_FROM_FACT}, PRIMARY KEY(pub_type, field))
+lc_pub_field_rule(pub_type VARCHAR(48), field VARCHAR(48), rule {PUBLIC_ENTITY|AREA_TERRITORY|DAY|COUNT|TEXT_FROM_FACT|
+                  LEDGER_WRIT_MARK|LEDGER_LEGEND_MARK|LEDGER_ALIAS|NAME_TOKEN|PUB_REF|REPLAY_FRAMES|MODERATED_TEXT|SAGA_ITEM},
+                  PRIMARY KEY(pub_type, field))
 lc_intel_copy(module VARCHAR(16), table_name VARCHAR(64), row_key VARCHAR(64), intel_id BIGINT, expires_at TIMESTAMP(3),
               PRIMARY KEY(module, table_name, row_key, intel_id))
 lc_witness_suppression(witness_ref VARCHAR(32), subject_char INT, suppressed_until TIMESTAMP(3), source_fact_id BIGINT, PRIMARY KEY(witness_ref, subject_char))
@@ -236,14 +238,19 @@ moment.
 ### 4.7 Publication
 
 `lc_pub_*` rows are of registered types only (`lc_pub_type`); each field of each type has a rule (`lc_pub_field_rule`: a
-public entity, such as a castle, a clan, a hero; an area at `TERRITORY` or coarser; a day; a count; text taken from a
+public entity, such as a castle or a clan, never a character (characters are always name tokens, chronicle.md §2.2); an area at `TERRITORY` or coarser; a day; a count; text taken from a
 fact). An unknown type or field is refused (fail closed). Every type has a minimum delay before a row may be written
 about an event; a **location-related** type (a battle map, a saga replay, a raid, anything naming an area and a time)
 has at least `PublicationTacticalDelayMinutes` (default 1440, 17 §1's "≥24 h"), and the registry refuses a lower one. Sealed contract terms, hidden identities (aliases, informants, marks, depositors) and anything
 derived from intel are never publishable, except through three field rules that check their condition when the row is
 written: `LEDGER_WRIT_MARK` (a character, only while an open Writ names them: Writs are public by design, 16 §2),
 `LEDGER_LEGEND_MARK` (the mark of a terminal Black Contract the Ledger promoted, black-ledger.md §4.12) and `LEDGER_ALIAS`
-(an alias, never its owner). A depositor, an informant or an alias's owner is never publishable, exposed or not. The website and narrator read the `lc_pub_*` tables with a database user that
+(an alias, never its owner). A depositor, an informant or an alias's owner is never publishable, exposed or not. Five
+further rules serve Chronicle's row store (chronicle.md §2.3): `NAME_TOKEN` (a per-row name token with a basis that must
+hold when it is read), `PUB_REF` (a current, earlier row), `REPLAY_FRAMES` (battle samples of at least the minimum count and
+place marks), `MODERATED_TEXT` (approved text naming no character), `SAGA_ITEM` (an item lifecycle, never an object id).
+Rows are stored in Chronicle's `lc_pub_row`, written only once due by the database clock; at startup the Intel Service
+writes every location-related type's `min_delay_minutes` as `PublicationTacticalDelayMinutes` (never below 1440). The website and narrator read the `lc_pub_*` tables with a database user that
 can read nothing else (04 §4).
 
 ### 4.8 The Black Ledger's operations
@@ -411,6 +418,11 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 3. **NPCs have no notion of having seen anyone.** → observation is new, bounded and measured (§3).
 
 ## 12. Review record
+
+- Revision 8 (after the revision-7 sign-off): the `NAME_TOKEN`, `PUB_REF`, `REPLAY_FRAMES`, `MODERATED_TEXT` and
+  `SAGA_ITEM` rules; characters always as name tokens; rows in Chronicle's store, written when due by the clock; the
+  tactical delay written into the registry at startup; §2's rule list completed with the three `LEDGER_*` rules §4.7 and
+  the DDL already held. For chronicle.md, under review with it.
 
 - Revision 7 signed off with aden-signal.md in Signal's round 5.
 - Revision 7 (after the revision-6 sign-off): Aden Signal needs a presence lifecycle and a region read bound to mutual

@@ -1,6 +1,6 @@
 # SPEC-CHR — Chronicle of Aden
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 17 (Chronicle of Aden); 01 §2.6 (deterministic engine, optional narration); 02 §7 (three processes; the
   narrator an external local service), §6 (budgets); 04 §4 (publication DTOs, a separate database user), §8 (narrator
   down); 10 §8 (Genesis: the Chronicle runs from day 0); 12 §9 (Aden Remembers decides what became history); 14 §7
@@ -38,39 +38,54 @@ of any module, hidden identities and character ids never enter what they read.
 
 ```text
 lc_pub_row(pub_row_id PK, pub_type, written_at, event_at, fields JSON, source_fact_from, source_fact_to,
-           superseded_by NULL → lc_pub_row, supersede_reason {CORRECTION|WITHDRAWAL} NULL)
-lc_pub_visible       = current rows: not superseded                                        (a view)
-lc_pub_successor     = (old row, its current row) for rows superseded by CORRECTION          (a view)
+           superseded_by NULL → lc_pub_row, withdrawn_at NULL)
+lc_pub_visible       = current rows: neither superseded nor withdrawn                       (a view)
+lc_pub_successor     = (old row, its final current row) along corrections                   (a view)
 ```
 
-- **Written when due.** A module writes a row only once its delay has passed: a trigger refuses a row unless
-  `written_at` ≥ `event_at` + its type's delay, and `event_at` ≥ the `occurred_at` of its newest source fact
+- **Written when due.** A module writes a row only once its delay has passed: the trigger sets `written_at` to the
+  database's clock at the insert, whatever the writer supplied, and refuses the row unless that is ≥ `event_at` + its
+  type's delay, and `event_at` ≥ the `occurred_at` of its newest source fact
   (`source_fact_to`, which must exist in `lc_fact`), so the delay is counted from the facts, not from a timestamp the
   writer chose. Chronicle's own pending publications wait in its private `lc_chr_pending` until due. A location-related
   type's delay in `lc_pub_type` follows the Intel Service's `PublicationTacticalDelayMinutes`, never below 1440 (written
   by the Intel Service at startup; an amendment, §11).
-- **Frozen.** A row never changes, except that it may be superseded once, by a later row of the same type, with a
-  reason: `CORRECTION` (the new row replaces it; archives follow `lc_pub_successor`) or `WITHDRAWAL` (§4.1: it simply
-  disappears). Rows are never deleted.
-- **Readers** are database roles (§4.9): `lc_chronicle_web` and `lc_chronicle_narrator` can read `lc_pub_visible`,
-  `lc_pub_successor`, `lc_pub_name_visible` and `lc_chr_prose` (the narrator role may also write `lc_chr_prose`), and
-  nothing else; neither can read `lc_pub_row`, `lc_pub_name_ref`, `lc_pub_name` or any other table.
+- **Frozen.** A row never changes, except once: it is **corrected** (`superseded_by`: a later, current row of the same
+  type replaces it; archives follow `lc_pub_successor` to the final current row) or **withdrawn** (`withdrawn_at`: it
+  disappears, with no replacement, §4.1), never both. Rows are never deleted.
+- **Readers** are database roles (§4.9): `lc_chronicle_web` can read `lc_pub_visible`, `lc_pub_successor`,
+  `lc_pub_name_visible`, `lc_pub_character_page` and `lc_chr_prose`; `lc_chronicle_narrator` the same and may write
+  `lc_chr_prose`; neither can read `lc_pub_row`, `lc_pub_name_ref`, `lc_pub_name` or any other table.
 
 ### 2.2 Names
 
 ```text
-lc_pub_name(char_id PK, name, opted_in BOOLEAN, changed_at)                      -- private
-lc_pub_name_ref(token BINARY(16) PK, pub_row_id, char_id, basis {OPTED_IN|HERO|CASTLE_LORD|WRIT_MARK})  -- private
-lc_pub_name_visible  = (token, name) for tokens whose basis holds now                  (a view)
+lc_pub_name(char_id PK, name, opted_in BOOLEAN, consent_gen INT, page_key BINARY(16), changed_at)   -- private
+lc_pub_name_ref(token BINARY(16) PK, pub_row_id, char_id, basis {OPTED_IN|HERO|CASTLE_LORD|PACT_PARTY|WRIT_MARK|
+                LEGEND_MARK}, consent_gen INT, basis_ref BIGINT NULL)                                       -- private
+lc_pub_name_visible   = (token, name) for tokens whose basis holds now                 (a view)
+lc_pub_character_page = (page_key, name, token) for a character's current opted-in tokens (a view)
 ```
 
-A row never holds a character id or a name: it holds **tokens**, one per (row, character), random, so two rows naming
-the same character share nothing a reader can link. `lc_pub_name_visible` returns a token's current name only while its
-basis holds: `OPTED_IN` while the character's `history_publishable` is set (mirrored into `lc_pub_name` from Wayfarer's
-durable flag facts, §5); `HERO`, `CASTLE_LORD`, `WRIT_MARK` for the rows about that role (written only by the types whose
-rules allow that basis, §2.3), the last while the Writ is open (black-ledger.md §4.12). A token that does not resolve
-renders as "an adventurer" in the reader's language. Character pages are built from the opted-in tokens of one
-character by the website through `lc_pub_name_visible` joined server-side by name, and disappear with the flag.
+No row of **any** module's type holds a character id or a name: every field naming a character holds **tokens**, one
+per (row, character), random, so two rows naming the same character share nothing a reader can link. The field's rule
+decides the token's basis: a `NAME_TOKEN` field's declared basis (§2.3); `LEDGER_WRIT_MARK` → `WRIT_MARK` (its
+`basis_ref` the Writ); `LEDGER_LEGEND_MARK` → `LEGEND_MARK`; PACT's `party_characters` → `PACT_PARTY` (pact.md §4.10).
+`PUBLIC_ENTITY` fields never hold a character. A trigger allows each basis only on its row types: `HERO` in `chr_arena`,
+`CASTLE_LORD` in `chr_realm` and `chr_history`, `PACT_PARTY` in PACT's types, `WRIT_MARK` in `ledger_wanted`,
+`LEGEND_MARK` in `ledger_legend`, `OPTED_IN` in Chronicle's other types. `lc_pub_name_visible` returns a token's name only
+while its row is current and its basis holds:
+- `OPTED_IN` while the character's flag is set **and** the token's `consent_gen` equals the character's: a withdrawal
+  raises `consent_gen` (and draws a new `page_key`), so a token written before a withdrawal never resolves again, even if
+  the character opts in later;
+- `WRIT_MARK` while its Writ is open (black-ledger.md §4.12);
+- `HERO`, `CASTLE_LORD`, `PACT_PARTY`, `LEGEND_MARK`: always, for those rows only: they name a role the game itself made
+  public in that event (the period's hero, the reign's lord, a party to a contract registered as public, a legend the
+  Ledger promoted), and the row is about that event.
+
+A token that does not resolve renders as "an adventurer" in the reader's language. A character page is
+`lc_pub_character_page` for one `page_key`: only current-generation opted-in tokens, so it disappears with the flag and a
+new one, unlinkable to the old, begins if the character opts in again.
 
 ### 2.3 Publication types
 
@@ -79,7 +94,7 @@ Chronicle's types; their field rules are registered by V016 (new rules marked *,
 
 | Type | Fields (rule) | Delay |
 |---|---|---|
-| `chr_realm` | kind (`TEXT_FROM_FACT`: owner change, law enacted or ended, treaty registered), castle, fortress, clan (`PUBLIC_ENTITY`), lord (`NAME_TOKEN`* basis `CASTLE_LORD`), day (`DAY`) | none (already public in the game) |
+| `chr_realm` | kind (`TEXT_FROM_FACT`: owner change, law enacted or ended), castle, fortress, clan (`PUBLIC_ENTITY`), lord (`NAME_TOKEN`* basis `CASTLE_LORD`), day (`DAY`) | none (already public in the game) |
 | `chr_history` | kind, title (`TEXT_FROM_FACT`), period (`DAY`), territory (`AREA_TERRITORY`), clans (`PUBLIC_ENTITY`), characters (`NAME_TOKEN`* basis `OPTED_IN` or `CASTLE_LORD`), counts and durations (`COUNT`) | tactical |
 | `chr_monument` | history row (`PUB_REF`* to a `chr_history` row), town (`PUBLIC_ENTITY`), slot (`COUNT`) | its history row's |
 | `chr_saga_entry` | item (`SAGA_ITEM`*), entry kind (`TEXT_FROM_FACT`), territory (`AREA_TERRITORY`), day (`DAY`), characters (`NAME_TOKEN`* basis `OPTED_IN`), counts (`COUNT`) | tactical |
@@ -90,9 +105,11 @@ Chronicle's types; their field rules are registered by V016 (new rules marked *,
 | `chr_gazette` | issue (`COUNT`), day (`DAY`), sections (`PUB_REF`* list) | none (each referenced row already written, so already due) |
 
 The new rules: `NAME_TOKEN` (a token of `lc_pub_name_ref` with a basis the field allows); `PUB_REF` (the id of a row that
-exists, is current, and whose `written_at` is at or before the referencing row's); `REPLAY_FRAMES` (§4.7's frame schema:
-minute, cell index on the battle's grid, side, a count of at least `ReplayMinCount`; nothing else);
-`MODERATED_TEXT` (text approved under §4.5, with no character name in it); `SAGA_ITEM` (an item lifecycle id of a saga,
+exists, is current, and whose `written_at` is at or before the referencing row's); `REPLAY_FRAMES` (below);
+`MODERATED_TEXT` (text approved under §4.5, with no character name in it); `REPLAY_FRAMES` holds two lists: **samples**
+(minute, cell index on the battle's grid, side, count ≥ `ReplayMinCount`) and **marks** (minute, kind among `KILLS`,
+`WARD`, `GATE`, `SEAL`, a reference that is a public entity: the ward's territory, the gate's door, the castle; a count
+≥ 1), nothing else, so a mark is an event of a place, never of a person; `SAGA_ITEM` (an item lifecycle id of a saga,
 with its item template; never an object id).
 
 ### 2.4 Chronicle's own tables
@@ -154,11 +171,11 @@ Chronicle's projector consumes durable facts in log order (fact-journal.md §4),
 refused row is counted and alarmed, never written in part. `lc why pub <type> <row>` shows its source facts.
 
 **Withdrawal.** When Wayfarer's `history_publishable` flag is cleared (a durable fact), Chronicle in one transaction sets
-`opted_in` false (so every `OPTED_IN` token of the character stops resolving everywhere at once, archived issues included)
-and supersedes with `WITHDRAWAL` every row that exists only because of the character: its milestones, its letters, its
-character page entries, its saga entries. Rows that name it among others stay and render it as "an adventurer"; tokens
-are per row, so nothing links those rows to each other or to the character. Setting the flag again resolves tokens only
-for rows written afterwards (a withdrawn row is not restored).
+`opted_in` false, raises `consent_gen`, draws a new `page_key` (so every `OPTED_IN` token of the character stops
+resolving everywhere at once, archived issues included, for good) and sets `withdrawn_at` on every row that exists only
+because of the character: its milestones, its letters, its saga entries. Rows that name it among others stay and render
+it as "an adventurer"; tokens are per row, so nothing links those rows to each other or to the character. Opting in
+again resolves only tokens written afterwards.
 
 **The humans-only view** (actor-identity.md §3, publication domain) never filters individual events or names. It shows,
 per domain and month, the number of events with at least `HumansMinPrincipals` (3) human participant principals and the
@@ -190,12 +207,13 @@ per-event or per-name disclosure of origin, not immunity to inference.
   repeat a no-op. Mobius's own reset callback, which runs once at startup however many days were missed and whose marker
   is saved separately (`DailyResetManager.java:75-88`, `:99`, `:129-131`), is not used.
 - **Composition.** Issue *N* for day *D* is composed in one transaction after `GazetteSettleMinutes` (30) past the day's
-  end: its entries are the current rows of the section types below whose `written_at` lies in *D*'s span and that are in
-  no issue, each in its section, ordered by `written_at` then id; letters at most `LettersPerIssue`, by approval time,
-  the rest carried to the next issue. A row committed after the composition goes to the next issue. A crash before the
+  end: its entries are **every current row of the section types that is in no issue yet and was written before the end of
+  *D*** (so the backlog, rows committed after an earlier composition and letters carried over, comes first), each in its
+  section, ordered by `written_at` then id; letters at most `LettersPerIssue`, by approval time, the rest waiting for the
+  next issue. A day with no eligible row closes without an issue, so every issue has at least one entry. A crash before the
   commit leaves nothing composed, and the recovery composes from what is eligible then; once committed, an issue never
   changes, and an entry whose row is later corrected renders its successor.
-- **Sections**: The Realm (`chr_realm`, `pact_registered`, `pact_completed`), Markets (`world_market`, `signal_demand`),
+- **Sections**: The Realm (`chr_realm`, `pact_registered`, `pact_completed`, `pact_completed_terms`), Markets (`world_market`, `signal_demand`),
   Roads (`world_caravan`), Law and Disorder (`ledger_wanted`, `ledger_legend`), Arena (`chr_arena`), Obituaries of Legends
   (`chr_obituary`), Letters (`chr_letter`), History (`chr_history`). No other type enters an issue.
 - **Reading.** The issue is free on the website. In the game, a Newsboy sells a reading of an issue for
@@ -265,14 +283,13 @@ a style and a language; it has no tools and no state. It **states no fact**:
 1. **Templates state every fact.** Each type's template is a fixed sequence of sentences over the row's fields.
 2. **Choices.** A template sentence offers closed lists of alternatives (verbs, connectives, epithets) for its slots, each
    alternative written by us and true for every row the template serves ("held", "kept", "defended" for a successful
-   defence). The narrator returns only the index chosen for each slot; anything else is discarded.
-3. **Flavour.** It may add one paragraph of atmosphere that names nothing: it is accepted only if it contains no
-   placeholder, no digit, no number word, no URL and no word outside the language's lexicon of common words
-   (`data/lc/narrator/lexicon_<lang>.txt`, which holds no proper noun), and it is rendered apart, marked as the bard's.
-4. **Cache.** Choices and flavour are stored per (DTO hash, language, style) in `lc_chr_prose`; names resolve at render.
-   Narrator down or slow (`NarratorTimeoutSeconds`): the templates' first alternatives, no flavour (04 §8).
+   defence). A template may also offer **flavour sentences**, also written by us and true for any row it serves (weather,
+   song, the mood of a town square: never a claim about what anyone did). The narrator returns only the indices it
+   chose; anything else is discarded.
+3. **Cache.** The choices are stored per (DTO hash, language, style) in `lc_chr_prose`; names resolve at render. Narrator
+   down or slow (`NarratorTimeoutSeconds`): the templates' first alternatives, no flavour (04 §8).
 
-So narrated text can say nothing the template does not, and the flavour can say nothing about anyone.
+So narrated text is always text we wrote, chosen; it can state nothing the template does not.
 
 ### 4.9 The website
 
@@ -345,7 +362,7 @@ was missed, idempotent).
 | CHR-R01 | Every public output MUST be rendered only from current rows through the views, by roles that can read nothing else. | AT-CHR-01 |
 | CHR-R02 | No row MUST be written before its type's delay counted from its newest source fact, and battle samples MUST stay private. | AT-CHR-02 |
 | CHR-R03 | A character MUST be named only through a token whose basis holds at render; withdrawal MUST unname them everywhere at once and supersede their own rows. | AT-CHR-03 |
-| CHR-R04 | Narrated text MUST consist of template choices and name-free flavour only. | AT-CHR-04 |
+| CHR-R04 | Narrated text MUST consist only of our template alternatives and flavour sentences, chosen. | AT-CHR-04 |
 | CHR-R05 | Every game day MUST close once, its issue composed once from its span's rows, each row in at most one issue. | AT-CHR-05 |
 | CHR-R06 | A monument MUST be raised at most once, only for a written row, and re-spawned from its row. | AT-CHR-06 |
 | CHR-R07 | Criers MUST be heard only inside their town, at most once per interval, each proclamation once. | AT-CHR-07 |
@@ -358,11 +375,11 @@ was missed, idempotent).
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-CHR-00 | integration | the migration applies; the registry holds exactly §2.3's types, fields, rules and delays and those the other modules' specs list (a table in the test, compared row for row); triggers and keys refuse a row before its delay, one whose `event_at` precedes its newest source fact or whose source fact is missing, a changed or deleted row, a supersession by an earlier, missing or other-type row or a second one, a second day or issue for a day, a row in two issues, a second monument for a history row, application or standing slot, an event on an ended saga, a battle sample below two, a letter over its length or outside its machine; the views hide superseded rows and unresolved names |
-| AT-CHR-01 | integration | connected as each role: `lc_pub_row`, `lc_pub_name_ref`, `lc_pub_name`, pending rows, samples and sagas are refused; the views read; a property test over every fact type finds no sealed term, live location, state value, hidden identity, intel content or character id in any view |
+| AT-CHR-00 | integration | the migration applies; the registry holds exactly §2.3's types, fields, rules and delays and those the other modules' specs list (a table in the test, compared row for row); triggers and keys refuse a row before its delay (a supplied future `written_at` is overridden by the clock), one whose `event_at` precedes its newest source fact or whose source fact is missing, a changed or deleted row, a correction by an earlier, other-type or non-current row, a second correction, a withdrawal of a corrected row, a basis on the wrong row type, a second day or issue for a day, a row in two issues, a second monument for a history row, application or standing slot, an event on an ended saga, a battle sample below two, a letter over its length or outside its machine; the views hide corrected and withdrawn rows and unresolved names; the successor view leads through two corrections to the final row |
+| AT-CHR-01 | integration | connected as the web and the narrator role (and the narrator writing prose): `lc_pub_row`, `lc_pub_name_ref`, `lc_pub_name`, pending rows, samples and sagas are refused; the views read; a property test over every fact type finds no sealed term, live location, state value, hidden identity, intel content or character id in any view |
 | AT-CHR-02 | integration | a location-related row refused before its delay from its source fact; raising the tactical delay raises the database floor; a replay dated from its battle's end; cells below the minimum absent |
-| AT-CHR-03 | integration | each basis resolves only while it holds; a withdrawal unnames the character in an archived issue at once and supersedes its milestones, letters and saga entries; two rows naming one character share no token; for one event with a human and a citizen swapped in a role, every per-event and per-name response is identical, and the humans-only view changes at most a monthly aggregate |
-| AT-CHR-04 | unit | the narrator protocol: only valid choice indices are kept; flavour with a placeholder, a digit, a number word, a URL or a word outside the lexicon (an invented name) is dropped, in EN, RO and RU; a reversed relationship cannot be expressed (no choice says it); narrator down gives the first alternatives |
+| AT-CHR-03 | integration | each basis resolves only while it holds and only on its row types; a withdrawal unnames the character in an archived issue at once and withdraws its milestones, letters and saga entries; opting in again resolves no old token and gives a new, unlinked page; two rows naming one character share no token; for one event with a human and a citizen swapped in a role, every per-event and per-name response is identical, and the humans-only view changes at most a monthly aggregate |
+| AT-CHR-04 | unit | the narrator protocol: only valid choice indices are kept, any free text discarded, in EN, RO and RU; every alternative and flavour sentence of every template is checked by a test that it holds for every row its template serves (a reversed relationship has no alternative); narrator down gives the first alternatives |
 | AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
 | AT-CHR-06 | integration, restart, fault | a monument raised once under a crash at each step, only after its row is written; re-spawned after a restart; retirement order; a withdrawn history row's monument retires |
 | AT-CHR-07 | integration | a player just outside the town zone, though visible to the crier, does not hear it; one proclamation per interval per crier across a restart; each once |
@@ -391,12 +408,23 @@ was missed, idempotent).
   runs under the object's stack lock like any operation that reads an object (§3.3).
 - pact.md §4.10: `pact_completed` split into `pact_completed` (type, parties, outcome, day) and `pact_completed_terms`
   (with clause kinds and totals, written only for `PUBLIC` and `publishable` contracts), so the registry itself refuses
-  terms on any other row (V011).
+  terms on any other row; and `parties` split into `party_clans` (`PUBLIC_ENTITY`) and `party_characters` (`NAME_TOKEN`
+  basis `PACT_PARTY`) (V011).
+- black-ledger.md needs no change: its mark fields keep their rules; that the stored value is a token of the matching
+  basis is the row store's rule (§2.2).
 - wayfarers-memory.md: the flag's set and clear as durable facts (`Mem.PublicationFlag`).
 - the registry rows of PACT's, the Ledger's and Signal's types in their own migrations (V011, V012, V013), as data.
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: flavour paragraphs could still state invented facts; re-enabling consent revived old
+  tokens; role bases unconditioned and pages unidentifiable; a withdrawal needed a visible replacement; frames could not
+  carry marks; a future `written_at` published at once; a non-current successor accepted and only one hop followed;
+  carry-over outside the day-span rule; `pact_completed_terms` outside the Gazette; other modules' character fields not
+  tokens; tests missing for these. Revision 3: authored flavour sentences, chosen; a consent generation and page key;
+  bases per row type; `withdrawn_at` without a successor; samples and place marks in frames; the clock sets `written_at`;
+  current successors and a view to the final row; eligibility of the whole backlog, an issue only with an entry; the terms
+  type in The Realm; tokens for every character field, PACT's parties split; the tests.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 16 findings: a lexical narrator check that lets relationships
   be invented; letters carrying names past withdrawal; a humans-only filter revealing origin in small events; withdrawal
   leaving stable ids attributable; reader grants that include delayed rows and every name; reference and replay fields

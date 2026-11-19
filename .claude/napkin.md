@@ -74,4 +74,4 @@
 2. **[2026-11-19] Git hygiene CONTINUOUSLY, and validate it**
    Do instead: follow Execution & Validation item 1 after every green step, without being asked.
 3. **[2026-11-18] `main` and history belong to the user**
-   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, after its fixes); never force-push or delete branches without it.
+   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, and again for the review answers + first intake); merge with `--no-ff -F <file>` (merge does not read `-F -`), and check `git rev-parse main^{tree}` equals the gated tree before pushing; never force-push or delete branches without it.

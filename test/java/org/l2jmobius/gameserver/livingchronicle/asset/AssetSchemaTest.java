@@ -26,6 +26,8 @@ class AssetSchemaTest
 {
 	private static final String OP = "UNHEX('00112233445566778899AABBCCDDEEFF')";
 	private static final String OTHER_OP = "UNHEX('FFEEDDCCBBAA99887766554433221100')";
+	/** The operation of the service-mail test; never OTHER_OP, which the constraint test needs absent. */
+	private static final String MAIL_OP = "UNHEX('0F0E0D0C0B0A09080706050403020100')";
 
 	private static TestDatabase _database;
 
@@ -52,7 +54,7 @@ class AssetSchemaTest
 				tables.add(result.getString(1));
 			}
 		}
-		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery"), tables);
+		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery", "lc_asset_pending"), tables);
 	}
 
 	@Test
@@ -97,9 +99,56 @@ class AssetSchemaTest
 			statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OP + ", 268477000, 'PAYOUT')");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OP + ", 268477000, 'REFUND')"));
 
+			// One pending mark per character and operation.
+			statement.execute("INSERT INTO lc_asset_pending (char_id, op_id, since) VALUES (268477000, " + OP + ", NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_asset_pending (char_id, op_id, since) VALUES (268477000, " + OP + ", NOW(3))"));
+
 			// A frozen module says why.
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_module_state (module, state, since) VALUES ('PACT', 'FROZEN', NOW(3))"));
 			statement.execute("INSERT INTO lc_module_state (module, state, reason, since) VALUES ('PACT', 'FROZEN', 'ASSET-INV03', NOW(3))");
+		}
+	}
+
+	/**
+	 * Service mail (spec §2.1) as the service writes it: a system message from sender -1 that cannot be rejected, is not cash on delivery and never expires, with an attachment row owned by -1 in MAIL. Upstream's own startup cleanup keeps both (DatabaseIdManager.java:68 keeps -1 MAIL rows of a sender -1 message), and the attachment's object id stays reserved.
+	 */
+	@Test
+	void serviceMailPassesUpstreamCleanupAndKeepsItsIdReserved() throws Exception
+	{
+		final int message = 268800001;
+		final int attachment = 268800002;
+		final int strayMail = 268800003;
+		try (Connection connection = _database.connect();
+			Statement statement = connection.createStatement())
+		{
+			statement.execute("INSERT INTO messages (messageId, senderId, receiverId, subject, content, expiration, reqAdena, hasAttachments, sendBySystem) VALUES (" + message + ", -1, 268477000, 'Notarius', 'Contract 7', 253402300799000, 0, 'true', 1)");
+			statement.execute("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use) VALUES (-1, " + attachment + ", 57, 1000, 0, 'MAIL', " + message + ", 0)");
+			// A -1 MAIL row of no system message is what upstream deletes: proof the rule ran.
+			statement.execute("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use) VALUES (-1, " + strayMail + ", 57, 1, 0, 'MAIL', 999999, 0)");
+			statement.execute("INSERT INTO lc_asset_op (op_id, module, action, subject_ref, committed_at) VALUES (" + MAIL_OP + ", 'PACT', 'release', 7, NOW(3))");
+			statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (" + message + ", " + MAIL_OP + ", 268477000, 'PAYOUT')");
+
+			for (String cleanup : queries("CLEANUP_QUERIES"))
+			{
+				statement.execute(cleanup);
+			}
+
+			assertEquals(1, count(statement, "SELECT COUNT(*) FROM messages WHERE messageId = " + message + " AND senderId = -1 AND sendBySystem <> 0 AND reqAdena = 0 AND hasAttachments = 'true'"));
+			assertEquals(1, count(statement, "SELECT COUNT(*) FROM items WHERE object_id = " + attachment + " AND owner_id = -1 AND loc = 'MAIL' AND loc_data = " + message));
+			assertEquals(0, count(statement, "SELECT COUNT(*) FROM items WHERE object_id = " + strayMail), "the cleanup did not run: the stray -1 MAIL row is still there");
+
+			final Set<Integer> used = new HashSet<>();
+			for (String extract : queries("EXTRACT_USED_OBJECT_ID_QUERIES"))
+			{
+				try (ResultSet result = statement.executeQuery(extract))
+				{
+					while (result.next())
+					{
+						used.add(result.getInt(1));
+					}
+				}
+			}
+			assertTrue(used.contains(attachment) && used.contains(message), "the mail's ids are not reserved");
 		}
 	}
 

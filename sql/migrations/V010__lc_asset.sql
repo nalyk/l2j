@@ -143,3 +143,12 @@ CREATE TABLE lc_mail_delivery (
 	KEY idx_mail_delivery_op (op_id),
 	CONSTRAINT fk_mail_delivery_op FOREIGN KEY (op_id) REFERENCES lc_asset_op (op_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- A character whose items an operation has taken in memory and not yet committed or refunded (spec §2.4): committed on
+-- its own before the first debit, deleted by the operation's or the refund's transaction; login waits while one exists.
+CREATE TABLE lc_asset_pending (
+	char_id INT NOT NULL,
+	op_id BINARY(16) NOT NULL,
+	since TIMESTAMP(3) NOT NULL,
+	PRIMARY KEY (char_id, op_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

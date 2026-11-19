@@ -12,10 +12,12 @@
 2. **[2026-11-18] Builds and tests run on ultra, never on WSL**
    Do instead: `scp` the changed files to `nalyk@build-host:gits/l2j/...`, run `./build.sh` (full gate) or `./build.sh test -Dtest.only=<Class>Test` there, write output to `build/gate.log` and read `build/test-reports/TEST-*.xml` for failures.
 3. **[2026-11-18] A golden is recorded by copying, and trusted only after a second run**
-   Do instead: on ultra copy `build/lock-actual/<golden>` to `test/lock/<golden>`, rerun the gate, and commit only when it reproduces byte for byte; then `scp` the golden back.
-4. **[2026-11-19] Ultra keeps files you `scp`'d even after a local `git stash`**
+   Do instead: on ultra copy `build/lock-actual/<golden>` to `test/lock/<golden>`, rerun the classes whose goldens changed (`./build.sh test -Dtest.only=<Class>Test`), commit only when they reproduce byte for byte; then `scp` the goldens back.
+4. **[2026-11-19] A gate is 8 minutes: run it in the background and prepare the next step meanwhile**
+   Do instead: start the gate with `run_in_background`, write the next patch as a script in the scratchpad (dry-run it on copies), apply it only after the current step is committed.
+5. **[2026-11-19] Ultra keeps files you `scp`'d even after a local `git stash`**
    Do instead: after stashing or reverting locally, `git checkout -- <files>` on ultra too, and run `git status --short` there before every gate run.
-5. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
+6. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
    Do instead: judge the gate by `BUILD SUCCESSFUL` in `build/gate.log` and by `failures="0"` in the report XML, not by the shell's exit code.
 
 ## Lock Harness Guardrails
@@ -35,8 +37,10 @@
    Do instead: spawn target and actor in the `Arena` before `setTarget`/`useMagic`; `Player.setTarget` drops unspawned targets.
 8. **[2026-11-19] The random spawn system rewrites a Spawn's own coordinates**
    Do instead: use `spawn.getSpawnLocation()` for the datapack spot, never `spawn.getX()`.
-9. **[2026-11-19] Territory containment is three-dimensional**
-   Do instead: check a territory point with `isInsideZone(x, y, z)`; the 2D `isInsideZone(x, y)` tests bans at the territory's lowest Z and rejects legal points above a banned band.
+9. **[2026-11-19] Territory containment is judged at the creature's height**
+   Do instead: use `NpcSpawnTerritory.holds(x, y, z)` (CP-0006); `isInsideZone(x, y)` tests bans at the territory's lowest Z and turns out legal points above a banned band.
+10. **[2026-11-19] Locks run in the truth profile**
+   Do instead: classify every new `config/Custom/*.ini` in `TruthProfile.MODULES` (its on-switch, held off, or neutral); a settings change shows in LOCK-CONFIG-0001.
 
 ## Core & Datapack Guardrails
 1. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
@@ -58,4 +62,4 @@
 2. **[2026-11-19] Git hygiene CONTINUOUSLY, and validate it**
    Do instead: follow Execution & Validation item 1 after every green step, without being asked.
 3. **[2026-11-18] `main` and history belong to the user**
-   Do instead: never merge into `main`, force-push or delete branches without the user's say.
+   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, after its fixes); never force-push or delete branches without it.

@@ -275,7 +275,7 @@ can read nothing else (04 §4).
 | Fact | Delivery | Fields |
 |---|---|---|
 | `Intel.Disclosed` | outbox | intel id, requester (char), purpose, precision, units spent, granted (true for a grant of an existing item) |
-| `Intel.Suppressed` | outbox | witness, subject, until, bribe fact |
+| `Intel.Suppressed` | outbox | until (on the grid); the witness, the subject and the bribe fact only as expiring data (`lc_fact_expiring`, with the suppression's life) |
 | `Intel.Purged` | outbox | counts of traces, items, grants and copies deleted |
 | `Intel.RumorPlanted` | outbox | trace, territory, life, payer fact (the subject only inside the expiring trace) |
 | `Intel.IdentityRecorded` | outbox | trace, kind, witness kind (never the payload) |

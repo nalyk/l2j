@@ -1,6 +1,6 @@
 # SPEC-BL — The Black Ledger
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 16 (the Black Ledger); 03 §4.4 (`ON_CURSED_WEAPON_ACQUIRE`), §4.5 (`canWitness`); 04 §3 (Asset Service), §4
   (Intel Service), §5 (Codex), §7 (keyed randomness); 10 §7 (citizen houses); 12 §6.2 (Crown Law Bounty Endowments);
   17 (publication); consensus §6.
@@ -56,7 +56,8 @@ lc_ledger_contract(contract_id BIGINT PK auto, kind {WRIT|BLACK}, cause {KARMA|C
                    version INT, mark_char INT, issuer_clan INT NULL, target_clan INT NULL, created_at, deadline,
                    principal BIGINT, intel_budget BIGINT, max_sighting_price BIGINT, broker_fee BIGINT, conditions JSON,
                    terms_hash BINARY(32), origin_npc VARCHAR(32), origin_town SMALLINT, sealed_identity BOOLEAN,
-                   min_rank TINYINT, max_hunters TINYINT, kills_required TINYINT, kills_done TINYINT)
+                   min_rank TINYINT, max_hunters TINYINT, kills_required TINYINT, kills_done TINYINT,
+                   settling_death VARCHAR(64) NULL)        -- the death whose settlement is in progress (§3.1)
 lc_ledger_patron(contract_id PK, client_char INT, expires_at)          -- the depositor of a Black Contract (§2.2)
 lc_ledger_funding(contract_id, funding_no INT, source {PLAYER|CROWN_LAW|GUILD|HOUSE}, amount BIGINT, op_id, at,
                   PRIMARY KEY(contract_id, funding_no))
@@ -73,8 +74,9 @@ lc_ledger_death(death_key VARCHAR(64) PK, fact_id BIGINT, victim_char INT, kille
 lc_ledger_decision(death_key, contract_id, outcome {QUALIFIED|EXCLUDED}, reason VARCHAR(48) NULL, decided_at,
                    PRIMARY KEY(death_key, contract_id))                                       -- immutable
 lc_ledger_claim(contract_id, death_key, claim_deadline, claimed_at NULL, claim_op NULL, PRIMARY KEY(contract_id, death_key))
-lc_ledger_payment(payment_id BIGINT PK auto, kind {BOUNTY|SIGHTING|ALIAS_LINK}, contract_id NULL, source_custody INT NULL,
-                  beneficiary_char INT, amount BIGINT, external_share BIGINT, state {PENDING|HELD|PAID|BLOCKED|RETURNED},
+lc_ledger_payment(payment_id BIGINT PK auto, kind {BOUNTY|SIGHTING|ALIAS_LINK}, contract_id NULL, death_key NULL,
+                  funding {PLAYER|EXTERNAL}, source_custody INT NULL, beneficiary_char INT, amount BIGINT,
+                  state {PENDING|HELD|PAID|BLOCKED|RETURNED},
                   reason VARCHAR(48) NULL, evidence JSON NULL, review_until NULL, resolved_by NULL, op_id NULL, expires_at NULL)
 lc_ledger_seal(lifecycle_id PK → lc_item_lifecycle, contract_id, hunter_char, mark_char, value_band, origin_town, issued_op,
                UNIQUE(contract_id, hunter_char))
@@ -91,6 +93,7 @@ lc_ledger_endowment_use(mark_char, window_start, paid BIGINT, expires_at)
 
 | Datum | Where | Kept |
 |---|---|---|
+| a Black Contract's depositor in the Asset Service's facts (`Asset.EscrowFunded`, `Asset.EscrowReleased` of its custodies) | `lc_fact_expiring`, because the Ledger opens its custodies as **confidential** (asset-service.md §5, revision 9) | as `lc_ledger_patron` |
 | a Black Contract's depositor | `lc_ledger_patron` | until the contract is terminal, its payments resolved, and its seals' reverse cases expired (`ReverseCaseHours` after the last seal); then deleted |
 | a Writ contribution's source | `lc_ledger_funder` | until the Writ is terminal and its returns made; then deleted |
 | an alias's owner | `lc_ledger_alias.owner_char` | while the alias is active; retiring it (the owner's choice, or `AliasIdleDays` without a contract) sets it to `NULL` and keeps the name reserved |
@@ -118,21 +121,24 @@ effect or kill identities; funding keys `BL/<contract>/fund/<n>`; settlement key
 | — | `open` (Writ, at a Magistrate, or automatically, §4.3) | the basis holds | `OPEN` | the basis recorded; first contribution, if any |
 | `OPEN` | `contribute` (Writ) | the basis holds | `OPEN` | funds added; `WritFeePermille` charged (`FEE_BROKER`) |
 | `OPEN` | `cancel` (Black, by the depositor) | no acceptance yet | `CANCELLED` | principal and intel returned; fees not |
-| `OPEN` | a `QUALIFIED` decision (§4.5) | not the last required kill | `OPEN` | `kills_done` + 1 |
-| `OPEN` | a `QUALIFIED` decision | the last required kill | `CLAIMABLE` (Black) or `SETTLING` (Writ) | a claim row (Black) or a `BOUNTY` payment (Writ) |
-| `CLAIMABLE` | `claim`, the killer in person at a Broker, before `claim_deadline` | — | `SETTLING` | a `BOUNTY` payment |
-| `CLAIMABLE` | the claim deadline passes | — | `OPEN` if before the contract's deadline, else `EXPIRED` | — |
-| `SETTLING` | the bounty payment `PAID` | — | `SETTLED` | unspent intel to the depositor; the mark's cooldown (§4.2) |
-| `SETTLING` | the bounty payment `BLOCKED` or `RETURNED` | — | `OPEN` if before the deadline, else `EXPIRED` | `kills_done` stays; the death stays recorded |
+| `OPEN` | a `QUALIFIED` decision (§4.5) | not the last required kill | `OPEN` | `kills_done` + 1; nothing paid yet |
+| `OPEN` | a `QUALIFIED` decision | the last required kill | `CLAIMABLE` (Black) or `SETTLING` (Writ) | `kills_done` + 1; `settling_death` = that death; a claim row (Black) or the bounty payments (Writ) |
+| `CLAIMABLE` | `claim`, the killer in person at a Broker, before `claim_deadline` | — | `SETTLING` | the bounty payments |
+| `CLAIMABLE` | the claim deadline passes | — | `OPEN` if before the contract's deadline, else `EXPIRED` | `kills_done` − 1; `settling_death` cleared |
+| `SETTLING` | every bounty payment of `settling_death` resolved, at least one `PAID` | — | `SETTLED` | unspent intel to the depositor; the mark's cooldown (§4.2) |
+| `SETTLING` | every bounty payment of `settling_death` `BLOCKED` or `RETURNED` | — | `OPEN` if before the deadline, else `EXPIRED` | `kills_done` − 1 (the blocked kill does not count, so a replacement kill can qualify); `settling_death` cleared; the death and its decision stay |
 | `OPEN` | the deadline, decided only once the journal's frontier has passed it with no overlapping gap of the death family (fact-journal.md §3.3) | — | `EXPIRED` | principal and unspent intel returned (Writ: each contribution to its source) |
 | `OPEN` | the deadline with an overlapping gap | — | `REVIEW` | an admin decides from the gap and Mobius's own counters |
 | `REVIEW` | admin | — | `OPEN`, `EXPIRED` or `SETTLING` | audit fact |
-| `OPEN` (Writ) | the basis ends (§4.3) | no qualifying death awaiting payment | `LAPSED` | contributions returned |
+| `OPEN` (Writ) | the basis ends (§4.3), decided like a deadline: only once the journal's frontier has passed the moment it was found false, with no overlapping gap of the death family and every captured death of the mark up to then decided | no qualifying death | `LAPSED` | contributions returned |
 
 Terminal: `SETTLED`, `EXPIRED`, `CANCELLED`, `LAPSED`. Every transition is a durable fact in the transaction of its
-movements. A trigger enforces the table **and its row guards**: `CLAIMABLE` and `SETTLING` need a `QUALIFIED` decision for
-the contract; `SETTLING` from `CLAIMABLE` needs a claimed claim; `SETTLED` needs a `PAID` bounty payment; `CANCELLED` needs
-no acceptance; `LAPSED` only for Writs; `CLAIMABLE` only for Black Contracts.
+movements. A trigger enforces the table **and its row guards, all about `settling_death`**: entering `CLAIMABLE` or
+`SETTLING` from `OPEN` sets it to a death with a `QUALIFIED` decision for the contract that was never claimed or paid
+before, and needs `kills_done` = `kills_required`; `SETTLING` from `CLAIMABLE` needs that death's claim claimed; `SETTLED` needs that death's bounty
+payments all resolved and one `PAID`; leaving `SETTLING` otherwise needs them all `BLOCKED` or `RETURNED`, decrements
+`kills_done` and clears it; `CANCELLED` needs no acceptance; `LAPSED` only for Writs; `CLAIMABLE` only for Black
+Contracts. Older decisions and claims never satisfy a guard.
 
 ### 3.2 Acceptance
 
@@ -141,9 +147,10 @@ no acceptance; `LAPSED` only for Writs; `CLAIMABLE` only for Black Contracts.
 ### 3.3 Payment
 
 `PENDING` → `PAID` (no signal) | `BLOCKED` (a block signal; the money stays in or returns to its custody) | `HELD` (a hold
-signal); `HELD` → `PAID` (admin release, or the review window passes for a player-funded payment) | `RETURNED` (admin
-return, or the review window passes for an externally funded payment, §4.11). Each payment is checked and resolved on its
-own: a held sighting purchase does not hold the contract.
+signal); `HELD` → `PAID` (admin release, or the review window passes for a `PLAYER`-funded payment) | `RETURNED` (admin
+return, or the review window passes for an `EXTERNAL`-funded payment, §4.11). Each payment is checked and resolved on its
+own: a held sighting purchase does not hold the contract. A bounty whose principal mixes player and external funds is
+**two payments**, one per funding, each with its share, resolved independently (§3.1 settles when all are resolved).
 
 ## 4. Operations
 
@@ -203,12 +210,16 @@ periodic check, or a karma, war or cursed-weapon event followed by a re-read of 
 lapses, unless a qualifying death awaits payment.
 
 **Writ farming bounds.** A Writ is paid only under the same mark protections as a Black Contract (newbie level, level gap,
-cooldown) and these, for the part funded by others than players (Crown Law, guild pools, houses), its **external share**:
-the mark's karma must come from a kill of a victim sharing no account, principal, party, clan or trade with the mark or
-the hunter in `LinkWindowHours` (the karma kill's own snapshot, from the death evidence of that kill); external payouts per
-mark are capped at `EndowmentCapAdena` per `PairWindowDays` (`lc_ledger_endowment_use`); and a held external share is
-**returned** by default when its review window passes (§4.11). Player contributions carry `WritFeePermille` as a sink.
-AT-BL-14 shows a ring that manufactures a mark and kills it loses money at every scale.
+cooldown). **External money** (Crown Law Bounty Endowments, guild fee pools) funds only `CURSED_WEAPON` Writs: a cursed
+weapon cannot be manufactured (it drops from a monster's death at 1 in 100 000 and its holder is whoever picks it up,
+`dist/game/data/CursedWeapons.xml:3-16`, `entity/actor/Attackable.java:1169`), so no ring can create a mark that external
+money will pay for; external payouts per mark are also capped at `EndowmentCapAdena` per `PairWindowDays`
+(`lc_ledger_endowment_use`), and a held external payment is returned by default (§4.11). `KARMA` and `CLAN_WAR` Writs are
+funded by players and citizen houses only (a house is an economic actor spending its own budget, 10 §7, exactly as a
+player does). On those, a ring's own contributions come back to it minus `WritFeePermille` and karma's retail costs: farming
+moves money between colluders and burns the fee. A ring that manufactures a real killer and collects honest players'
+contributions to a Writ on them has created a real killer with retail's consequences; the Ledger pays for that death as for
+any. AT-BL-14 shows a ring's net is never positive on its own money, and strictly negative with a positive fee.
 
 ### 4.4 Dossier
 
@@ -254,9 +265,10 @@ mark in a named clan; in a named territory, the "public execution"; for a multi-
 `MultiKillCooldownHours`). Anti-abuse is **not** a decision: it is the payment's (§4.11), so evidence and decisions never
 change.
 
-**Claims and payment.** A Writ's qualifying decision creates its `BOUNTY` payment at once. A Black Contract's creates a
-claim; the killer claims in person at any Broker before `claim_deadline` (`ClaimHours`), the **delayed Broker delivery**
-(16 §6), which creates the payment. A paid bounty goes to the hunter by service mail; unspent intel to the depositor.
+**Claims and payment.** Only the decision on the **last required kill** starts a settlement (§3.1); earlier
+qualifying kills of a multi-kill contract only count. A Writ's last kill creates its bounty payments at once. A Black
+Contract's creates a claim; the killer claims in person at any Broker before `claim_deadline` (`ClaimHours`), the **delayed
+Broker delivery** (16 §6), which creates the payments. A paid bounty goes to the hunter by service mail; unspent intel to the depositor.
 
 ### 4.6 Questioning, rumors, sightings
 
@@ -327,10 +339,11 @@ A case starts at step 0 and moves one step at a time; the failed hunter is no st
 
 ### 4.10 The alias intelligence market
 
-The only certified alias link is made at an `AT_KILL` card's death, and only when the victim **saw the killer itself**:
-the killer kind is `SELF` (not a summon, trap, decoy or damage over time) and the killer was not transformed with a named
-transform at the death (when the visible name is not the real one). Then the Ledger records `ALIAS_LINK` identity evidence
-(alias → killer), the victim its witness. The victim may sell it at a Broker in person (`AliasLinkAdena` per buyer, an
+The only certified alias link is a **direct-kill certificate**: when a hunter chose `AT_KILL`, the
+server itself certifies to the victim, at the qualifying death, that the alias is the character who killed them (whatever
+the victim did or did not see: an `AT_KILL` card is a deliberate choice to burn secrecy towards the victim, 16 §6). The
+Ledger records `ALIAS_LINK` identity evidence (alias → killer), the victim its witness, and the victim's Ledger page shows
+it. The victim may sell it at a Broker in person (`AliasLinkAdena` per buyer, an
 `ALIAS_LINK` payment to the victim, checked under §4.11 against the buyer and the alias's owner); buyers receive it at
 `CONFIRMED`. Its first sale sets `exposed_at`. Nothing else creates `ALIAS_LINK` evidence; gossip is never certified.
 
@@ -456,9 +469,9 @@ granted intel with confidence and age band, offers, payments under review, the r
 | AT-BL-01 | integration | every transition through the operations, with movements and facts; a deadline with and without an overlapping gap |
 | AT-BL-02 | integration | each refusal at its boundary (level 39/40, gap 20/21, the open-contract cap, the k-th pair contract at 2^k, reciprocal at 23/25 hours); deaths during a mark's cooldown excluded for every contract; two deaths decided in log order |
 | AT-BL-03 | integration | Writs per cause: a death while the basis held settles, a death after it ended does not; a war ending between the death and the event; a cursed-weapon acquisition opens a Writ, its drop or expiry lapses it |
-| AT-BL-04 | integration, fault | the death event fired twice and the seam reached once; a death refused by retail (an already-dead victim) captures nothing; kills by summon, trap, decoy, DoT and self; each excluded context including a suicide skill in a duel and Olympiad; each condition at its boundary; a full ring: a gap, no decision, a claim to review |
+| AT-BL-04 | integration, fault | a blocked final bounty reopening the contract with `kills_done` − 1 and a replacement kill settling; a lapse waiting for a queued lawful death; the death event fired twice and the seam reached once; a death refused by retail (an already-dead victim) captures nothing; kills by summon, trap, decoy, DoT and self; each excluded context including a suicide skill in a duel and Olympiad; each condition at its boundary; a full ring: a gap, no decision, a claim to review |
 | AT-BL-05 | integration | questioning per rank within its ceiling; prices from the intel custody then the hunter; a sighting price above the cap refused; an informant sharing the buyer's account blocked, linked held; equivalent sightings: one item, two grants |
-| AT-BL-06 | integration | each signal per payment kind; a held sighting not holding the contract; release by admin, return by admin, timeout release (player-funded) and timeout return (external); no source posting on any path |
+| AT-BL-06 | integration | each signal per payment kind; a mixed bounty as two payments, the player one released and the external one returned at timeout, the contract settling; a held sighting not holding the contract; release by admin, return by admin, timeout release (player-funded) and timeout return (external); no source posting on any path |
 | AT-BL-07 | integration | intuition at the threshold with the keyed chance, once per window, never offline; a bribed witness disclosing nothing until the suppression ends; lawful witnesses refusing bribes; a planted rumor only as a rumor |
 | AT-BL-08 | integration | a hunter killed by the mark: one seal; steps 1-3 in order, "obscured" with sealed identity; after `ReverseCaseHours` nothing |
 | AT-BL-09 | unit | the static scan: no Ledger code calls a mechanics API or reads a combat stat |
@@ -466,7 +479,7 @@ granted intel with confidence and age band, offers, payments under review, the r
 | AT-BL-11 | integration | every flow: postings balance; sinks at their codes; no source except `LEDGER_SEAL` |
 | AT-BL-12 | integration | rows of both types; an exposed alias's owner never published; a Writ mark not publishable once no open Writ names them; another field refused |
 | AT-BL-13 | sim | the full-sharing citizen population: survival and hunt duration inside the Truth Report's declared bands |
-| AT-BL-14 | sim | rings of 2 to 20 linked and unlinked accounts manufacturing karma marks and killing them for player-funded and endowment-funded Writs: net Adena of the ring negative in every configuration, after fees, caps, holds and returns |
+| AT-BL-14 | sim | rings of 2 to 20 linked and unlinked accounts manufacturing karma and clan-war marks and killing them for Writs funded by the ring: the ring's net Adena never positive, strictly negative when `WritFeePermille` > 0; external money refused on any Writ but `CURSED_WEAPON` |
 
 ## 11. Upstream constraints
 
@@ -486,6 +499,13 @@ granted intel with confidence and age band, offers, payments under review, the r
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: most fixed; open were Writ farming by three unlinked accounts, the Asset Service's and
+  the Intel Service's own facts still naming depositors and bribers permanently, guards satisfied by stale decisions,
+  mixed-funded payments with one state, reopening after a blocked final kill with no kill-count path, a Writ lapsing
+  before a queued lawful death is decided, and an alias certificate claiming observation. Revision 3: external money only
+  for cursed-weapon Writs, which cannot be manufactured; confidential custodies and suppression facts keep identities in
+  the journal's expiring data (asset-service.md, intel-service.md); `settling_death` with guards about it and `kills_done`
+  decremented on a block; one payment per funding kind; lapse decided like a deadline; a direct-kill certificate.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 18 findings: a reserved column name; a death key that did not
   deduplicate; capture at a pre-death notification; SQL in the combat thread against the journal's capture contract; a
   block that had to rewrite immutable evidence; informant purchases able to drain a budget to a hunter's alt; holds keyed by

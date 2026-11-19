@@ -19,7 +19,7 @@ import org.l2jmobius.testing.Migrations;
 import org.l2jmobius.testing.TestDatabase;
 
 /**
- * AT-BL-00 (docs/spec/black-ledger.md): the migration applies; triggers and keys refuse transitions outside spec §3.1 for each kind (every pair, with each guard's rows present), each guarded transition without its rows, changed terms, a Black principal changing or a Writ shrinking, a patron on a Writ, cancelling after an acceptance, an acceptance by the mark or the client, evidence or a decision changed or duplicated, a late or second claim, a payment off its state machine, a seal for anyone but a failed hunter's mark or twice, a reverse case inserted past step 0, held by another or skipping a step, alias names and owners, a falling rank, an offer not tied to an informant trace of its mark.
+ * AT-BL-00 (docs/spec/black-ledger.md): the migration applies; triggers and keys refuse transitions outside spec §3.1 for each kind (every pair, with each guard's rows present), each guarded transition without its rows or with another death's, a settlement before every kill is counted, a reopening that keeps the kill, external money outside cursed-weapon Writs, changed terms, a Black principal changing or a Writ shrinking, a patron on a Writ, cancelling after an acceptance, an acceptance by the mark or the client, evidence or a decision changed or duplicated, a late or second claim, a payment off its state machine, a seal for anyone but a failed hunter's mark or twice, a reverse case inserted past step 0, held by another or skipping a step, alias names and owners, a falling rank, an offer not tied to an informant trace of its mark.
  */
 class LedgerSchemaTest
 {
@@ -90,25 +90,26 @@ class LedgerSchemaTest
 						// Every guard's rows present, so only the transition table decides.
 						statement.execute(death(contract));
 						statement.execute(decision(contract, "'QUALIFIED'", "NULL"));
-						if (isBlack)
-						{
-							statement.execute(claim(contract));
-							statement.execute("UPDATE lc_ledger_claim SET claimed_at = NOW(3), claim_op = UNHEX(REPEAT('71', 16)) WHERE contract_id = " + contract);
-						}
-						if (to.equals("SETTLED") || Arrays.asList(paths.get(from)).contains("SETTLED"))
-						{
-							bounty(statement, contract, "PAID");
-						}
-						else if (from.equals("SETTLING") || from.equals("REVIEW"))
-						{
-							bounty(statement, contract, "BLOCKED");
-						}
+						final boolean paid = to.equals("SETTLED") || Arrays.asList(paths.get(from)).contains("SETTLED");
 						int version = 0;
+						String state = "OPEN";
 						for (String step : paths.get(from))
 						{
-							statement.execute(move(contract, step, ++version));
+							statement.execute(move(contract, state, step, ++version));
+							state = step;
+							if (step.equals("CLAIMABLE"))
+							{
+								// The settling death's claim, made and claimed.
+								statement.execute(claim(contract));
+								statement.execute("UPDATE lc_ledger_claim SET claimed_at = NOW(3), claim_op = UNHEX(REPEAT('71', 16)) WHERE contract_id = " + contract);
+							}
+							if (step.equals("SETTLING"))
+							{
+								// The settling death's bounty, resolved as the next step needs.
+								bounty(statement, contract, paid ? "PAID" : "BLOCKED");
+							}
 						}
-						final String sql = move(contract, to, version + 1);
+						final String sql = move(contract, state, to, version + 1);
 						if (allowed.containsKey(from) && allowed.get(from).contains(to))
 						{
 							statement.execute(sql);
@@ -136,11 +137,11 @@ class LedgerSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ledger_contract (contract_id, kind, cause, state, mark_char, created_at, deadline, principal, conditions, terms_hash, origin_npc, origin_town) VALUES (3, 'WRIT', 'CLAN_WAR', 'OPEN', 900, NOW(3), NOW(3) + INTERVAL 1 DAY, 1000000, '{}', UNHEX(SHA2('w', 256)), 'magistrate.giran', 7)"), "a clan-war Writ without its clans");
 
 			// Guards: no qualifying death, no claim, no paid bounty.
-			assertThrows(SQLException.class, () -> statement.execute(move(1, "CLAIMABLE", 1)), "claimable without a qualifying death");
-			assertThrows(SQLException.class, () -> statement.execute(move(2, "SETTLING", 1)), "a Writ settling without a qualifying death");
+			assertThrows(SQLException.class, () -> statement.execute(move(1, "OPEN", "CLAIMABLE", 1)), "claimable without a qualifying death");
+			assertThrows(SQLException.class, () -> statement.execute(move(2, "OPEN", "SETTLING", 1)), "a Writ settling without a qualifying death");
 			statement.execute(death(1));
 			statement.execute(decision(1, "'EXCLUDED'", "'MARK_COOLDOWN'"));
-			assertThrows(SQLException.class, () -> statement.execute(move(1, "CLAIMABLE", 1)), "an excluded death qualifies nothing");
+			assertThrows(SQLException.class, () -> statement.execute(move(1, "OPEN", "CLAIMABLE", 1)), "an excluded death qualifies nothing");
 			assertThrows(SQLException.class, () -> statement.execute(claim(1)), "a claim on an excluded death");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_decision SET outcome = 'QUALIFIED', reason = NULL WHERE contract_id = 1"), "a decision changed");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_death SET killer_char = 1 WHERE death_key = 'BL/death/1/1'"), "evidence changed");
@@ -149,16 +150,20 @@ class LedgerSchemaTest
 			open(statement, 4, true);
 			statement.execute(death(4));
 			statement.execute(decision(4, "'QUALIFIED'", "NULL"));
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_contract SET state = 'CLAIMABLE', settling_death = 'BL/death/1/4', version = 1 WHERE contract_id = 4"), "settling before every required kill is counted");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_contract SET state = 'CLAIMABLE', settling_death = 'BL/death/1/1', kills_done = 1, version = 1 WHERE contract_id = 4"), "settling another contract's death");
+			statement.execute(move(4, "OPEN", "CLAIMABLE", 1));
 			statement.execute(claim(4));
-			statement.execute(move(4, "CLAIMABLE", 1));
-			assertThrows(SQLException.class, () -> statement.execute(move(4, "SETTLING", 2)), "settling without a claimed claim");
+			assertThrows(SQLException.class, () -> statement.execute(move(4, "CLAIMABLE", "SETTLING", 2)), "settling without a claimed claim");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_claim SET claimed_at = claim_deadline + INTERVAL 1 SECOND, claim_op = UNHEX(REPEAT('72', 16)) WHERE contract_id = 4"), "a late claim");
 			statement.execute("UPDATE lc_ledger_claim SET claimed_at = NOW(3), claim_op = UNHEX(REPEAT('72', 16)) WHERE contract_id = 4");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_claim SET claimed_at = NOW(3), claim_op = UNHEX(REPEAT('73', 16)) WHERE contract_id = 4"), "claimed twice");
-			statement.execute(move(4, "SETTLING", 2));
-			assertThrows(SQLException.class, () -> statement.execute(move(4, "SETTLED", 3)), "settled without a paid bounty");
-			statement.execute("INSERT INTO lc_ledger_payment (payment_id, kind, contract_id, beneficiary_char, amount) VALUES (40, 'BOUNTY', 4, 700, 20000000)");
-			assertThrows(SQLException.class, () -> statement.execute(move(4, "OPEN", 3)), "reopened while its bounty is pending");
+			statement.execute(move(4, "CLAIMABLE", "SETTLING", 2));
+			assertThrows(SQLException.class, () -> statement.execute(move(4, "SETTLING", "SETTLED", 3)), "settled without a paid bounty");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ledger_payment (kind, contract_id, death_key, beneficiary_char, amount) VALUES ('BOUNTY', 4, 'BL/death/1/1', 700, 1)"), "a bounty for a death not being settled");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ledger_payment (kind, contract_id, death_key, funding, beneficiary_char, amount) VALUES ('BOUNTY', 4, 'BL/death/1/4', 'EXTERNAL', 700, 1)"), "external money on a Black Contract");
+			statement.execute("INSERT INTO lc_ledger_payment (payment_id, kind, contract_id, death_key, beneficiary_char, amount) VALUES (40, 'BOUNTY', 4, 'BL/death/1/4', 700, 20000000)");
+			assertThrows(SQLException.class, () -> statement.execute(move(4, "SETTLING", "OPEN", 3)), "reopened while its bounty is pending");
 
 			// Payments: start pending, resolve once along §3.3; a hold carries its reason and review time.
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ledger_payment (kind, contract_id, beneficiary_char, amount, state) VALUES ('BOUNTY', 4, 700, 1, 'PAID')"), "a payment created paid");
@@ -170,7 +175,25 @@ class LedgerSchemaTest
 			statement.execute("UPDATE lc_ledger_payment SET state = 'PAID', resolved_by = 'admin' WHERE payment_id = 40");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_payment SET state = 'RETURNED' WHERE payment_id = 40"), "resolved twice");
 			statement.execute("UPDATE lc_ledger_payment SET expires_at = NOW(3) + INTERVAL 30 DAY WHERE payment_id = 40");
-			statement.execute(move(4, "SETTLED", 3));
+			statement.execute(move(4, "SETTLING", "SETTLED", 3));
+
+			// A blocked final bounty reopens the contract, uncounting the kill, so a replacement kill can settle.
+			open(statement, 5, false);
+			statement.execute(death(5));
+			statement.execute(decision(5, "'QUALIFIED'", "NULL"));
+			statement.execute(move(5, "OPEN", "SETTLING", 1));
+			bounty(statement, 5, "BLOCKED");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_contract SET state = 'OPEN', settling_death = NULL, version = 2 WHERE contract_id = 5"), "reopening without uncounting the kill");
+			statement.execute(move(5, "SETTLING", "OPEN", 2));
+			statement.execute("INSERT INTO lc_ledger_death (death_key, fact_id, victim_char, killer_char, killer_kind, at, region_id, context) VALUES ('BL/death/1/5b', 55, 900, 701, 'SELF', NOW(3), 12, '{}')");
+			statement.execute("INSERT INTO lc_ledger_decision (death_key, contract_id, outcome, decided_at) VALUES ('BL/death/1/5b', 5, 'QUALIFIED', NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_contract SET state = 'SETTLING', settling_death = 'BL/death/1/5', kills_done = 1, version = 3 WHERE contract_id = 5"), "a death whose bounty was blocked settled again");
+			statement.execute("UPDATE lc_ledger_contract SET state = 'SETTLING', settling_death = 'BL/death/1/5b', kills_done = 1, version = 3 WHERE contract_id = 5");
+
+			// External money only for cursed-weapon Writs.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ledger_funding (contract_id, funding_no, source, amount, op_id, at) VALUES (2, 1, 'CROWN_LAW', 1000000, UNHEX(REPEAT('81', 16)), NOW(3))"), "Crown money on a karma Writ");
+			statement.execute("INSERT INTO lc_ledger_contract (contract_id, kind, cause, state, mark_char, created_at, deadline, principal, conditions, terms_hash, origin_npc, origin_town) VALUES (6, 'WRIT', 'CURSED_WEAPON', 'OPEN', 902, NOW(3), NOW(3) + INTERVAL 1 DAY, 1000000, '{}', UNHEX(SHA2('c', 256)), 'magistrate.aden', 9)");
+			statement.execute("INSERT INTO lc_ledger_funding (contract_id, funding_no, source, amount, op_id, at) VALUES (6, 1, 'CROWN_LAW', 1000000, UNHEX(REPEAT('82', 16)), NOW(3))");
 
 			// Terms fixed; a Black principal fixed; an open Writ only grows; cancel only before any acceptance.
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_contract SET principal = 1, version = 2 WHERE contract_id = 1"));
@@ -181,7 +204,7 @@ class LedgerSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(accept(1, 900)), "the mark accepting");
 			assertThrows(SQLException.class, () -> statement.execute(accept(1, 800)), "the client accepting");
 			statement.execute(accept(1, 700));
-			assertThrows(SQLException.class, () -> statement.execute(move(1, "CANCELLED", 1)), "cancelled after an acceptance");
+			assertThrows(SQLException.class, () -> statement.execute(move(1, "OPEN", "CANCELLED", 1)), "cancelled after an acceptance");
 
 			// Seals: only for a failed hunter, to the contract's mark, once; reverse cases from step 0, by the mark, one step at a time.
 			statement.execute("INSERT INTO lc_item_lifecycle (lifecycle_id, object_id, item_id, began_at) VALUES (1, 300100, 21000, NOW(3)), (2, 300101, 21000, NOW(3))");
@@ -262,13 +285,25 @@ class LedgerSchemaTest
 
 	private static void bounty(Statement statement, int contract, String state) throws SQLException
 	{
-		statement.execute("INSERT INTO lc_ledger_payment (payment_id, kind, contract_id, beneficiary_char, amount) VALUES (" + contract + ", 'BOUNTY', " + contract + ", 700, 1000000)");
+		statement.execute("INSERT INTO lc_ledger_payment (payment_id, kind, contract_id, death_key, beneficiary_char, amount) VALUES (" + contract + ", 'BOUNTY', " + contract + ", 'BL/death/1/" + contract + "', 700, 1000000)");
 		statement.execute("UPDATE lc_ledger_payment SET state = '" + state + "'" + (state.equals("BLOCKED") ? ", reason = 'SAME_ACCOUNT'" : "") + " WHERE payment_id = " + contract);
 	}
 
-	private static String move(int contract, String to, int version)
+	/**
+	 * A transition with the fields spec §3.1 changes with it: entering a settlement names the contract's own death and counts its kill; leaving one clears it and uncounts the kill.
+	 */
+	private static String move(int contract, String from, String to, int version)
 	{
-		return "UPDATE lc_ledger_contract SET state = '" + to + "', version = " + version + " WHERE contract_id = " + contract;
+		String extra = "";
+		if ((from.equals("OPEN") || from.equals("REVIEW")) && (to.equals("CLAIMABLE") || to.equals("SETTLING")))
+		{
+			extra = ", kills_done = 1, settling_death = 'BL/death/1/" + contract + "'";
+		}
+		else if ((from.equals("CLAIMABLE") || from.equals("SETTLING")) && (to.equals("OPEN") || to.equals("EXPIRED")))
+		{
+			extra = ", kills_done = 0, settling_death = NULL";
+		}
+		return "UPDATE lc_ledger_contract SET state = '" + to + "', version = " + version + extra + " WHERE contract_id = " + contract;
 	}
 
 	private static String accept(int contract, int hunter)

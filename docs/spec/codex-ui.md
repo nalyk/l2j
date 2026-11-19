@@ -1,6 +1,6 @@
 # SPEC-UI — Codex of Aden (UI framework)
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: reviewed (revision 5; signed off by Codex, a different model family, in round 5; record in §12)
 - Blueprint: 04 §5 (Codex of Aden); 02 §3 (one mechanism per concern), §12 (nothing the client sends is trusted); 13 §4
   (Signal's pages), 14 (Wayfarer's journal), 15 (PACT's ceremonies), 16 (Ledger pages), 17 (Chronicle, Gazette); 30 §2.4
   (localisation EN/RO/RU); 20 (client patch at N6).
@@ -299,6 +299,9 @@ id, expected version and terms hash), registered per module. To players: §4.1's
 
 ## 12. Review record
 
+- Round 5 (Codex), **SIGN-OFF**. The dialog replacement remains an accepted stated limit (§4.4). Remaining are named
+  implementation obligations: the incarnation core patch, the Codex queue, the operations' transactional re-checks, fresh
+  reads at render, whole-terms rendering and the packet oracles, each with its acceptance test.
 - Round 4 (Codex), NO SIGN-OFF: one open, a resurrection before decay (`doRevive`) bypassing both hooks. Revision 5: the
   incarnation advances in `setDead`, the one writer of the dead flag, so every death and every revival, by any path,
   changes it; AT-UI-02 adds the resurrection case.

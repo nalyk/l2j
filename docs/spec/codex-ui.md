@@ -1,6 +1,6 @@
 # SPEC-UI — Codex of Aden (UI framework)
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 04 §5 (Codex of Aden); 02 §3 (one mechanism per concern), §12 (nothing the client sends is trusted); 13 §4
   (Signal's pages), 14 (Wayfarer's journal), 15 (PACT's ceremonies), 16 (Ledger pages), 17 (Chronicle, Gazette); 30 §2.4
   (localisation EN/RO/RU); 20 (client patch at N6).
@@ -45,12 +45,15 @@ DialogSlot    { token_id, nonce: negative int, deadline }  -- at most one per pl
   (`managers/IdManager.java:158`) and respawns a dead NPC as the same object with the same `Spawn`
   (`entity/spawns/Spawn.java:658-664`, `initializeNpc` at :399, linking the same `Spawn` at :508), and its spawn event is asynchronous
   (`entity/actor/Npc.java:1331-1334`), so no upstream value tells one life from the next. A small core patch (ledgered
-  in `CORE_PATCHES.md` when implemented) adds a `volatile int` incarnation to `Npc`, advanced **when a life ends and
-  before the next can be seen**: at the start of `Npc.onDecay` (`entity/actor/Npc.java:1365`) and at the start of
-  `Spawn.initializeNpc` (`entity/spawns/Spawn.java:399`), before it clears the dead flag (:402) and before
-  `WorldObject.spawnMe` publishes the object again (`entity/WorldObject.java:169`, `onSpawn` only at :179). So between a
-  death and the next publication the old incarnation is already gone (and the dead NPC fails "not dead" anyway); the same
-  coordinates in another instance, another object, or the same object in a later life do not match.
+  in `CORE_PATCHES.md` when implemented) adds a `volatile int` incarnation to `Npc`, advanced **on every change of
+  life**: in an override of `setDead` (`entity/actor/Creature.java:3027`, the only writer of the dead flag, `:210`),
+  before the flag changes, in either direction; and at the start of `Npc.onDecay` (`entity/actor/Npc.java:1365`), for an
+  NPC removed without dying. Every dead-to-live transition passes through `setDead(false)`: a respawn
+  (`Spawn.initializeNpc`, `entity/spawns/Spawn.java:402`, before `WorldObject.spawnMe` republishes the object,
+  `entity/WorldObject.java:169-179`) and a resurrection before decay (`Creature.doRevive`, `Creature.java:2822-2832`,
+  reachable for NPCs through `dist/game/data/scripts/handlers/chat/commands/admin/AdminRes.java:169`). So a token's
+  incarnation is gone at the death that ended its life, before any next life can be seen; the same coordinates in
+  another instance, another object, or the same object in a later life do not match.
 - The **locale** is the player variable `LC_LOCALE` (`EN`, `RO`, `RU`; Mobius's `PlayerVariables`), chosen in the book's
   settings, `EN` until chosen. It is independent of Mobius's multilingual support, which ships disabled and with other
   languages (`dist/game/config/Custom/MultilingualSupport.ini:7`).
@@ -266,7 +269,7 @@ id, expected version and terms hash), registered per module. To players: §4.1's
 | Test | Kind | What it does |
 |---|---|---|
 | AT-UI-01 | integration | forged bypasses (never sent: no effect; another player's context or token, an id instead of a handle, an unparseable command: dropped and counted); input with markup and control characters arrives stripped, input over the bound cut; a page's own links work; the 17th page context drops the oldest |
-| AT-UI-02 | integration | a token used twice (sequentially, and by two answers racing), after its deadline, after the contract was amended, with terms changed between page and "yes", **and with an amendment committed between "yes" and the operation's commit** (the operation refuses); away from the NPC, after the NPC despawned and its object id was reused, from the same coordinates in another instance; after the NPC died and respawned as the same object, and with the respawn paused between clearing the dead flag and `onSpawn` (the old answer refused); from a dead character; after a newer page of the module: refused. Faults injected before the operation, inside its commit and after it: nothing / all-or-nothing / applied once and shown on the next page |
+| AT-UI-02 | integration | a token used twice (sequentially, and by two answers racing), after its deadline, after the contract was amended, with terms changed between page and "yes", **and with an amendment committed between "yes" and the operation's commit** (the operation refuses); away from the NPC, after the NPC despawned and its object id was reused, from the same coordinates in another instance; after the NPC died and respawned as the same object, with the respawn paused between clearing the dead flag and `onSpawn`, and after the NPC was killed and resurrected before decay (the old answer refused); from a dead character; after a newer page of the module: refused. Faults injected before the operation, inside its commit and after it: nothing / all-or-nothing / applied once and shown on the next page |
 | AT-UI-03 | integration | a Codex dialog and a pending offline-trade dialog in either order: each answer reaches only its own handler; a stale, forged or late (after the slot's deadline) negative answer is claimed and ignored, and a pending offline-trade action stays pending; the listener with a fault injected after claiming still terminates the event; a new Codex dialog kills the previous token; the dialog packet carries `DialogSeconds × 1000` |
 | AT-UI-04 | unit, integration | every template in every locale renders within limits for view models at their declared maxima; pages of 48 749 and 48 750 characters: the first sent in three parts, the second paginated by the Codex before Mobius sees it; NPC pages of 17 200 and 17 201 likewise; no action cached from a page that was not sent; a character choosing RO and RU receives those texts, a key missing in RO falls back to English; a missing English key fails the build; an over-long terms text is not offered; terms that fit `MaxTermsChars` but would exceed a text field's maximum are shown whole, never cut, and the hash is of exactly what is shown |
 | AT-UI-05 | integration | the packets emitted: a system message of the right id carrying the localised text; a screen message, rate-limited; the recap as `TutorialShowHtml`, once per login and only when there is something to recap |
@@ -290,12 +293,15 @@ id, expected version and terms hash), registered per module. To players: §4.1's
 5. **Object ids are reused** (`managers/IdManager.java:158`), a respawn reuses the very object
    (`entity/spawns/Spawn.java:658-664`), the spawn event is asynchronous (`entity/actor/Npc.java:1331-1334`), the object is republished before `onSpawn` (`WorldObject.java:169-179`), and
    Mobius's bypass range check ignores instances (`util/LocationUtil.java:192`). → `NpcRef` with an incarnation advanced
-   at decay and before republication (a small core patch) and `Npc.canInteract` (§4.3).
+   in `setDead` and at decay (a small core patch) and `Npc.canInteract` (§4.3).
 6. **Packets run on a worker pool** (`commons/network/packet/PacketExecutor.java:52`) without a per-player lock. → the
    Codex queue (§3.1).
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: one open, a resurrection before decay (`doRevive`) bypassing both hooks. Revision 5: the
+  incarnation advances in `setDead`, the one writer of the dead flag, so every death and every revival, by any path,
+  changes it; AT-UI-02 adds the resurrection case.
 - Round 3 (Codex), NO SIGN-OFF: one open, the incarnation advanced in `onSpawn`, after Mobius had already republished the
   object. Revision 4: it advances when a life ends (`onDecay`) and at the start of `initializeNpc`, before the dead flag is
   cleared and before publication; AT-UI-02 pauses respawn inside the publication window.

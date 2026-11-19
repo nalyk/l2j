@@ -15,7 +15,7 @@ import org.l2jmobius.testing.Migrations;
 import org.l2jmobius.testing.TestDatabase;
 
 /**
- * AT-INTEL-00 (docs/spec/intel-service.md): the migration applies; keys, checks and triggers reject what the spec forbids: an exact precision (no such value), a second item from one trace, evidence, an item, a grant or a copy outliving its parent, a grant finer than its item, a changed expiry, a trace disclosable before it happened, a location-related publication type below the tactical delay.
+ * AT-INTEL-00 (docs/spec/intel-service.md): the migration applies; keys, checks and triggers reject what the spec forbids: an exact precision (no such value), a second item from one trace, evidence, an item, a grant or a copy outliving its parent, a grant finer than its item, any update (an expiry, a parent, a precision), a trace disclosable before it happened, a location-related publication type below the tactical delay.
  */
 class IntelSchemaTest
 {
@@ -63,6 +63,9 @@ class IntelSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_intel SET expires_at = expires_at + INTERVAL 1 HOUR WHERE intel_id = " + item));
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_trace SET expires_at = expires_at - INTERVAL 10 MINUTE WHERE trace_id = 1"));
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_intel_grant SET expires_at = expires_at + INTERVAL 1 MINUTE WHERE intel_id = " + item));
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_intel_grant SET view_precision = 'ZONE' WHERE intel_id = " + item), "re-precisioning a grant");
+			statement.execute(trace(5, "3", "NOW(3) + INTERVAL 5 MINUTE", "NOW(3) + INTERVAL 10 MINUTE"));
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_intel SET trace_id = 5 WHERE intel_id = " + item), "reparenting an item to a shorter-lived trace");
 
 			// A copy never outlives its item, nor depends on one that does not exist; one row per dependency.
 			assertThrows(SQLException.class, () -> statement.execute(copy("42", item, "NOW(3) + INTERVAL 2 HOUR")));
@@ -73,8 +76,9 @@ class IntelSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_disclosure (target_char, witness_ref, at, units, implied_cells, expires_at) VALUES (268477000, 'gk.giran', NOW(3), 0, 12, NOW(3) + INTERVAL 1 HOUR)"));
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_disclosure (target_char, witness_ref, at, units, implied_cells, expires_at) VALUES (268477000, 'gk.giran', NOW(3), 1, 12, NOW(3) - INTERVAL 1 HOUR)"), "a ledger row that never expires after its disclosure");
 
-			// Evidence never outlives its trace.
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_trace_evidence (trace_id, x, y, z, observed_ms, expires_at) VALUES (1, 1, 2, 3, 6000, NOW(3) + INTERVAL 2 HOUR)"));
+			// Evidence expires exactly with its trace: neither later nor earlier.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_trace_evidence (trace_id, x, y, z, observer_x, observer_y, observed_ms, expires_at) VALUES (1, 1, 2, 3, 40, 50, 6000, NOW(3) + INTERVAL 2 HOUR)"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_trace_evidence (trace_id, x, y, z, observer_x, observer_y, observed_ms, expires_at) VALUES (1, 1, 2, 3, 40, 50, 6000, NOW(3) + INTERVAL 10 MINUTE)"));
 
 			// Publication: a location-related type waits at least the tactical delay; fields belong to registered types.
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pub_type (pub_type, min_delay_minutes, location_related) VALUES ('battle_map', 60, TRUE)"));
@@ -83,7 +87,7 @@ class IntelSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pub_field_rule (pub_type, field, rule) VALUES ('unknown', 'x', 'COUNT')"));
 
 			// Deleting a trace takes its evidence, item and grants with it.
-			statement.execute("INSERT INTO lc_trace_evidence (trace_id, x, y, z, observed_ms, expires_at) VALUES (1, 1, 2, 3, 6000, (SELECT expires_at FROM lc_trace WHERE trace_id = 1))");
+			statement.execute("INSERT INTO lc_trace_evidence (trace_id, x, y, z, observer_x, observer_y, observed_ms, expires_at) VALUES (1, 1, 2, 3, 40, 50, 6000, (SELECT expires_at FROM lc_trace WHERE trace_id = 1))");
 			statement.execute("DELETE FROM lc_trace WHERE trace_id = 1");
 			try (ResultSet result = statement.executeQuery("SELECT (SELECT COUNT(*) FROM lc_trace_evidence WHERE trace_id = 1) + (SELECT COUNT(*) FROM lc_intel WHERE trace_id = 1) + (SELECT COUNT(*) FROM lc_intel_grant WHERE intel_id = " + item + ")"))
 			{

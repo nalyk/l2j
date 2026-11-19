@@ -1,6 +1,6 @@
 # SPEC-ACTOR — Actor Identity
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 04 §2 (Actor Identity); 02 §3 (game logic never branches on "is this a citizen"), §12 (never trust the client);
   10 (Citizens of Aden); 13 §… (Signal reports human / synthetic / mixed); 17 (history's humans-only filter); consensus §3.
 - DDL: `sql/migrations/V007__lc_actor.sql` (after the Fact Journal, before the Asset Service).
@@ -172,7 +172,7 @@ humans-only filter use it (AT-ACTOR-09).
 | ACTOR-INV01 | an account's id, login and origin never change, its row is never deleted, a character's binding never changes, and a profile or principal changes only with its audit row | by the database triggers, verified present and unaltered at startup |
 | ACTOR-INV02 | a human has no sim profile and its own human principal; a citizen has a profile and a household principal | by a check constraint and the triggers |
 | ACTOR-INV03 | every loaded character has its binding and its account row, and its `account_name` still names the bound login | when a `Player` is loaded (refused otherwise) |
-| ACTOR-INV04 | outside the policy package no Living Chronicle code reads a snapshot's origin or activity | by the static test (AT-ACTOR-05) |
+| ACTOR-INV04 | outside the policy package, the identity loader and the snapshot copier no Living Chronicle code reads a snapshot's origin or activity; no Living Chronicle code calls a mechanics API | by the static test (AT-ACTOR-05) |
 | ACTOR-INV05 | a snapshot holds only primitives | by reflection (AT-ACTOR-06) |
 
 ## 7. Failure model
@@ -182,7 +182,8 @@ humans-only filter use it (AT-ACTOR-09).
 | database down at login | the login fails as Mobius's own login does without its database; no character enters without its account row |
 | an attempt to change an origin, a binding, an id, or a profile without its audit (admin error, SQL) | refused by the trigger; alarm |
 | triggers missing or altered (a restore, a failover, a hand edit) | the module refuses to start until they are the migration's own again |
-| a login deleted and recreated outside the service (the account tool, or any SQL on Mobius's `accounts`) | refused at login: the login still has its permanent `lc_account` row, retired by the tool's path or not, and a login whose Mobius account is newer than its `lc_account` row is treated as recreated and refused until an admin decides; the patched tool refuses earlier |
+| a login deleted and recreated through the account tool | refused by the patched tool; a retired login refused at login |
+| a login deleted and recreated by hand in Mobius's `accounts` (SQL by an operator) | **not detected**: Mobius's account row carries nothing the identity could be bound to that SQL cannot also reproduce, so the new row inherits the login's permanent `lc_account` row, origin and principal. This is a stated limit: the guarantee covers every path the server and its tools offer; operators with SQL on `accounts` are trusted, and the login server's own database user has no `DELETE` on `accounts` |
 | a character's `account_name` changed outside the service | the character is not loaded; alarm |
 | a policy row missing | not allowed: the module's rule fails closed |
 
@@ -241,6 +242,9 @@ the account row), `lc policy <module>`.
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: one open, a recreation detector based on Mobius's whole-second `created_time`, which SQL
+  can also preserve; and INV04's wording. Revision 5: the detector dropped and the limit stated (operator SQL on
+  `accounts` is trusted; every server and tool path is covered); INV04 names its exceptions.
 - Round 3 (Codex), NO SIGN-OFF: audit rows not matched on the old value; the startup comparison racing the relay after a
   crash; facts that could not rebuild every compared column; the snapshot not carrying its identity version; and wording
   left from earlier revisions. Revision 4: the before value matched null-safely; comparison after journal recovery and a

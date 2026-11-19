@@ -27,13 +27,15 @@ CREATE TABLE lc_trace (
 	CONSTRAINT chk_trace_sensitivity CHECK (sensitivity BETWEEN 0 AND 3)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- A trace's exact evidence: read only by the service and forensics, deleted with the trace, never outliving it.
+-- A trace's exact evidence and where the witness stood: read only by the service and forensics, expiring exactly with the trace.
 CREATE TABLE lc_trace_evidence (
 	trace_id BIGINT NOT NULL,
 	x INT NOT NULL,
 	y INT NOT NULL,
 	z INT NOT NULL,
 	instance_id INT NOT NULL DEFAULT 0,
+	observer_x INT NOT NULL,
+	observer_y INT NOT NULL,
 	observed_ms INT NOT NULL,
 	expires_at TIMESTAMP(3) NOT NULL,
 	PRIMARY KEY (trace_id),
@@ -66,7 +68,7 @@ CREATE TABLE lc_intel (
 	CONSTRAINT chk_intel_payload CHECK (JSON_VALID(payload))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-CREATE TRIGGER lc_trace_evidence_within_trace BEFORE INSERT ON lc_trace_evidence FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND NEW.expires_at <= expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: evidence never outlives its trace'; END IF;
+CREATE TRIGGER lc_trace_evidence_within_trace BEFORE INSERT ON lc_trace_evidence FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND NEW.expires_at = expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: evidence expires exactly with its trace'; END IF;
 
 -- An item never outlives its trace (spec §4.5).
 CREATE TRIGGER lc_intel_within_trace BEFORE INSERT ON lc_intel FOR EACH ROW IF NEW.expires_at > (SELECT expires_at FROM lc_trace WHERE trace_id = NEW.trace_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an item never outlives its trace'; END IF;
@@ -128,14 +130,14 @@ CREATE TABLE lc_intel_copy (
 -- A copy never outlives the item it depends on.
 CREATE TRIGGER lc_intel_copy_within_item BEFORE INSERT ON lc_intel_copy FOR EACH ROW IF NEW.expires_at > IFNULL((SELECT expires_at FROM lc_intel WHERE intel_id = NEW.intel_id), TIMESTAMP('1970-01-02')) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_copy: a copy never outlives its item, nor depends on one that does not exist'; END IF;
 
--- Expiries are immutable: rows are created with them and deleted at them (spec §2.2).
-CREATE TRIGGER lc_trace_expiry_frozen BEFORE UPDATE ON lc_trace FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace: an expiry never changes'; END IF;
-CREATE TRIGGER lc_trace_evidence_expiry_frozen BEFORE UPDATE ON lc_trace_evidence FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: an expiry never changes'; END IF;
-CREATE TRIGGER lc_intel_expiry_frozen BEFORE UPDATE ON lc_intel FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an expiry never changes'; END IF;
-CREATE TRIGGER lc_intel_grant_expiry_frozen BEFORE UPDATE ON lc_intel_grant FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_grant: an expiry never changes'; END IF;
-CREATE TRIGGER lc_intel_copy_expiry_frozen BEFORE UPDATE ON lc_intel_copy FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_copy: an expiry never changes'; END IF;
-CREATE TRIGGER lc_disclosure_expiry_frozen BEFORE UPDATE ON lc_disclosure FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_disclosure: an expiry never changes'; END IF;
-CREATE TRIGGER lc_disclosure_cell_expiry_frozen BEFORE UPDATE ON lc_disclosure_cell FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_disclosure_cell: an expiry never changes'; END IF;
+-- Rows are immutable: inserted with their expiry, parent and precision, deleted at expiry, never updated (spec §2.2).
+CREATE TRIGGER lc_trace_immutable BEFORE UPDATE ON lc_trace FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace: rows are inserted and deleted, never updated';
+CREATE TRIGGER lc_trace_evidence_immutable BEFORE UPDATE ON lc_trace_evidence FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: rows are inserted and deleted, never updated';
+CREATE TRIGGER lc_intel_immutable BEFORE UPDATE ON lc_intel FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: rows are inserted and deleted, never updated';
+CREATE TRIGGER lc_intel_grant_immutable BEFORE UPDATE ON lc_intel_grant FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_grant: rows are inserted and deleted, never updated';
+CREATE TRIGGER lc_intel_copy_immutable BEFORE UPDATE ON lc_intel_copy FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_copy: rows are inserted and deleted, never updated';
+CREATE TRIGGER lc_disclosure_immutable BEFORE UPDATE ON lc_disclosure FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_disclosure: rows are inserted and deleted, never updated';
+CREATE TRIGGER lc_disclosure_cell_immutable BEFORE UPDATE ON lc_disclosure_cell FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_disclosure_cell: rows are inserted and deleted, never updated';
 
 CREATE TABLE lc_witness_suppression (
 	witness_ref VARCHAR(32) NOT NULL,

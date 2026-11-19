@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
+- Status: draft (revision 7, answering six adversarial review rounds; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -206,9 +206,10 @@ facts, and records *p* and its **frontier** (the logical time at which *p* was c
 phase's gaps before any of its facts, and stops before acting on anything from a phase that lost something. **Latency.** The writer is one thread committing one batch at a time, so every bound counts the batches committed before
 a fact's own. Let *T* be the longest batch transaction (a measured value: `WriterBatchBudgetMillis`, checked by the
 benchmark, and exceeding it is itself an alarm). With the store available: a captured fact is committed within
-`HeartbeatMillis` + `PhaseDrainMillis` + 2*T* (its phase's batch, and at most one relay batch ahead of it); a staged fact
-with *k* rows staged before it and not yet relayed is committed within `RelayMillis` + 2 × ⌈(*k* + 1) /
-`WriterBatchMax`⌉ × *T*: its own and the preceding relay batches, each of which may be followed by one
+`HeartbeatMillis` + `PhaseDrainMillis` + 3*T* (a batch already in progress when its phase closed, at most one relay batch,
+and its phase's own); a staged fact with *k* rows staged before it and not yet relayed is committed within `RelayMillis`
++ (2 × ⌈(*k* + 1) / `WriterBatchMax`⌉ + 2) × *T*: the batch already in progress when it was staged (whose selection is
+fixed, so it cannot include the fact) and the phase batch that may follow it, then its own and the preceding relay batches, each of which may be followed by one
 phase batch, because with a backlog the writer relays batch after batch without waiting for the cadence and commits at
 most one closed phase between two relay batches. A batch that fails and is retried (§3.1) adds its retries' time. With
 the store down, nothing is committed and §7 applies. These bounds, not the cadences, are what lag (§4.6) and its tests
@@ -307,7 +308,13 @@ A projector never calls the Asset Service or an actuator directly. It writes eac
 
 ### 4.5 Replay and retention
 
-Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot. A running replay holds a **lease**
+Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot. **Admission** is one transaction
+that reads the `lc_journal_retention` rows of the projector's families with a shared lock, chooses the newest snapshot
+usable against them, and inserts its lease; maintenance's step (1) updates those same rows, so the two serialise: a
+replay is admitted either before a watermark moves (and its lease is then seen by maintenance) or after (and chooses
+against the new watermark). Every read batch also re-reads its families' watermarks and aborts the replay if any is
+above the lease's read position, so even an admission that slipped past this protocol cannot read past a hole. A running
+replay holds a **lease**
 (`lc_replay_lease`: its projector, the families it reads, the id it has read up to, a heartbeat), and reads each batch
 of facts in a transaction that holds its lease row with a shared lock and checks the lease is still valid. Maintenance,
 before step (1) below, locks the leases of every family in the partition exclusively: a live lease whose read position is
@@ -434,7 +441,7 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 | Test | Kind | What it does |
 |---|---|---|
 | AT-FACT-00 | integration | the journal's migration applies; monthly partitions start exactly at midnight UTC on the first of each month, contiguous, ending in a catch-all; keys and checks reject what this spec forbids |
-| AT-FACT-01 | integration, fault | a staged fact and its change commit together or not at all, under faults at each statement; relaying, with its commit cut both ways, a lower `outbox_id` committing late, and a relay backlog, puts each staged fact into the log exactly once, in stream order, within the latency bound of §3.3 for its backlog |
+| AT-FACT-01 | integration, fault | a staged fact and its change commit together or not at all, under faults at each statement; relaying, with its commit cut both ways, a lower `outbox_id` committing late, and a relay backlog, and a row staged just after a relay selected its batch, puts each staged fact into the log exactly once, in stream order, within the latency bound of §3.3 for its backlog |
 | AT-FACT-02 | integration | Asset operations over several characters, custodies, items, mail and streams, concurrently, with outbox writers to shared streams: no deadlock outside the retry path, no wait past `LockWaitMillis`; the log's ids grow in commit order |
 | AT-FACT-03 | unit | hot-path capture benchmark at full load, phase admission and telemetry included: p99 within 2 µs, zero allocation (first use of every family and every thread included), never blocks; bulk facts within budget and chunked at the cap; locations read during movement, teleport and two concurrent writers are coherent or flagged torn |
 | AT-FACT-04 | integration | a full ring: refused captures counted per family, and the gap record is in the log at or before the batch whose frontier passes them; game threads unaffected |
@@ -451,7 +458,7 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 | AT-FACT-15 | integration | a projector combining captured and outbox facts, live and replayed: the same order; a phase's gap applied before its facts; an absence decided before the frontier passed is refused; a gap overlapping it fails closed; a configuration change relayed after a fact produced under it: the fact read under its own version |
 | AT-FACT-16 | fault, restart | crash between checkpoint and execution, an Asset effect refunded twice then committed, an actuator crashing after acting before `DONE`, a world object it spawned gone before `DONE` is recorded, two projectors deciding effect 0 of one fact, effects out of order on restart: each executed once, in order; `FAILED` freezes the module |
 | AT-FACT-18 | fault | the writer thread killed while the JVM lives, with a batch unresolved: the supervisor restarts it, the batch is resolved first, the relay resumes |
-| AT-FACT-17 | integration | the maintenance job: partitions two months ahead after a run; a catch-all row alarms; a partition with an unretired dependency is kept; a replay paused mid-way keeps the partition it still needs; a replay whose lease went stale finds it invalid at its next batch and restarts, never reading past a dropped partition |
+| AT-FACT-17 | integration | the maintenance job: partitions two months ahead after a run; a catch-all row alarms; a partition with an unretired dependency is kept; a replay paused mid-way keeps the partition it still needs; a replay paused between choosing its snapshot and registering its lease while maintenance runs: either maintenance sees the lease or the replay chooses against the new watermark; a replay whose lease went stale finds it invalid at its next batch and restarts, never reading past a dropped partition |
 
 ## 11. Upstream constraints
 
@@ -476,6 +483,10 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Round 6 (Codex), NO SIGN-OFF: two open. The latency bound missed a batch already in progress, whose selection could
+  not include a fact staged during it; and replay admission was not coordinated with the watermark. Revision 7: the
+  in-progress batch and its following phase batch counted; admission serialised with maintenance through the retention
+  rows, and every read batch re-checks the watermarks.
 - Round 5 (Codex), NO SIGN-OFF: two open. The backlog bound ignored the batches committed before a fact's own; and a
   replay already running could resume past a partition dropped under it. Revision 6: latency counted in batches of a
   measured longest transaction, relay and phase batches interleaved; replay leases checked under a shared lock at each

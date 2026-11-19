@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: draft (revision 6: the Black Ledger's operations added after the round-5 sign-off; under review with black-ledger.md; record in §12)
+- Status: reviewed (revision 6; signed off by Codex with the Black Ledger, in its round 6; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -384,6 +384,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Revision 6 signed off with black-ledger.md in the Ledger's round 6.
 - Revision 6 (after the round-5 sign-off): the Black Ledger (black-ledger.md) needs suppression, rumors and identity
   evidence as Intel operations, two trace kinds, four purposes and publication field rules; they go to review with the
   Ledger. Its round 1 found rumors fixed by a trace's first item, rumors and identity evidence outside the budget and

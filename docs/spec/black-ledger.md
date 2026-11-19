@@ -1,6 +1,6 @@
 # SPEC-BL — The Black Ledger
 
-- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
+- Status: reviewed (revision 6; signed off by Codex, a different model family, in round 6; record in §12)
 - Blueprint: 16 (the Black Ledger); 03 §4.4 (`ON_CURSED_WEAPON_ACQUIRE`), §4.5 (`canWitness`); 04 §3 (Asset Service), §4
   (Intel Service), §5 (Codex), §7 (keyed randomness); 10 §7 (citizen houses); 12 §6.2 (Crown Law Bounty Endowments);
   17 (publication); consensus §6.
@@ -524,6 +524,10 @@ granted intel with confidence and age band, offers, payments under review, the r
 
 ## 12. Review record
 
+- Round 6 (Codex), **SIGN-OFF**. The bounded subsidy and the operator-audit limit are stated limits. Remaining are named
+  implementation obligations: the weapon-life identity and atomic cap accounting, the death and cursed-weapon seams,
+  confidential-fact production, the Intel authorisation rules, the seal item's restrictions, purge and restore jobs, and
+  the runtime and simulation acceptance tests.
 - Round 5 (Codex), NO SIGN-OFF: two schema gaps, a payment resolving without its party row and a party expiry able to
   skip the audit interval. Revision 6: resolution requires the party; expiry at least a day ahead (the configured
   `PaymentAuditDays` applied by the operation) and no deletion before it.

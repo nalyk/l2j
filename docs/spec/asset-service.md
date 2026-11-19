@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 9: the Black Ledger's codes added after the revision-8 sign-off; under review with black-ledger.md; record in §12)
+- Status: reviewed (revision 9; signed off by Codex with the Black Ledger, in its round 6; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -619,6 +619,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Revision 9 signed off with black-ledger.md in the Ledger's round 6.
 - Revision 9 (after the revision-8 sign-off): the Black Ledger needs the `LEDGER_SEAL` source and the `FEE_BRIBE` sink;
   `issue` covers both representation items; confidential operations keep holders out of fact payloads (§5). Under review
   with black-ledger.md.

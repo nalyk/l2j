@@ -62,6 +62,18 @@ class GameServerBootTest
 		assertEquals(Set.of(), TruthAgent.unredirectedReads());
 	}
 
+	/**
+	 * The server's many-actor loops (moving, thinking) tell their actors apart in a test JVM: the agent found every call it sends to the test's ActorStreams. Both loops are loaded here whether or not the boot happened to run them.
+	 */
+	@Test
+	void theManyActorLoopsTellTheirActorsApart() throws ClassNotFoundException
+	{
+		Class.forName("org.l2jmobius.gameserver.taskmanagers.MovementTaskManager$Movement");
+		Class.forName("org.l2jmobius.gameserver.taskmanagers.AttackableThinkTaskManager$AttackableThink");
+		assertEquals(Set.of(), TruthAgent.failures());
+		assertEquals(Set.of("org/l2jmobius/gameserver/taskmanagers/MovementTaskManager$Movement", "org/l2jmobius/gameserver/taskmanagers/AttackableThinkTaskManager$AttackableThink"), TruthAgent.dispatchedClasses());
+	}
+
 	@Test
 	void theDatapackIsLoaded()
 	{

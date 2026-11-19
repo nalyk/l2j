@@ -39,6 +39,36 @@ public final class Arena
 	{
 	}
 
+	/** The arena's region and the regions around it, found once. */
+	private static volatile WorldRegion[] _regions;
+
+	/**
+	 * @return whether {@code object} is in the arena: in its region or one of the regions around it, which is where a case's actors are and the world's never come.
+	 */
+	public static boolean contains(WorldObject object)
+	{
+		final WorldRegion region = object.getWorldRegion();
+		if (region == null)
+		{
+			return false;
+		}
+
+		WorldRegion[] regions = _regions;
+		if (regions == null)
+		{
+			regions = World.getRegion(X, Y, Z).getSurroundingRegions();
+			_regions = regions;
+		}
+		for (WorldRegion arena : regions)
+		{
+			if (arena == region)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Fails unless the arena is still outside every zone, which a datapack change could end.
 	 */

@@ -3,6 +3,7 @@ package org.l2jmobius.testing.agent;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -14,6 +15,9 @@ import org.l2jmobius.testing.agent.MethodRedirector.Target;
  * Java agent for test JVMs: makes Mobius read time from {@code GameClock} and schedule work through {@code GameScheduler}.
  * <p>
  * Mobius reads the clock in several hundred places across roughly 250 files, core and datapack scripts, and hands work to its thread pool in several hundred more. Editing them would make every upstream intake a conflict, so they are not edited. Instead, as each Mobius class is loaded in a test JVM, its calls to the JDK's "what time is it" methods and to {@code ThreadPool} are pointed at the equivalent {@code GameClock} and {@code GameScheduler} methods (see {@link MethodRedirector}). Both pass straight through until a test takes control of them, so loading this agent changes nothing by itself. Production never loads it and runs the classes exactly as compiled.
+ * </p>
+ * <p>
+ * Two loops of the server that serve many actors in one task, moving and thinking, have the calls that are one actor's turn sent through the test's {@code ActorStreams}, so a test can tell whose turn it is (see {@link ActorDispatch}).
  * </p>
  * <p>
  * The agent also keeps the books a test needs to trust it: how many classes it patched, every class it failed on, and every way of asking the time that it saw but cannot redirect. A silent miss here would be a hole in every time-dependent golden.
@@ -68,10 +72,26 @@ public final class TruthAgent implements ClassFileTransformer
 
 	private static final MethodRedirector REDIRECTOR = new MethodRedirector(REDIRECTS, TruthAgent::dependsOnRealTime);
 
+	private static final String CREATURE = "org/l2jmobius/gameserver/entity/actor/Creature";
+	private static final String CREATURE_AI = "org/l2jmobius/gameserver/ai/CreatureAI";
+	private static final String AI = "L" + CREATURE_AI + ";";
+
+	/** The loops of the server that serve many actors in one task, and the calls in them that are one actor's turn. See {@link ActorDispatch}; the test's {@code ActorStreams} receives them. */
+	private static final ActorDispatch DISPATCH = new ActorDispatch(Map.of( //
+		"org/l2jmobius/gameserver/taskmanagers/MovementTaskManager$Movement", new ActorDispatch.Site("run", List.of( //
+			new ActorDispatch.Call(CREATURE, "updatePosition", "()Z"), //
+			new ActorDispatch.Call(CREATURE, "getAI", "()" + AI), //
+			new ActorDispatch.Call(CREATURE_AI, "notifyActionArrived", "()V"))), //
+		"org/l2jmobius/gameserver/taskmanagers/AttackableThinkTaskManager$AttackableThink", new ActorDispatch.Site("run", List.of( //
+			new ActorDispatch.Call("org/l2jmobius/gameserver/entity/actor/Attackable", "getAI", "()" + AI), //
+			new ActorDispatch.Call(CREATURE_AI, "notifyActionThink", "()V")))), //
+		"org/l2jmobius/testing/ActorStreams");
+
 	private static final AtomicInteger PATCHED_CORE_CLASSES = new AtomicInteger();
 	private static final AtomicInteger PATCHED_SCRIPT_CLASSES = new AtomicInteger();
 	private static final Set<String> FAILURES = new ConcurrentSkipListSet<>();
 	private static final Set<String> UNREDIRECTED = new ConcurrentSkipListSet<>();
+	private static final Set<String> DISPATCHED_CLASSES = new ConcurrentSkipListSet<>();
 
 	private TruthAgent()
 	{
@@ -114,6 +134,14 @@ public final class TruthAgent implements ClassFileTransformer
 	public static int patchedScriptClasses()
 	{
 		return PATCHED_SCRIPT_CLASSES.get();
+	}
+
+	/**
+	 * @return the loaded classes whose many-actor loops tell their actors apart (see {@link ActorDispatch}), by internal name.
+	 */
+	public static Set<String> dispatchedClasses()
+	{
+		return Set.copyOf(DISPATCHED_CLASSES);
 	}
 
 	/**
@@ -169,13 +197,18 @@ public final class TruthAgent implements ClassFileTransformer
 				UNREDIRECTED.add(className + " -> " + reference);
 			}
 
-			if (result.classFile() == classFile)
+			final byte[] patched = script ? result.classFile() : DISPATCH.apply(className, result.classFile(), loader);
+			if (patched == classFile)
 			{
 				return null;
 			}
 
 			(script ? PATCHED_SCRIPT_CLASSES : PATCHED_CORE_CLASSES).incrementAndGet();
-			return result.classFile();
+			if (DISPATCH.covers(className))
+			{
+				DISPATCHED_CLASSES.add(className);
+			}
+			return patched;
 		}
 		catch (Throwable t)
 		{

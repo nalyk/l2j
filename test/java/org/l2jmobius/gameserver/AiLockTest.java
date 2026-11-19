@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import org.l2jmobius.commons.util.Rnd;
 import org.l2jmobius.gameserver.ai.Intention;
 import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.data.xml.NpcData;
@@ -96,28 +97,71 @@ class AiLockTest
 		Arena.wake();
 	}
 
+	/** Who every monster meets. */
+	private static final IntFunction<Player> MONSTER_OPPONENT = level ->
+	{
+		final Player opponent = TestPlayers.create(PlayerClass.PHOENIX_KNIGHT, LEVEL);
+		TestGear.wear(opponent, MONSTER_OPPONENT_GEAR);
+		return opponent;
+	};
+
+	/** Who a raid boss of {@code level} meets. */
+	private static final IntFunction<Player> RAID_BOSS_OPPONENT = level ->
+	{
+		final Player opponent = ofKnightLine(Math.min(level, LEVEL));
+		TestGear.wear(opponent, List.of(new Piece(LONG_SWORD, 1)));
+		return opponent;
+	};
+
+	/** An aggressive monster that walks up to its opponent, and a raid boss its opponent walks up to: cases where actors move. */
+	private static final int BLOOD_QUEEN = 18001;
+	private static final int REMMEL = 25041;
+
 	@Test
 	@Order(1)
 	void everyMonsterMeetsAPlayerAsRecorded()
 	{
-		meetAll("Monster", "ai/monster-meets-player.tsv", "LOCK-AI-0001", "a level " + LEVEL + " Phoenix Knight in Vesper heavy armour with sword and shield", level ->
-		{
-			final Player opponent = TestPlayers.create(PlayerClass.PHOENIX_KNIGHT, LEVEL);
-			TestGear.wear(opponent, MONSTER_OPPONENT_GEAR);
-			return opponent;
-		});
+		meetAll("Monster", "ai/monster-meets-player.tsv", "LOCK-AI-0001", "a level " + LEVEL + " Phoenix Knight in Vesper heavy armour with sword and shield", MONSTER_OPPONENT);
 	}
 
 	@Test
 	@Order(2)
 	void everyRaidBossMeetsAPlayerAsRecorded()
 	{
-		meetAll("RaidBoss", "ai/raid-boss-meets-player.tsv", "LOCK-AI-0002", "a character of the Phoenix Knight's line at the boss's level (" + LEVEL + " at most) holding a Long Sword", level ->
+		meetAll("RaidBoss", "ai/raid-boss-meets-player.tsv", "LOCK-AI-0002", "a character of the Phoenix Knight's line at the boss's level (" + LEVEL + " at most) holding a Long Sword", RAID_BOSS_OPPONENT);
+	}
+
+	/**
+	 * A case whose actors walk comes out the same after the world has gone on by itself for ten minutes and its stream has been drawn on a thousand times more. Walking and thinking are done by the server's many-actor loops, which tell a case's actors from the world's (CaseStreams, ActorStreams); without that, everything an actor did after arriving drew on the world's stream.
+	 */
+	@Test
+	@Order(4)
+	void aCaseWhoseActorsWalkComesOutTheSameAfterTheWorldHasMovedOn()
+	{
+		for (int[] npcAndRaid : new int[][]
 		{
-			final Player opponent = ofKnightLine(Math.min(level, LEVEL));
-			TestGear.wear(opponent, List.of(new Piece(LONG_SWORD, 1)));
-			return opponent;
-		});
+			{
+				BLOOD_QUEEN,
+				0
+			},
+			{
+				REMMEL,
+				1
+			}
+		})
+		{
+			final NpcTemplate template = NpcData.getInstance().getTemplate(npcAndRaid[0]);
+			final IntFunction<Player> opponents = npcAndRaid[1] == 0 ? MONSTER_OPPONENT : RAID_BOSS_OPPONENT;
+			Arena.wake();
+			final String before = meet(template, opponents);
+			GameScheduler.advance(600_000);
+			for (int draw = 0; draw < 1000; draw++)
+			{
+				Rnd.nextLong();
+			}
+			Arena.wake();
+			assertEquals(before, meet(template, opponents));
+		}
 	}
 
 	/**

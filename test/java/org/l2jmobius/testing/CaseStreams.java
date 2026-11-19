@@ -2,8 +2,10 @@ package org.l2jmobius.testing;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.random.RandomGenerator;
 
+import org.l2jmobius.gameserver.entity.WorldObject;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 
 /**
@@ -12,16 +14,15 @@ import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
  * A task draws on the stream of whatever scheduled it, so the hits, casts and effects a case starts draw on the case's stream however late they land, while the world's own timers (doors, script events, spawns) draw on the world's stream even when they fall due inside a case. Neither then moves the other: a change to some script elsewhere in the world does not change a case's draws, and a case does not change the world's.
  * </p>
  * <p>
- * A few tasks of the server serve every actor of their kind at once: thinking, following, combat stance, seeing, automation, flagging. In a world with no player near, none of them draws anything, so whatever they draw while a case is open is the case's actors', and they draw on the open case's stream then, on the world's otherwise. The others stay on the world's stream, and so does what they set going; a case actor's draw that happens inside them is the world's too. Movement and decay: the world keeps them busy with no player near (measured over an idle hour), walking routes and roaming squads, NPCs that scripts kill. Idle animation: it keeps every NPC it has ever seen, deleted ones included, drawing when each next turns, so earlier cases' NPCs would draw inside later cases; what it draws for is cosmetic.
+ * The server's task managers serve the whole world, and run on the world's stream whoever made them. Inside the two that serve many actors in one loop and draw for them, moving and thinking, each actor's turn draws on the stream of the case it belongs to: an actor in the {@link Arena} while a case is open is that case's, any other is the world's (the arena is open sea far from every spawn, so the world's actors are never there). The test agent hands those turns to {@link ActorStreams}. A few more managers serve every actor of their kind and draw nothing with no player near (following, combat stance, seeing, automation, flagging); whatever they draw while a case is open is the case's actors', so they run on the open case's stream then. Decay and idle animation stay on the world's: scripts kill NPCs with no player near, and idle animation keeps every NPC it has seen, deleted ones too, drawing when each next turns; what it draws for is cosmetic.
  * </p>
  */
 final class CaseStreams implements GameScheduler.TaskContext
 {
 	private static final String TASK_MANAGERS = "org.l2jmobius.gameserver.taskmanagers.";
 
-	/** The tasks that serve every actor of their kind and draw nothing with no player near, by class name. Checked at boot: a renamed one would silently stop being one. */
+	/** The task managers that serve every actor of their kind and draw nothing with no player near, by class name. Checked at boot: a renamed one would silently stop being one. */
 	static final List<String> ACTOR_POOLS = List.of( //
-		TASK_MANAGERS + "AttackableThinkTaskManager$AttackableThink", //
 		TASK_MANAGERS + "CreatureFollowTaskManager$CreatureFollowNormalTask", //
 		TASK_MANAGERS + "CreatureFollowTaskManager$CreatureFollowAttackTask", //
 		TASK_MANAGERS + "AttackStanceTaskManager", //
@@ -54,6 +55,7 @@ final class CaseStreams implements GameScheduler.TaskContext
 				throw new IllegalStateException("the actor pool " + pool + " no longer exists; find what serves those actors now and name it here", e);
 			}
 		}
+		ActorStreams.install(this);
 	}
 
 	@Override
@@ -71,12 +73,31 @@ final class CaseStreams implements GameScheduler.TaskContext
 	@Override
 	public Object forRun(Runnable runnable, Object scheduled)
 	{
-		if (_actorPools.contains(runnable.getClass().getName()))
+		final String name = runnable.getClass().getName();
+		if (_actorPools.contains(name))
 		{
 			final RandomGenerator open = _case;
 			return open != null ? open : _world;
 		}
-		return scheduled;
+		return name.startsWith(TASK_MANAGERS) ? _world : scheduled;
+	}
+
+	/**
+	 * Does {@code call}, one actor's turn in a many-actor loop, drawing on the stream {@code actor} belongs to, then on what was drawn on before.
+	 */
+	<T> T asActor(WorldObject actor, Supplier<T> call)
+	{
+		final RandomGenerator open = _case;
+		final RandomGenerator previous = _random.source();
+		_random.use(((open != null) && Arena.contains(actor)) ? open : _world);
+		try
+		{
+			return call.get();
+		}
+		finally
+		{
+			_random.use(previous);
+		}
 	}
 
 	/**

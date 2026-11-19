@@ -63,15 +63,18 @@ class GameServerBootTest
 	}
 
 	/**
-	 * The server's many-actor loops (moving, thinking) tell their actors apart in a test JVM: the agent found every call it sends to the test's ActorStreams. Both loops are loaded here whether or not the boot happened to run them.
+	 * The server's many-actor loops (moving, thinking, respawning) tell their actors apart in a test JVM: the agent found every call it sends to the test's ActorStreams. Every one is loaded here whether or not the boot happened to run it.
 	 */
 	@Test
 	void theManyActorLoopsTellTheirActorsApart() throws ClassNotFoundException
 	{
-		Class.forName("org.l2jmobius.gameserver.taskmanagers.MovementTaskManager$Movement");
-		Class.forName("org.l2jmobius.gameserver.taskmanagers.AttackableThinkTaskManager$AttackableThink");
+		final Set<String> loops = Set.of("org/l2jmobius/gameserver/taskmanagers/MovementTaskManager$Movement", "org/l2jmobius/gameserver/taskmanagers/AttackableThinkTaskManager$AttackableThink", "org/l2jmobius/gameserver/entity/spawns/Spawn", "org/l2jmobius/gameserver/taskmanagers/RespawnTaskManager");
+		for (String loop : loops)
+		{
+			Class.forName(loop.replace('/', '.'));
+		}
 		assertEquals(Set.of(), TruthAgent.failures());
-		assertEquals(Set.of("org/l2jmobius/gameserver/taskmanagers/MovementTaskManager$Movement", "org/l2jmobius/gameserver/taskmanagers/AttackableThinkTaskManager$AttackableThink"), TruthAgent.dispatchedClasses());
+		assertEquals(loops, TruthAgent.dispatchedClasses());
 	}
 
 	@Test

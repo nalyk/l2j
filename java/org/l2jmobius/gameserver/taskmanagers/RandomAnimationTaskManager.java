@@ -63,7 +63,8 @@ public class RandomAnimationTaskManager implements Runnable
 					npc.onRandomAnimation(Rnd.get(2, 3));
 				}
 				
-				PENDING_ANIMATIONS.put(npc, currentTime + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000));
+				// Only if it is still there: an NPC taken off the list meanwhile (it left an awake region, decayed) stays off.
+				PENDING_ANIMATIONS.replace(npc, entry.getValue(), currentTime + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000));
 			}
 		}
 		

@@ -6,9 +6,12 @@ import org.l2jmobius.gameserver.ai.CreatureAI;
 import org.l2jmobius.gameserver.entity.WorldObject;
 import org.l2jmobius.gameserver.entity.actor.Attackable;
 import org.l2jmobius.gameserver.entity.actor.Creature;
+import org.l2jmobius.gameserver.entity.actor.Npc;
+import org.l2jmobius.gameserver.entity.spawns.Spawn;
+import org.l2jmobius.gameserver.taskmanagers.RespawnTaskManager;
 
 /**
- * Where the test agent sends the calls that are one actor's turn in the server's many-actor loops (moving, thinking). Each does the call it stands for, drawing on the stream of the case the actor belongs to (see {@link CaseStreams}), and then on whatever the loop draws on again.
+ * Where the test agent sends the calls that are one actor's turn in the server's many-actor loops (moving, thinking, respawning). Each does the call it stands for, drawing on the stream of the case the actor belongs to (see {@link CaseStreams}), and then on whatever the loop draws on again.
  * <p>
  * A method here has exactly the name of the call it receives and takes its receiver first; the agent fails a class whose listed calls it cannot find. With no paused world (a JVM that boots in real time) each simply does the call.
  * </p>
@@ -52,6 +55,37 @@ public final class ActorStreams
 		asActor(ai.getActor(), () ->
 		{
 			ai.notifyActionArrived();
+			return null;
+		});
+	}
+
+	/**
+	 * A spawn putting its dead NPC on the respawn list: the NPC belongs, until it is back, to the stream this is drawn on.
+	 */
+	public static void add(RespawnTaskManager manager, Npc npc, long time)
+	{
+		final CaseStreams streams = _streams;
+		if (streams != null)
+		{
+			streams.own(npc);
+		}
+		manager.add(npc, time);
+	}
+
+	/**
+	 * The respawn manager bringing an NPC back, on the stream it belongs to.
+	 */
+	public static void respawnNpc(Spawn spawn, Npc npc)
+	{
+		final CaseStreams streams = _streams;
+		if (streams == null)
+		{
+			spawn.respawnNpc(npc);
+			return;
+		}
+		streams.asOwner(npc, () ->
+		{
+			spawn.respawnNpc(npc);
 			return null;
 		});
 	}

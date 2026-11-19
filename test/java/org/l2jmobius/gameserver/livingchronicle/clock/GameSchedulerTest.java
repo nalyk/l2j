@@ -447,6 +447,148 @@ class GameSchedulerTest
 		assertEquals(List.of("plain in a", "pooled in pool", "then in a"), _log);
 	}
 
+	/**
+	 * As a pool thread: cancelling a task with mayInterruptIfRunning while it sleeps ends the sleep at that instant with an InterruptedException.
+	 */
+	@Test
+	void cancellingWithInterruptEndsASleepAtOnce()
+	{
+		final ScheduledFuture<?>[] sleeper = new ScheduledFuture<?>[1];
+		sleeper[0] = GameScheduler.schedule(() ->
+		{
+			try
+			{
+				GameScheduler.sleep(1000);
+				_log.add("woke@" + (GameClock.millis() - START));
+			}
+			catch (InterruptedException e)
+			{
+				_log.add("interrupted@" + (GameClock.millis() - START));
+			}
+		}, 0);
+		GameScheduler.schedule(() -> sleeper[0].cancel(true), 100);
+
+		GameScheduler.advance(2000);
+		assertEquals(List.of("interrupted@100"), _log);
+		assertEquals(0, GameScheduler.pendingTasks());
+	}
+
+	@Test
+	void cancellingWithoutInterruptLetsTheSleepEnd()
+	{
+		final ScheduledFuture<?>[] sleeper = new ScheduledFuture<?>[1];
+		sleeper[0] = GameScheduler.schedule(sleeper("s", 1000), 0);
+		GameScheduler.schedule(() -> sleeper[0].cancel(false), 100);
+
+		GameScheduler.advance(2000);
+		assertEquals(List.of("s-before@0", "s-after@1000"), _log);
+	}
+
+	/**
+	 * A task that cancels itself with interrupt cannot sleep afterwards, and the interrupt ends with it: the next task on that thread sleeps as usual.
+	 */
+	@Test
+	void anInterruptReachesOnlyItsOwnTask()
+	{
+		final ScheduledFuture<?>[] self = new ScheduledFuture<?>[1];
+		self[0] = GameScheduler.schedule(() ->
+		{
+			self[0].cancel(true);
+			try
+			{
+				GameScheduler.sleep(100);
+				_log.add("slept");
+			}
+			catch (InterruptedException e)
+			{
+				_log.add("refused to sleep@" + (GameClock.millis() - START));
+			}
+		}, 0);
+		GameScheduler.schedule(sleeper("next", 100), 10);
+
+		GameScheduler.advance(1000);
+		assertEquals(List.of("refused to sleep@0", "next-before@10", "next-after@110"), _log);
+	}
+
+	/**
+	 * Releasing control lets the session's threads go and waits for them; a periodic task that was asleep in it does not come back in the next session.
+	 */
+	@Test
+	void aReleasedSessionLeavesNothingInTheNext()
+	{
+		GameScheduler.scheduleAtFixedRate(sleeper("tick", 50), 100, 100);
+		GameScheduler.advance(120);
+		assertEquals(List.of("tick-before@100"), _log);
+
+		GameScheduler.releaseControl();
+		final List<String> released = List.copyOf(_log);
+		GameScheduler.takeControl();
+		GameScheduler.advance(1000);
+		assertEquals(released, _log);
+		assertEquals(0, GameScheduler.pendingTasks());
+	}
+
+	/**
+	 * A cooperative thread counts as ready only once its first wake is queued, so what the caller sees after waiting for it is the world it will run.
+	 */
+	@Test
+	void aCooperativeThreadIsReadyOnlyWithItsWakeQueued() throws InterruptedException
+	{
+		for (int round = 0; round < 20; round++)
+		{
+			GameScheduler.releaseControl();
+			final String name = "cooperative-" + round;
+			GameScheduler.takeControl(() ->
+			{
+			}, Set.of(name));
+			final Thread thread = new Thread(() ->
+			{
+				try
+				{
+					while (GameScheduler.isControlled())
+					{
+						GameScheduler.sleep(100);
+					}
+				}
+				catch (InterruptedException e)
+				{
+					// Ends the thread.
+				}
+			}, name);
+			thread.setDaemon(true);
+			thread.start();
+			GameScheduler.awaitCooperativeThreads(10_000);
+			assertEquals(1, GameScheduler.pendingTasks(), "round " + round);
+		}
+	}
+
+	/**
+	 * As the thread pool: a fixed-rate period that is not positive is refused, not run once.
+	 */
+	@Test
+	void aPeriodThatIsNotPositiveIsRefused()
+	{
+		assertNull(GameScheduler.scheduleAtFixedRate(task("zero"), 0, 0));
+		assertNull(GameScheduler.schedulePriorityTaskAtFixedRate(task("negative"), 0, -5));
+		GameScheduler.advance(100);
+		assertEquals(List.of(), _log);
+		assertEquals(0, GameScheduler.pendingTasks());
+	}
+
+	/**
+	 * A periodic task whose next run would be past the last instant the clock can hold stops, and says so, instead of wrapping around to the past.
+	 */
+	@Test
+	void aRecurrencePastTheEndOfTimeStops()
+	{
+		GameClock.set(Long.MAX_VALUE - 10);
+		GameScheduler.scheduleAtFixedRate(() -> _log.add("ran"), 0, 20);
+		GameScheduler.advance(0);
+		assertEquals(List.of("ran"), _log);
+		assertEquals(0, GameScheduler.pendingTasks());
+		assertTrue(GameScheduler.failures().stream().anyMatch(failure -> failure.contains("past the last instant")), GameScheduler.failures()::toString);
+	}
+
 	@Test
 	void sleepersWakeInOrderOfTheirWakeTimes()
 	{

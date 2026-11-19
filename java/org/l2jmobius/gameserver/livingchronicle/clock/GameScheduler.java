@@ -63,6 +63,12 @@ public final class GameScheduler
 	/** Every thread that takes part in the simulation, so releasing control can let them all go. */
 	private static final Set<SimThread> SIM_THREADS = ConcurrentHashMap.newKeySet();
 
+	/** Cooperative threads that have queued their first wake: from then on they run only when the event loop wakes them. */
+	private static final Set<String> READY = ConcurrentHashMap.newKeySet();
+
+	/** How long releasing control waits, in real time, for the scheduler threads of the session it ends to finish. */
+	private static final long RELEASE_WAIT_MILLIS = 10_000;
+
 	private static final ThreadLocal<SimThread> CURRENT = new ThreadLocal<>();
 
 	/** Released by the simulation when an advance has reached its target. */
@@ -83,6 +89,8 @@ public final class GameScheduler
 	};
 
 	private static volatile boolean _controlled;
+	/** Which control session this is. Threads and tasks of an earlier session are let go and never act in a later one. */
+	private static volatile int _currentSession;
 	private static volatile Thread _controller;
 	private static volatile Runnable _simThreadSetup;
 	private static volatile TaskContext _taskContext = NO_CONTEXT;
@@ -150,7 +158,7 @@ public final class GameScheduler
 	{
 		if (CONTROLLABLE && _controlled)
 		{
-			return enqueue(runnable, initialDelay, clamp(period));
+			return enqueuePeriodic(runnable, initialDelay, period, "recurring task");
 		}
 		return ThreadPool.scheduleAtFixedRate(runnable, initialDelay, period);
 	}
@@ -166,7 +174,7 @@ public final class GameScheduler
 	{
 		if (CONTROLLABLE && _controlled)
 		{
-			return enqueue(runnable, initialDelay, clamp(period));
+			return enqueuePeriodic(runnable, initialDelay, period, "high priority task");
 		}
 		return ThreadPool.schedulePriorityTaskAtFixedRate(runnable, initialDelay, period);
 	}
@@ -203,8 +211,15 @@ public final class GameScheduler
 		}
 
 		SimThread self = CURRENT.get();
+		if ((self != null) && (self._session != _currentSession))
+		{
+			// A thread of a session that has ended is no longer part of the simulation.
+			CURRENT.remove();
+			self = null;
+		}
 		final boolean holdsBaton = self != null;
-		if (self == null)
+		final boolean joining = self == null;
+		if (joining)
 		{
 			// A thread Mobius started itself. It joins the simulation only if it was named as cooperative.
 			final Thread thread = Thread.currentThread();
@@ -216,17 +231,37 @@ public final class GameScheduler
 			self = join(thread.getName());
 		}
 
+		// As Thread.sleep with the interrupt status set: the status is cleared and the sleep does not happen.
+		if (self._interrupted)
+		{
+			self._interrupted = false;
+			throw new InterruptedException("sleep interrupted");
+		}
+
 		final Object resumeIn = _taskContext.capture();
-		QUEUE.add(new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement()));
+		final Wake wake = new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement());
+		self._wake = wake;
+		QUEUE.add(wake);
+		if (joining)
+		{
+			// Only now, with its wake queued, does the thread run only when the event loop wakes it.
+			READY.add(self._name);
+		}
 		if (holdsBaton)
 		{
 			// The world goes on while this thread sleeps.
 			passBatonToAScheduler();
 		}
 
-		// Parked until the event loop reaches our wake time and hands the baton to us.
+		// Parked until the event loop reaches our wake time, or an interrupt moves it to now, and hands the baton to us.
 		self._resume.acquireUninterruptibly();
+		self._wake = null;
 		_taskContext.restore(resumeIn);
+		if (self._interrupted && (self._session == _currentSession))
+		{
+			self._interrupted = false;
+			throw new InterruptedException("sleep interrupted");
+		}
 	}
 
 	/**
@@ -266,6 +301,8 @@ public final class GameScheduler
 		_taskContext = context;
 		_controller = Thread.currentThread();
 		_abort = null;
+		READY.clear();
+		_currentSession++;
 		_controlled = true;
 
 		// A JVM that exits while controlled must not leave a shutdown hook asleep in game time.
@@ -367,10 +404,7 @@ public final class GameScheduler
 		while (true)
 		{
 			final Set<String> missing = new java.util.TreeSet<>(_cooperativeThreads);
-			for (SimThread thread : SIM_THREADS)
-			{
-				missing.remove(thread._name);
-			}
+			missing.removeAll(READY);
 			if (missing.isEmpty())
 			{
 				return;
@@ -389,8 +423,10 @@ public final class GameScheduler
 	public static void releaseControl()
 	{
 		_controlled = false;
+		_currentSession++;
 		QUEUE.clear();
 		FAILURES.clear();
+		READY.clear();
 		_cooperativeThreads = Set.of();
 		_taskContext = NO_CONTEXT;
 
@@ -398,12 +434,42 @@ public final class GameScheduler
 		{
 			IDLE.clear();
 		}
-		for (SimThread thread : SIM_THREADS)
+		final List<SimThread> released = List.copyOf(SIM_THREADS);
+		for (SimThread thread : released)
 		{
 			thread._resume.release();
 		}
 		SIM_THREADS.clear();
 		CONTROLLER_GATE.drainPermits();
+
+		// A scheduler thread finishes the task it is in, unparked, and ends. None of this session may act in the next, so wait for them.
+		final long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(RELEASE_WAIT_MILLIS);
+		final List<String> stillRunning = new java.util.ArrayList<>();
+		for (SimThread thread : released)
+		{
+			final Thread running = thread._thread;
+			if ((running == null) || !thread._scheduler || (running == Thread.currentThread()))
+			{
+				continue;
+			}
+			try
+			{
+				running.join(Math.max(1, TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())));
+			}
+			catch (InterruptedException e)
+			{
+				Thread.currentThread().interrupt();
+				return;
+			}
+			if (running.isAlive())
+			{
+				stillRunning.add(thread._name);
+			}
+		}
+		if (!stillRunning.isEmpty())
+		{
+			throw new IllegalStateException("scheduler threads of the released session did not end within " + RELEASE_WAIT_MILLIS + " ms: " + stillRunning);
+		}
 	}
 
 	/**
@@ -436,6 +502,19 @@ public final class GameScheduler
 	public static List<String> failures()
 	{
 		return List.copyOf(FAILURES);
+	}
+
+	/**
+	 * As the thread pool's fixed-rate methods: a period that is not positive is refused with a warning and no task, as the pool's executor refuses it.
+	 */
+	private static Task enqueuePeriodic(Runnable runnable, long initialDelay, long period, String kind)
+	{
+		if (clamp(period) <= 0)
+		{
+			LOGGER.warning("GameScheduler: Failed to schedule " + kind + " " + runnable.getClass().getSimpleName() + " with initial delay " + initialDelay + "ms and period " + period + "ms: the period must be positive.");
+			return null;
+		}
+		return enqueue(runnable, initialDelay, clamp(period));
 	}
 
 	private static Task enqueue(Runnable runnable, long delay, long period)
@@ -487,7 +566,7 @@ public final class GameScheduler
 	 */
 	private static SimThread join(String name)
 	{
-		final SimThread self = new SimThread(name);
+		final SimThread self = new SimThread(name, Thread.currentThread(), false);
 		CURRENT.set(self);
 		_simThreadSetup.run();
 		SIM_THREADS.add(self);
@@ -506,11 +585,12 @@ public final class GameScheduler
 			if (next == null)
 			{
 				final String name = "GameScheduler-" + (++_schedulerThreadCount);
-				final SimThread started = new SimThread(name);
-				final Thread thread = new Thread(() -> runScheduler(started), name);
+				final SimThread[] started = new SimThread[1];
+				final Thread thread = new Thread(() -> runScheduler(started[0]), name);
+				started[0] = new SimThread(name, thread, true);
 				thread.setDaemon(true);
 				thread.start();
-				next = started;
+				next = started[0];
 			}
 		}
 		next._resume.release();
@@ -524,7 +604,7 @@ public final class GameScheduler
 		CURRENT.set(self);
 		SIM_THREADS.add(self);
 		self._resume.acquireUninterruptibly();
-		if (!_controlled)
+		if (!inSession(self))
 		{
 			return;
 		}
@@ -532,7 +612,7 @@ public final class GameScheduler
 
 		int runsAtThisInstant = 0;
 		final Map<String, Integer> tally = new HashMap<>();
-		while (_controlled)
+		while (inSession(self))
 		{
 			final Event event = QUEUE.pollFirst();
 			if ((event == null) || (event._dueMillis > _targetMillis) || (_abort != null))
@@ -589,7 +669,17 @@ public final class GameScheduler
 			_runs++;
 			final Task task = (Task) event;
 			_taskContext.restore(_taskContext.forRun(task._runnable, task._scheduledIn));
-			task.run();
+			task._runner = self;
+			try
+			{
+				task.run();
+			}
+			finally
+			{
+				task._runner = null;
+				// As a pool thread between tasks: an interrupt meant for one task does not reach the next.
+				self._interrupted = false;
+			}
 		}
 	}
 
@@ -615,7 +705,30 @@ public final class GameScheduler
 		}
 		handover.release();
 		self._resume.acquireUninterruptibly();
-		return _controlled;
+		return inSession(self);
+	}
+
+	/**
+	 * @return whether {@code thread} belongs to the session that is controlling now.
+	 */
+	private static boolean inSession(SimThread thread)
+	{
+		return _controlled && (thread._session == _currentSession);
+	}
+
+	/**
+	 * Interrupts the thread running a task, as a pool interrupts the thread of a task cancelled with {@code mayInterruptIfRunning}: its sleep, now or the next one, ends at once with an {@link InterruptedException}.
+	 */
+	private static void interrupt(SimThread runner)
+	{
+		runner._interrupted = true;
+		final Wake asleep = runner._wake;
+		if ((asleep != null) && QUEUE.remove(asleep))
+		{
+			final Wake now = new Wake(runner, GameClock.millis(), SEQUENCE.getAndIncrement());
+			runner._wake = now;
+			QUEUE.add(now);
+		}
 	}
 
 	private static String describeSimThreads()
@@ -645,12 +758,29 @@ public final class GameScheduler
 	{
 		final String _name;
 
+		/** The thread itself, so that releasing control can wait for it. */
+		final Thread _thread;
+
+		/** Whether it is one of the scheduler's own threads, rather than a cooperative thread Mobius started. */
+		final boolean _scheduler;
+
+		/** The control session it belongs to. */
+		final int _session = _currentSession;
+
 		/** Released to hand this thread the baton. */
 		final Semaphore _resume = new Semaphore(0);
 
-		SimThread(String name)
+		/** Its wake-up while it sleeps in game time, null otherwise. */
+		volatile Wake _wake;
+
+		/** Its interrupt status, as {@link Thread#interrupted()} has it for a pool thread. */
+		volatile boolean _interrupted;
+
+		SimThread(String name, Thread thread, boolean scheduler)
 		{
 			_name = name;
+			_thread = thread;
+			_scheduler = scheduler;
 		}
 	}
 
@@ -707,6 +837,10 @@ public final class GameScheduler
 		private final long _periodMillis;
 		/** The {@link TaskContext} it was scheduled in. */
 		private final Object _scheduledIn;
+		/** The control session it was scheduled in; it never runs again in another. */
+		private final int _session = _currentSession;
+		/** The thread running it, while it runs. */
+		volatile SimThread _runner;
 		private volatile boolean _cancelled;
 		private volatile boolean _done;
 
@@ -735,10 +869,18 @@ public final class GameScheduler
 				LOGGER.log(Level.WARNING, "GameScheduler: task " + _runnable.getClass().getName() + " failed.", t);
 			}
 
-			if ((_periodMillis > 0) && !_cancelled && _controlled)
+			if ((_periodMillis > 0) && !_cancelled && _controlled && (_session == _currentSession))
 			{
-				_dueMillis += _periodMillis;
-				QUEUE.add(this);
+				try
+				{
+					_dueMillis = Math.addExact(_dueMillis, _periodMillis);
+					QUEUE.add(this);
+				}
+				catch (ArithmeticException e)
+				{
+					FAILURES.add(_runnable.getClass().getName() + ": its next run would be past the last instant the clock can hold");
+					_done = true;
+				}
 			}
 			else
 			{
@@ -755,6 +897,11 @@ public final class GameScheduler
 			}
 			_cancelled = true;
 			QUEUE.remove(this);
+			final SimThread runner = _runner;
+			if (mayInterruptIfRunning && (runner != null))
+			{
+				interrupt(runner);
+			}
 			return true;
 		}
 

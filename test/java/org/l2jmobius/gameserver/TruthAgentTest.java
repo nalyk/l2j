@@ -4,16 +4,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.function.LongSupplier;
+import java.util.random.RandomGenerator;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import org.l2jmobius.commons.util.Rnd;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
+import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
 import org.l2jmobius.testing.RealTime;
 import org.l2jmobius.testing.agent.TruthAgent;
 
@@ -60,6 +66,34 @@ class TruthAgentTest
 		final long read = System.currentTimeMillis();
 		final long after = RealTime.millis();
 		assertTrue((before <= read) && (read <= after), () -> "read " + read + " outside [" + before + ", " + after + "]");
+	}
+
+	/**
+	 * The JDK's own random draws, which Rnd cannot bind, are made through Rnd: with Rnd bound to a stream, Collections.shuffle(List) makes exactly the swaps the JDK's shuffle makes with that stream, and Math.random() is that stream's next double.
+	 */
+	@Test
+	void jdkRandomDrawsComeFromRnd()
+	{
+		final List<Integer> shuffled = new ArrayList<>();
+		for (int i = 0; i < 20; i++)
+		{
+			shuffled.add(i);
+		}
+		final List<Integer> expected = new ArrayList<>(shuffled);
+		final RandomGenerator reference = KeyedRandom.of(1, "agent.draws", 0);
+		Collections.shuffle(expected, reference);
+
+		Rnd.bind(KeyedRandom.of(1, "agent.draws", 0));
+		try
+		{
+			Collections.shuffle(shuffled);
+			assertEquals(expected, shuffled);
+			assertEquals(reference.nextDouble(), Math.random());
+		}
+		finally
+		{
+			Rnd.unbind();
+		}
 	}
 
 	@Test

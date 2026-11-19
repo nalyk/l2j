@@ -2,9 +2,11 @@ package org.l2jmobius.gameserver;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.StringJoiner;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -17,7 +19,9 @@ import org.l2jmobius.gameserver.data.xml.PlayerTemplateData;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.entity.actor.instance.Monster;
+import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.item.type.CrystalType;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
@@ -27,6 +31,7 @@ import org.l2jmobius.gameserver.mechanics.events.holders.actor.creature.OnCreatu
 import org.l2jmobius.gameserver.mechanics.events.listeners.ConsumerEventListener;
 import org.l2jmobius.testing.Arena;
 import org.l2jmobius.testing.Golden;
+import org.l2jmobius.testing.GradeGear;
 import org.l2jmobius.testing.StatLine;
 import org.l2jmobius.testing.TestGear;
 import org.l2jmobius.testing.TestGear.Piece;
@@ -56,6 +61,10 @@ class GearLockTest
 	private static final long ATTACK_LIMIT_MILLIS = 30_000;
 
 	private static final List<Wear> ARMOURS = List.of(TestGear.HEAVY, TestGear.LIGHT, TestGear.ROBE);
+
+	/** Soulshot (S-Grade), the grade of every Vesper weapon, and how many a case carries. */
+	private static final int SOULSHOT_S = 1467;
+	private static final long SOULSHOTS = 1000;
 
 	private static final List<CategoryType> ARMOUR_CATEGORIES = List.of(CategoryType.HEAVY_ARMOR_CLASS, CategoryType.LIGHT_ARMOR_CLASS, CategoryType.ROBE_CLASS);
 
@@ -162,6 +171,114 @@ class GearLockTest
 	}
 
 	/**
+	 * LOCK-COMBAT-0003: the same attacks with soulshots, as a player has them: S-grade soulshots in the bag and set to load themselves, loaded before the first swing and again after every hit by the server itself.
+	 */
+	@Test
+	void everyClassHitsWithSoulshotsAsRecorded()
+	{
+		final List<String> lines = new ArrayList<>();
+		lines.add("# LOCK-COMBAT-0003: as LOCK-COMBAT-0002, with each Vesper weapon and " + SOULSHOTS + " S-grade soulshots set to load themselves, on the stream (" + SEED + ", \"lock.combat.soulshot\", class * 100 + weapon).");
+		lines.add("# Hits are millis:damage, ! marking a critical, or millis:miss. MP, ammunition and soulshots spent are over the whole case.");
+		lines.add("class\tarmour\tweapon\thits\tmpSpent\tammoSpent\tsoulshotsSpent");
+
+		for (PlayerClass playerClass : CLASSES)
+		{
+			final Wear armour = armourOf(playerClass);
+			final PlayerClass source = armourSource(playerClass);
+			final String armourName = armour == null ? "-" : source == playerClass ? armour.name() : armour.name() + " (from " + source + ")";
+			for (int w = 0; w < TestGear.WEAPONS.size(); w++)
+			{
+				final Weapon weapon = TestGear.WEAPONS.get(w);
+				final String[] line = new String[1];
+				final int weaponIndex = w + 1;
+				Arena.align();
+				_server.withRandom(KeyedRandom.of(SEED, "lock.combat.soulshot", (playerClass.getId() * 100L) + weaponIndex), () -> line[0] = attackOnItsStream(armour, weapon, playerClass, true));
+				lines.add(playerClass + "\t" + armourName + "\t" + weapon.name() + "\t" + line[0]);
+			}
+		}
+		Golden.repository().assertMatches("combat/third-class-auto-attack-soulshot.tsv", lines);
+	}
+
+	/**
+	 * LOCK-GEAR-0002: every class at the first level of each grade it can be at, in that grade's plainest armour of its armour category, holding nothing and each of the grade's plainest weapons ({@link GradeGear}); and, one line each, in the next grade's armour with its sword, which its expertise does not reach yet.
+	 */
+	@Test
+	void everyClassInEveryGradeHasItsRecordedStats() throws IOException
+	{
+		final List<String> lines = new ArrayList<>();
+		lines.add("# LOCK-GEAR-0002: every class at the first level of each grade whose level it can have, made and taught by the server, in the lowest armour set of that grade and of its armour category (its own or its nearest ancestor's),");
+		lines.add("# holding nothing and the lowest plain weapon of each kind of that grade (no special ability, PvP, shadow, common or timed copy), a bow or crossbow with the grade's arrows or bolts; no jewels.");
+		lines.add("# A grade marked (above) is the next one, its armour and sword, which the character's expertise does not reach.");
+		lines.add("class\tlevel\tgrade\tarmour\tweapon\t" + StatLine.HEADER);
+
+		final List<PlayerClass> classes = new ArrayList<>();
+		for (PlayerClass playerClass : PlayerClass.values())
+		{
+			if (PlayerTemplateData.getInstance().getTemplate(playerClass) != null)
+			{
+				classes.add(playerClass);
+			}
+		}
+		classes.sort(Comparator.comparingInt(PlayerClass::getId));
+
+		final List<CrystalType> grades = new ArrayList<>(GradeGear.FIRST_LEVEL.keySet());
+		for (int g = 0; g < grades.size(); g++)
+		{
+			final CrystalType grade = grades.get(g);
+			final int level = GradeGear.FIRST_LEVEL.get(grade);
+			final Map<String, Wear> armours = GradeGear.armours(grade);
+			final List<Weapon> held = new ArrayList<>();
+			held.add(null);
+			held.addAll(GradeGear.weapons(grade).values());
+			final CrystalType above = (g + 1) < grades.size() ? grades.get(g + 1) : null;
+			for (PlayerClass playerClass : classes)
+			{
+				final int[] range = TestPlayers.levelRange(playerClass);
+				if ((level < range[0]) || (level > range[1]))
+				{
+					continue;
+				}
+				final String type = armourTypeOf(playerClass);
+				final Player player = TestPlayers.create(playerClass, level);
+				for (Weapon weapon : held)
+				{
+					lines.add(gradeLine(player, grade.toString(), type == null ? null : armours.get(type), weapon));
+				}
+				if (above != null)
+				{
+					lines.add(gradeLine(player, above + " (above)", type == null ? null : GradeGear.armours(above).get(type), GradeGear.weapons(above).get("sword")));
+				}
+				player.deleteMe();
+			}
+		}
+		Golden.repository().assertMatches("gear/grade-stats.tsv", lines);
+	}
+
+	private static String gradeLine(Player player, String grade, Wear armour, Weapon weapon)
+	{
+		final List<Piece> pieces = new ArrayList<>();
+		if (weapon != null)
+		{
+			pieces.addAll(weapon.pieces());
+		}
+		if (armour != null)
+		{
+			pieces.addAll(armour.pieces());
+		}
+		TestGear.wear(player, pieces);
+		return player.getPlayerClass() + "\t" + player.getLevel() + "\t" + grade + "\t" + (armour == null ? "-" : armour.name()) + "\t" + (weapon == null ? "-" : weapon.name()) + "\t" + StatLine.of(player);
+	}
+
+	/**
+	 * The armour type ("heavy", "light", "robe") of the armour category {@code playerClass} or its nearest ancestor is in, {@code null} for none.
+	 */
+	private static String armourTypeOf(PlayerClass playerClass)
+	{
+		final Wear armour = armourOf(playerClass);
+		return armour == null ? null : armour.name();
+	}
+
+	/**
 	 * A case's outcome is a function of the case: the same attack, run again after the world has gone on by itself for ten minutes and its stream has been drawn on a thousand times more, as a world with other scripts or other spawns would have, lands the same hits at the same moments. Both runs find the arena awake, as every case of the sweep does.
 	 */
 	@Test
@@ -186,11 +303,11 @@ class GearLockTest
 	{
 		final String[] line = new String[1];
 		Arena.align();
-		_server.withRandom(KeyedRandom.of(SEED, "lock.combat.auto", (playerClass.getId() * 100L) + weaponIndex), () -> line[0] = attackOnItsStream(armour, weapon, playerClass));
+		_server.withRandom(KeyedRandom.of(SEED, "lock.combat.auto", (playerClass.getId() * 100L) + weaponIndex), () -> line[0] = attackOnItsStream(armour, weapon, playerClass, false));
 		return line[0];
 	}
 
-	private static String attackOnItsStream(Wear armour, Weapon weapon, PlayerClass playerClass)
+	private static String attackOnItsStream(Wear armour, Weapon weapon, PlayerClass playerClass, boolean soulshots)
 	{
 		final Player attacker = TestPlayers.create(playerClass, LEVEL);
 		final List<Piece> pieces = new ArrayList<>();
@@ -205,6 +322,12 @@ class GearLockTest
 		TestGear.wear(attacker, pieces);
 		attacker.setCurrentHpMp(attacker.getMaxHp(), attacker.getMaxMp());
 		attacker.setCurrentCp(attacker.getMaxCp());
+		if (soulshots)
+		{
+			attacker.getInventory().addItem(ItemProcessType.NONE, SOULSHOT_S, SOULSHOTS, attacker, null);
+			attacker.addAutoSoulShot(SOULSHOT_S);
+			attacker.rechargeShots(true, false);
+		}
 
 		final Monster target = Arena.monster(MALUK_WARLORD);
 		Arena.placeInFront(attacker, target);
@@ -235,10 +358,11 @@ class GearLockTest
 		attacker.abortAttack();
 		attacker.getAI().setIntentionIdle();
 
+		final Item shots = attacker.getInventory().getItemByItemId(SOULSHOT_S);
 		final String line = String.join("\t", //
 			hits.isEmpty() ? "-" : String.join(" ", hits.subList(0, Math.min(HITS, hits.size()))), //
 			String.valueOf(mpBefore - attacker.getCurrentMp()), //
-			String.valueOf(ammoBefore - ammo(attacker, weapon)));
+			String.valueOf(ammoBefore - ammo(attacker, weapon))) + (soulshots ? "\t" + (SOULSHOTS - (shots == null ? 0 : shots.getCount())) : "");
 
 		attacker.removeListener(dealt);
 		target.removeListener(avoided);

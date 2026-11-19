@@ -16,6 +16,8 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.entity.actor.holders.creature.TimeStamp;
 import org.l2jmobius.gameserver.entity.actor.instance.Monster;
+import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
@@ -46,6 +48,11 @@ class SkillLockTest
 
 	private static final int LEVEL = 85;
 	private static final int MALUK_WARLORD = 22839;
+
+	/** Soulshot (S-Grade) and Blessed Spiritshot (S-Grade), the grade of every Vesper weapon, and how many of each a case with shots carries. */
+	private static final int SOULSHOT_S = 1467;
+	private static final int BLESSED_SPIRITSHOT_S = 3952;
+	private static final long SHOTS = 1000;
 	
 	/** A cast still going after this much game time is recorded as such and cut short. */
 	private static final long CAST_LIMIT_MILLIS = 60_000;
@@ -116,6 +123,31 @@ class SkillLockTest
 	}
 
 	/**
+	 * LOCK-SKILL-0002: the same casts with shots, as a player has them: S-grade soulshots and blessed spiritshots in the bag, set to load themselves, loaded before the cast. What a skill spends of each shows which it draws power from.
+	 */
+	@Test
+	void everySkillGoesAsRecordedWithShotsLoaded()
+	{
+		final List<String> lines = new ArrayList<>();
+		lines.add("# LOCK-SKILL-0002: as LOCK-SKILL-0001, with " + SHOTS + " Soulshots (S-Grade) and " + SHOTS + " Blessed Spiritshots (S-Grade) set to load themselves and loaded before the cast, on the stream (" + SEED + ", \"lock.skill.shots\", class * 100000 + skill).");
+		lines.add("class\tskill\tlevel\tname\ton\tgear\tresult\tcastMillis\treuseMillis\tmpSpent\thpSpent\ttargetHpLost\ttargetMpLost\ttargetDead\tcharges\tsouls\tcasterEffects\ttargetEffects\ttaskFailures\tsoulshotsSpent\tspiritshotsSpent");
+
+		for (Map.Entry<PlayerClass, List<Skill>> entry : SKILLS.entrySet())
+		{
+			final PlayerClass playerClass = entry.getKey();
+			final Map<Skill, Loadout> gear = chooseGear(playerClass, entry.getValue());
+			for (Skill skill : entry.getValue())
+			{
+				final String[] line = new String[1];
+				Arena.align();
+				_server.withRandom(KeyedRandom.of(SEED, "lock.skill.shots", (playerClass.getId() * 100_000L) + skill.getId()), () -> line[0] = useOnItsStream(playerClass, skill, gear.get(skill), true));
+				lines.add(playerClass + "\t" + skill.getId() + "\t" + skill.getLevel() + "\t" + skill.getName() + "\t" + line[0]);
+			}
+		}
+		Golden.repository().assertMatches("skill/third-class-use-shots.tsv", lines);
+	}
+
+	/**
 	 * For each skill, the first loadout with which the server's condition check accepts it, or {@code null} if none does.
 	 */
 	private static Map<Skill, Loadout> chooseGear(PlayerClass playerClass, List<Skill> skills)
@@ -157,11 +189,20 @@ class SkillLockTest
 	{
 		final String[] line = new String[1];
 		Arena.align();
-		_server.withRandom(KeyedRandom.of(SEED, "lock.skill", (playerClass.getId() * 100_000L) + skill.getId()), () -> line[0] = useOnItsStream(playerClass, skill, loadout));
+		_server.withRandom(KeyedRandom.of(SEED, "lock.skill", (playerClass.getId() * 100_000L) + skill.getId()), () -> line[0] = useOnItsStream(playerClass, skill, loadout, false));
 		return line[0];
 	}
 
-	private static String useOnItsStream(PlayerClass playerClass, Skill skill, Loadout loadout)
+	/**
+	 * How many of the {@link #SHOTS} shots of {@code shot} a case gave {@code caster} are gone.
+	 */
+	private static long spent(Player caster, int shot)
+	{
+		final Item item = caster.getInventory().getItemByItemId(shot);
+		return SHOTS - (item == null ? 0 : item.getCount());
+	}
+
+	private static String useOnItsStream(PlayerClass playerClass, Skill skill, Loadout loadout, boolean shots)
 	{
 		final Player caster = TestPlayers.create(playerClass, LEVEL);
 		if (loadout != null)
@@ -170,6 +211,19 @@ class SkillLockTest
 		}
 		caster.setCurrentHpMp(caster.getMaxHp(), caster.getMaxMp());
 		caster.setCurrentCp(caster.getMaxCp());
+		if (shots)
+		{
+			for (int shot : new int[]
+			{
+				SOULSHOT_S,
+				BLESSED_SPIRITSHOT_S
+			})
+			{
+				caster.getInventory().addItem(ItemProcessType.NONE, shot, SHOTS, caster, null);
+				caster.addAutoSoulShot(shot);
+			}
+			caster.rechargeShots(true, true);
+		}
 
 		final Monster target = Arena.monster(MALUK_WARLORD);
 		Arena.placeInFront(caster, target);
@@ -226,7 +280,7 @@ class SkillLockTest
 			String.valueOf(caster.getChargedSouls()), //
 			effects(caster), //
 			effects(target), //
-			taskFailures.length() == 0 ? "-" : taskFailures.toString());
+			taskFailures.length() == 0 ? "-" : taskFailures.toString()) + (shots ? "\t" + spent(caster, SOULSHOT_S) + "\t" + spent(caster, BLESSED_SPIRITSHOT_S) : "");
 
 		if (caster.hasSummon())
 		{

@@ -23,8 +23,8 @@
    Do instead: `Arena.wake()` once before a sweep; per case `Arena.align()` then `_server.withRandom(KeyedRandom.of(SEED, "<stream>", key), ...)` around setup, run and clean-up.
 2. **[2026-11-19] Prove isolation, do not assume it**
    Do instead: run one case, advance the world ten minutes, draw 1,000 times on the world stream, `Arena.wake()`, run it again and assert it is equal (`GearLockTest.aCaseComesOutTheSameAfterTheWorldHasMovedOn`). To find a leak, wrap the case's generator with a `StackWalker` draw-site logger and diff the two runs.
-3. **[2026-11-19] Server pools that also serve world actors stay on the world stream**
-   Do instead: add a task class to `CaseStreams.ACTOR_POOLS` only after measuring that it draws nothing over an idle hour (movement, decay and idle animation do draw).
+3. **[2026-11-19] A server loop serving world and case actors alike is dispatched per actor**
+   Do instead: list its per-actor calls in `TruthAgent.DISPATCH` and add same-named receiver-first statics to `ActorStreams` (movement and thinking are done). A loop goes in `CaseStreams.ACTOR_POOLS` (case-wide) only if it draws nothing over an idle hour; every other task manager runs on the world stream.
 4. **[2026-11-18] Reading an NPC's AI must not create one**
    Do instead: use `npc.hasAI() ? npc.getAI().getIntention() : null`; `getAI()` builds an AI and draws (`rollGlobalAggro`).
 5. **[2026-11-18] Stop conditions must count only the case's own objects**
@@ -35,6 +35,8 @@
    Do instead: spawn target and actor in the `Arena` before `setTarget`/`useMagic`; `Player.setTarget` drops unspawned targets.
 8. **[2026-11-19] The random spawn system rewrites a Spawn's own coordinates**
    Do instead: use `spawn.getSpawnLocation()` for the datapack spot, never `spawn.getX()`.
+9. **[2026-11-19] Territory containment is three-dimensional**
+   Do instead: check a territory point with `isInsideZone(x, y, z)`; the 2D `isInsideZone(x, y)` tests bans at the territory's lowest Z and rejects legal points above a banned band.
 
 ## Core & Datapack Guardrails
 1. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
@@ -43,6 +45,8 @@
    Do instead: edit them byte-wise in Python, check whether `\r\n` is present first and write the same endings back.
 3. **[2026-11-19] `-XX:hashCode=2` makes every identity hash equal in tests**
    Do instead: key test maps by object id (Integer), never by world objects; expect maps keyed by objects to degrade to one bucket.
+4. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
+   Do instead: use `java.lang.classfile` to swap `invokevirtual X.m(args)R` for `invokestatic W.m(X,args)R` (same stack effect) at listed sites; `MethodRedirector` handles static calls only and never touches instructions.
 
 ## Shell & Command Reliability
 1. **[2026-11-18] Python block replacements must match exactly once**

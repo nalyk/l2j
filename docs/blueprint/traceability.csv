@@ -40,9 +40,9 @@ TR-transmog,90 §1,Transmog,03 §8 (each with policy and reason),profiles.md,PRO
 TR-walker-bot-protection,90 §1,Walker/Bot Protection,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
 TR-wedding,90 §1,Wedding,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
 TR-pc-cafe-pc-bang,90 §1,PC Cafe / PC Bang,"H5 has `PcCafePointsManager`, configured in `PremiumSystem.ini`; OFF — 03 §8 (PremiumSystem row)",profiles.md,PRO-R04,,,,AT-PRO-04,,specified
-TR-vip-tier-system,90 §1,VIP Tier System,not present in H5 (Kamael-only configs),,,,,,,,blueprint
-TR-sayune-for-everyone,90 §1,Sayune for Everyone,not present in H5 (Kamael-only configs),,,,,,,,blueprint
-TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (Kamael-only configs),,,,,,,,blueprint
+TR-vip-tier-system,90 §1,VIP Tier System,not present in H5 (Kamael-only configs),platform.md,PLT-R09,,,,AT-PLT-09,,specified
+TR-sayune-for-everyone,90 §1,Sayune for Everyone,not present in H5 (Kamael-only configs),platform.md,PLT-R09,,,,AT-PLT-09,,specified
+TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (Kamael-only configs),platform.md,PLT-R09,,,,AT-PLT-09,,specified
 TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",profiles.md,PRO-R04,,,,AT-PRO-04,,specified
 TR-aden-remembers,90 §2,Aden Remembers,12; 04 §1 (Fact Journal),aden-remembers.md,AR-R01;AR-R02;AR-R03;AR-R06;AR-R09;AR-R11;AR-R12;AR-R13,lc_region;lc_region_atom;lc_subregion_spawn;lc_region_state;lc_actuator;lc_actuator_switch;lc_situation,projector over telemetry and durable facts (§4.1),telemetry and fact seams (§4.1),AT-AR-01;AT-AR-02;AT-AR-03;AT-AR-06;AT-AR-09;AT-AR-11;AT-AR-12;AT-AR-13;AT-AR-00,,reviewed
 TR-living-world-director,90 §2,Living World Director,12; 04 §1 (Fact Journal),aden-remembers.md,AR-R02;AR-R03;AR-R10;AR-R11,lc_region;lc_region_atom;lc_subregion_spawn;lc_region_state;lc_situation;lc_situation_transition;lc_actuator,"situations → actuators (§4.4, §3.2)",,AT-AR-02;AT-AR-03;AT-AR-10;AT-AR-11,,reviewed
@@ -150,23 +150,23 @@ TR-retail-truth-clean-profile,90 §2,Retail Truth: clean profile,11,profiles.md,
 TR-retail-truth-regression-gates,90 §2,Retail Truth: regression gates,11,retail-truth.md,RT-R03;RT-R04,test/lock;truth/overrides,,,AT-RT-02;AT-RT-03,,specified
 TR-retail-truth-automated-tests,90 §2,Retail Truth: automated tests,11,retail-truth.md,RT-R02;RT-R06,truth/cases,,,AT-RT-01;AT-RT-05,,specified
 TR-retail-truth-ai-combat-economy-world-validation,90 §2,Retail Truth: AI/combat/economy/world validation,11,retail-truth.md,RT-R01;RT-R02,truth/coverage.csv,,,AT-RT-00;AT-RT-01,,specified
-TR-kamael-scope-clarification,90 §3,Kamael scope clarification,replaced by H5 baseline: 03 §1,,,,,,,,blueprint
-TR-java-25,90 §3,Java 25,Java 27 (upstream requirement): 03 §1–§2,,,,,,,,blueprint
-TR-ant,90 §3,Ant,"03 §2, §9",,,,,,,,blueprint
-TR-mariadb,90 §3,MariaDB,"03 §2, §9",,,,,,,,blueprint
-TR-loginserver-gameserver,90 §3,LoginServer/GameServer,"03 §2, §9",,,,,,,,blueprint
-TR-geodata,90 §3,geodata,03 §7,citizens.md,CIT-R03,,,,AT-CIT-03,,specified
-TR-dev-ram-cpu-storage,90 §3,dev RAM/CPU/storage,replaced by measured capacity on build-host: 03 §9–§10,,,,,,,,blueprint
-TR-no-gpu-requirement,90 §3,no GPU requirement,authoritative systems need none; the narrator uses the RTX 5090 (17 §6),,,,,,,,blueprint
-TR-client-on-workstation,90 §3,client on workstation,03 §6 (client package),,,,,,,,blueprint
+TR-kamael-scope-clarification,90 §3,Kamael scope clarification,replaced by H5 baseline: 03 §1,platform.md,PLT-R09,,,,AT-PLT-09,,specified
+TR-java-25,90 §3,Java 25,Java 27 (upstream requirement): 03 §1–§2,platform.md,PLT-R01,,,,AT-PLT-01,,specified
+TR-ant,90 §3,Ant,"03 §2, §9",platform.md,PLT-R01,,,,AT-PLT-01,,specified
+TR-mariadb,90 §3,MariaDB,"03 §2, §9",platform.md,PLT-R01;PLT-R02;PLT-R08,,,,AT-PLT-01;AT-PLT-02;AT-PLT-08,,specified
+TR-loginserver-gameserver,90 §3,LoginServer/GameServer,"03 §2, §9",platform.md,PLT-R02;PLT-R03,,,,AT-PLT-02;AT-PLT-03,,specified
+TR-geodata,90 §3,geodata,03 §7,citizens.md;platform.md,CIT-R03;PLT-R04,,,,AT-CIT-03;AT-PLT-04,,specified
+TR-dev-ram-cpu-storage,90 §3,dev RAM/CPU/storage,replaced by measured capacity on build-host: 03 §9–§10,platform.md,PLT-R06,,,,AT-PLT-06,,specified
+TR-no-gpu-requirement,90 §3,no GPU requirement,authoritative systems need none; the narrator uses the RTX 5090 (17 §6),platform.md,PLT-R07,,,,AT-PLT-07,,specified
+TR-client-on-workstation,90 §3,client on workstation,03 §6 (client package),platform.md,PLT-R05,,,,AT-PLT-05,,specified
 TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,actor-identity.md;citizens.md,ACTOR-R01;ACTOR-R03;ACTOR-R04;ACTOR-R05;ACTOR-R06;ACTOR-R09;ACTOR-R10;CIT-R01;CIT-R02,lc_account;lc_principal;cit_account,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-03;AT-ACTOR-04;AT-ACTOR-05;AT-ACTOR-06;AT-ACTOR-09;AT-ACTOR-10;AT-CIT-01;AT-CIT-02,,specified
 TR-fake-player-classification,90 §3,fake-player classification,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R07,lc_actor_policy,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-07,,reviewed
 TR-missing-quests,90 §3,missing quests,"H5 content inventory: 03 §5, 11 §1.5",retail-truth.md,RT-R07,truth/inventory,,,AT-RT-06,,specified
 TR-npc-ai-fidelity,90 §3,NPC AI fidelity,11 §1.4,retail-truth.md,RT-R01;RT-R02,truth/coverage.csv,,,AT-RT-00;AT-RT-01,,specified
 TR-formula-trigger-edge-cases,90 §3,formula/trigger edge cases,11 §1.4,retail-truth.md,RT-R01;RT-R05,truth/coverage.csv,,,AT-RT-00;AT-RT-04,,specified
-TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,citizens.md,CIT-R03,,,,AT-CIT-03,,specified
+TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,citizens.md;platform.md,CIT-R03;PLT-R04,,,,AT-CIT-03;AT-PLT-04,,specified
 TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, §6; 10 §5.2",citizens.md,CIT-R01,,,,AT-CIT-01,,specified
-TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
+TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,platform.md,PLT-R02,,,,AT-PLT-02,,specified
 TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02;ACTOR-R10,lc_account,,,AT-ACTOR-02;AT-ACTOR-00;AT-ACTOR-10,,reviewed
 TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10;AT-FACT-06,,reviewed
 TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,aden-remembers.md,AR-R11,,,,AT-AR-11,,reviewed
@@ -190,7 +190,7 @@ TR-saga-replays,90 §4,saga replays,17 §5,chronicle.md,CHR-R02;CHR-R10,lc_chr_b
 TR-public-truth-report,90 §4,public Truth Report,11 §5,retail-truth.md,RT-R08,truth/,,,AT-RT-07,,specified
 TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,aden-remembers.md,AR-R11,,,,AT-AR-11,,reviewed
 TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,reviewed
-TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint
+TR-engineering-doctrine,90 §4,engineering doctrine,02,platform.md,PLT-R01,,,,AT-PLT-01,,specified
 TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,aden-signal.md,SIG-R03;SIG-R06,,,,AT-SIG-03;AT-SIG-07,,reviewed
 TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,wayfarers-memory.md,MEM-R03,,,,AT-MEM-03,,reviewed
 TR-remembers-pact-public-contracts-treaties-mercena,20 §1,"Remembers ↔ PACT: public contracts, treaties, mercenary deals become high-confidence history (no AI inferring politics from chat)",20 §1,chronicle.md,CHR-R01,,,,AT-CHR-01,,specified

@@ -22,6 +22,7 @@ ahead of it (blueprint 02 §2, 30 §2.1): a change that adds behaviour first cha
 | [profiles.md](profiles.md) | Profiles and Mobius custom modules: the profile, configuration overlays at the one reading point, the startup check, each custom module's policy per profile | 02 §8, 03 §8, 10 §9, 11 §3, 20 §1 |
 | [retail-truth.md](retail-truth.md) | Retail Truth: the case format and status machine, the regression contract, the lock's change rule and DESIGN_OVERRIDE, coverage, the H5 content inventory, the Truth Report | 11, 02 §9, 03 §3 §5, 17 §5, 30 §2 |
 | [citizens.md](citizens.md) | Citizens of Aden: the runner, its protocol library, perception, observation store, navigation, personas and policies, principals and their channel, the relationship ledger, dialogue, admission and pacing, economic discipline, Genesis | 10, 01 §2.5, 02 §3 §7, 03 §7, 04 §2, 16 §8, 20 §1 |
+| [platform.md](platform.md) | Platform: baseline, pinned toolchain and build, processes and database users, network, client package, geodata, capacity, the doctrine as checks | 03 §1 §2 §6 §7 §9 §10, 02, 90 §1 §3 §4 |
 
 One file per module. Its DDL lives in `sql/migrations/V###__lc_<module>.sql`, numbered in the order modules depend on each
 other; a spec names its tables, the migration defines them, and a test applies every migration to MariaDB.

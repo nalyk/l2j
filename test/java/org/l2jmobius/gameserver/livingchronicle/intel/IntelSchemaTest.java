@@ -15,7 +15,7 @@ import org.l2jmobius.testing.Migrations;
 import org.l2jmobius.testing.TestDatabase;
 
 /**
- * AT-INTEL-00 (docs/spec/intel-service.md): the migration applies; keys, checks and triggers reject what the spec forbids: an exact precision (no such value), a second item from one trace, evidence, an item, a grant or a copy outliving its parent, a grant finer than its item, any update (an expiry, a parent, a precision), a trace disclosable before it happened, a location-related publication type below the tactical delay.
+ * AT-INTEL-00 (docs/spec/intel-service.md): the migration applies; keys, checks and triggers reject what the spec forbids: an exact precision (no such value), a second item from one trace, evidence, an item, a grant or a copy outliving its parent, an item expiring before its trace, a grant finer than its item, any update (an expiry, a parent, a precision), a trace disclosable before it happened, a location-related publication type below the tactical delay.
  */
 class IntelSchemaTest
 {
@@ -46,8 +46,9 @@ class IntelSchemaTest
 			// Intel is never exact; one item per trace; an item never outlives its trace.
 			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'EXACT_INTERNAL'", "NOW(3) + INTERVAL 30 MINUTE")));
 			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'REGION'", "NOW(3) + INTERVAL 2 HOUR")), "an item outliving its trace");
-			statement.execute(intel(1, "'REGION'", "NOW(3) + INTERVAL 30 MINUTE"));
-			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'TERRITORY'", "NOW(3) + INTERVAL 30 MINUTE")), "a second item from one trace");
+			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'REGION'", "NOW(3) + INTERVAL 30 MINUTE")), "an item expiring before its trace, which could be purged and replaced");
+			statement.execute(intel(1, "'REGION'", TRACE_1_EXPIRY));
+			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'TERRITORY'", TRACE_1_EXPIRY)), "a second item from one trace");
 			final long item;
 			try (ResultSet result = statement.executeQuery("SELECT intel_id FROM lc_intel WHERE trace_id = 1"))
 			{
@@ -103,6 +104,8 @@ class IntelSchemaTest
 			}
 		}
 	}
+
+	private static final String TRACE_1_EXPIRY = "(SELECT expires_at FROM lc_trace WHERE trace_id = 1)";
 
 	private static String trace(int id, String direction, String disclosable, String expires)
 	{

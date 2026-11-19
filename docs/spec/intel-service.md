@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -194,8 +194,9 @@ service's answers; what players learn by other means (seeing the subject themsel
 
 ### 4.5 Expiry
 
-- Evidence, items, grants and copies never outlive what they depend on: evidence's and an item's `expires_at` ≤ the
-  trace's, a grant's ≤ its item's, a copy's ≤ the earliest of its items'. A grant does not extend an item's life; a new
+- An item and the evidence expire **exactly** with their trace, so an item is never purged while its trace lives and a
+  trace's one item can never be replaced by a new one; shorter lives belong to grants. Grants, copies and the ledger
+  never outlive what they depend on: a grant's ≤ its item's, a copy's ≤ the earliest of its items'. A grant does not extend an item's life; a new
   disclosure of an old trace gets the old item and its old expiry. The database enforces this at insert, and refuses any
   later change of an expiry (§2.2).
 - At `expires_at` the purge job deletes traces with their evidence, items with their grants, and every row of every
@@ -337,6 +338,8 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: one open, an item expiring before its trace could be purged and replaced by a finer one.
+  Revision 5: an item expires exactly with its trace (trigger); shorter lives are the grants'.
 - Round 3 (Codex), NO SIGN-OFF: open were Wayfarer recall able to create a grant wider than the one it came from,
   reparenting and re-precisioning rows after the insert checks, items outliving evidence that expired earlier than its
   trace, implied areas centred on spawn points for moving witnesses, a timing promise at odds with immediate revocation,

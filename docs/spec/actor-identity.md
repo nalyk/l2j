@@ -1,6 +1,6 @@
 # SPEC-ACTOR — Actor Identity
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: reviewed (revision 5; signed off by Codex, a different model family, in round 5; record in §12)
 - Blueprint: 04 §2 (Actor Identity); 02 §3 (game logic never branches on "is this a citizen"), §12 (never trust the client);
   10 (Citizens of Aden); 13 §… (Signal reports human / synthetic / mixed); 17 (history's humans-only filter); consensus §3.
 - DDL: `sql/migrations/V007__lc_actor.sql` (after the Fact Journal, before the Asset Service).
@@ -242,6 +242,9 @@ the account row), `lc policy <module>`.
 
 ## 12. Review record
 
+- Round 5 (Codex), **SIGN-OFF**. Remaining are named implementation obligations: transactional audit, change and fact
+  coupling proved by integration tests (the schema test uses separate statements), and the account tool's deletes
+  (`tools/AccountManager.java:1080`, `:1469`) patched as §2.2 requires, covered by AT-ACTOR-10.
 - Round 4 (Codex), NO SIGN-OFF: one open, a recreation detector based on Mobius's whole-second `created_time`, which SQL
   can also preserve; and INV04's wording. Revision 5: the detector dropped and the limit stated (operator SQL on
   `accounts` is trusted; every server and tool path is covered); INV04 names its exceptions.

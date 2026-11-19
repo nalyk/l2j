@@ -70,8 +70,8 @@ CREATE TABLE lc_intel (
 
 CREATE TRIGGER lc_trace_evidence_within_trace BEFORE INSERT ON lc_trace_evidence FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND NEW.expires_at = expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: evidence expires exactly with its trace'; END IF;
 
--- An item never outlives its trace (spec §4.5).
-CREATE TRIGGER lc_intel_within_trace BEFORE INSERT ON lc_intel FOR EACH ROW IF NEW.expires_at > (SELECT expires_at FROM lc_trace WHERE trace_id = NEW.trace_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an item never outlives its trace'; END IF;
+-- An item expires exactly with its trace, so it is never purged and replaced while its trace lives (spec §4.5).
+CREATE TRIGGER lc_intel_within_trace BEFORE INSERT ON lc_intel FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND expires_at = NEW.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an item expires exactly with its trace'; END IF;
 
 CREATE TABLE lc_intel_grant (
 	intel_id BIGINT NOT NULL,

@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 7, answering six adversarial review rounds; record in §12)
+- Status: draft (revision 8, answering seven adversarial review rounds; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -316,8 +316,12 @@ against the new watermark). Every read batch also re-reads its families' waterma
 above the lease's read position, so even an admission that slipped past this protocol cannot read past a hole. A running
 replay holds a **lease**
 (`lc_replay_lease`: its projector, the families it reads, the id it has read up to, a heartbeat), and reads each batch
-of facts in a transaction that holds its lease row with a shared lock and checks the lease is still valid. Maintenance,
-before step (1) below, locks the leases of every family in the partition exclusively: a live lease whose read position is
+of facts in a transaction that holds its lease row with a shared lock and checks the lease is still valid. Maintenance
+first locks the `lc_journal_retention` rows of every family in the partition **exclusively** (creating any missing row
+first), and holds them through step (1); only then does it scan and lock the leases of those families. An admission
+needs those rows shared, so while maintenance holds them no lease of those families can be inserted: every lease that
+can matter either committed before the scan, and is seen by it, or is admitted after step (1) commits, against the new
+watermark. Then: a live lease whose read position is
 below the partition's last id **keeps the partition** (the drop waits for the next run); a lease whose heartbeat is older
 than `ReplayLeaseSeconds` is invalidated in that transaction, and its replay, at its next batch, finds it invalid and
 aborts and starts over from a snapshot usable then. So no replay ever reads past a hole, and none holds retention
@@ -483,6 +487,9 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Round 7 (Codex), NO SIGN-OFF: one open, the lease scan ran before maintenance held the retention rows, so a lease
+  inserted during the scan escaped it. Revision 8: maintenance takes the retention rows exclusively first and holds them
+  through the watermark update, then scans the leases.
 - Round 6 (Codex), NO SIGN-OFF: two open. The latency bound missed a batch already in progress, whose selection could
   not include a fact staged during it; and replay admission was not coordinated with the watermark. Revision 7: the
   in-progress batch and its following phase batch counted; admission serialised with maintenance through the retention

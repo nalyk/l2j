@@ -15,7 +15,7 @@ import org.l2jmobius.testing.Migrations;
 import org.l2jmobius.testing.TestDatabase;
 
 /**
- * AT-MEM-00 (docs/spec/wayfarers-memory.md): the migration applies; keys and checks refuse an import without its author and page, a lead without its intel reference (unless an expired lead without content), intel on a non-lead row, a second row for one coalescing key, a durable row with an expiry or a raw row without one, a shared fact carrying a lead, a changed shared fact, a note over its bound; expiring tables registered.
+ * AT-MEM-00 (docs/spec/wayfarers-memory.md): the migration applies; keys and checks refuse an import without teller or origin, an import as KNOWN, intel content on a row, intel on a durable or summary row, a second row for one intel item, a second row for one coalescing key, a lead without intel, a durable row with an expiry, a shared fact without origin or of a rumor, a changed shared fact, a note over its bound; a new price or a second teller is its own row; expiring tables registered.
  */
 class MemSchemaTest
 {
@@ -37,36 +37,47 @@ class MemSchemaTest
 		try (Connection connection = _database.connect();
 			Statement statement = connection.createStatement())
 		{
-			// A known observation, coalesced: a second row with the same key is refused (repeats update times).
-			statement.execute(observation("'OBTAINED_FROM'", "'ITEM'", 1864, "'MONSTER'", 20537, "'{\"count\":3}'", "'KNOWN'", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY"));
-			assertThrows(SQLException.class, () -> statement.execute(observation("'OBTAINED_FROM'", "'ITEM'", 1864, "'MONSTER'", 20537, "'{\"count\":1}'", "'KNOWN'", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "a second row for one coalescing key");
-			statement.execute("UPDATE lc_mem_observation SET times = times + 1, last_at = NOW(3) WHERE relation = 'OBTAINED_FROM'");
+			// Coalescing: a repeat is refused as a new row; a new price is its own row; a second teller is its own row.
+			statement.execute(row("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", "268477010", "'{\"price\":78000}'", "'78000/0'", "'KNOWN'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY"));
+			assertThrows(SQLException.class, () -> statement.execute(row("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", "268477010", "'{\"price\":78000}'", "'78000/0'", "'KNOWN'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "the same observation as a new row");
+			statement.execute(row("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", "268477010", "'{\"price\":81000}'", "'81000/0'", "'KNOWN'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY"));
+			statement.execute(told("268477011", "5"));
+			statement.execute(told("268477012", "6"));
 
-			// Imports are TOLD with their author and page, and only then.
-			assertThrows(SQLException.class, () -> statement.execute(observation("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", 268477010, "'{\"price\":78000}'", "'TOLD'", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "an import without its author");
-			assertThrows(SQLException.class, () -> statement.execute(observation("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", 268477010, "'{\"price\":78000}'", "'KNOWN'", "268477011", "5", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "an import passed off as known");
-			statement.execute(observation("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", 268477010, "'{\"price\":78000}'", "'TOLD'", "268477011", "5", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY"));
+			// Imports are TOLD with teller and origin, never KNOWN with a teller.
+			assertThrows(SQLException.class, () -> statement.execute(row("'SOLD_BY'", "'ITEM'", 57, "NULL", "NULL", "'{}'", "''", "'TOLD'", "NULL", "268477011", "5", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "an import without its origin");
+			assertThrows(SQLException.class, () -> statement.execute(row("'SOLD_BY'", "'ITEM'", 57, "NULL", "NULL", "'{}'", "''", "'KNOWN'", "NULL", "268477011", "5", "268477011", "NOW(3)", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "an import passed off as known");
 
-			// Leads hold only an intel reference; expired, nothing but the day; intel nowhere else.
-			assertThrows(SQLException.class, () -> statement.execute(observation("'LEAD'", "'PLAYER'", 268477099, "NULL", null, "'{}'", "'KNOWN'", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 DAY")), "a live lead without its intel reference");
-			assertThrows(SQLException.class, () -> statement.execute(observation("'SOLD_BY'", "'ITEM'", 57, "NULL", null, "'{}'", "'KNOWN'", "NULL", "NULL", "4242", "'RAW'", "NOW(3) + INTERVAL 1 DAY")), "intel on a non-lead row");
-			statement.execute(observation("'LEAD'", "'PLAYER'", 268477099, "NULL", null, "'{}'", "'KNOWN'", "NULL", "NULL", "4242", "'RAW'", "NOW(3) + INTERVAL 1 DAY"));
-			assertThrows(SQLException.class, () -> statement.execute(observation("'LEAD'", "'PLAYER'", 268477098, "NULL", null, "'{\"region\":12,\"day\":\"x\"}'", "'HISTORICAL'", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 DAY")), "an expired lead keeping a place");
-			statement.execute(observation("'LEAD'", "'PLAYER'", 268477098, "NULL", null, "'{\"day\":\"2026-11-19\"}'", "'HISTORICAL'", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 DAY"));
+			// Intel rows: content-free, unique by item, raw only, a lead always has one; an Intel rumor too.
+			statement.execute(intel("'LEAD'", "'KNOWN'", "NULL", 4242, "'{}'", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR"));
+			assertThrows(SQLException.class, () -> statement.execute(intel("'LEAD'", "'KNOWN'", "NULL", 4242, "'{}'", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR")), "a second row for one intel item");
+			assertThrows(SQLException.class, () -> statement.execute(intel("'LEAD'", "'KNOWN'", "NULL", 4243, "'{\"region\":12}'", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR")), "intel content kept on a row");
+			assertThrows(SQLException.class, () -> statement.execute(intel("'LEAD'", "'KNOWN'", "NULL", 4244, "'{}'", "12", "'RAW'", "NOW(3) + INTERVAL 1 HOUR")), "an intel row with a region");
+			assertThrows(SQLException.class, () -> statement.execute(intel("'LEAD'", "'KNOWN'", "NULL", 4245, "'{}'", "NULL", "'DURABLE'", "NULL")), "a durable intel row");
+			assertThrows(SQLException.class, () -> statement.execute(row("'LEAD'", "'PLAYER'", 268477099, "NULL", "NULL", "'{}'", "''", "'KNOWN'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR")), "a lead without its intel reference");
+			assertThrows(SQLException.class, () -> statement.execute(row("'RUMOR'", "'PLAYER'", 268477099, "NULL", "NULL", "'{}'", "''", "'RUMORED'", "'INTEL'", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR")), "an Intel rumor without its item");
+			statement.execute(intel("'RUMOR'", "'RUMORED'", "'INTEL'", 4246, "'{}'", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR"));
+			statement.execute(row("'RUMOR'", "'ITEM'", 1864, "NULL", "NULL", "'{\"supply\":\"up\"}'", "''", "'RUMORED'", "'WORLD'", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 DAY"));
 
-			// Tiers: durable rows never expire, raw and summary rows always do.
-			assertThrows(SQLException.class, () -> statement.execute(observation("'VISITED'", "'REGION'", 12, "NULL", null, "'{}'", "'KNOWN'", "NULL", "NULL", "NULL", "'RAW'", "NULL")), "a raw row without expiry");
-			assertThrows(SQLException.class, () -> statement.execute(observation("'VISITED'", "'REGION'", 12, "NULL", null, "'{}'", "'KNOWN'", "NULL", "NULL", "NULL", "'DURABLE'", "NOW(3) + INTERVAL 1 DAY")), "a durable row with an expiry");
-			statement.execute(observation("'VISITED'", "'REGION'", 12, "NULL", null, "'{}'", "'KNOWN'", "NULL", "NULL", "NULL", "'DURABLE'", "NULL"));
+			// Tiers.
+			assertThrows(SQLException.class, () -> statement.execute(row("'VISITED'", "'REGION'", 12, "NULL", "NULL", "'{}'", "''", "'KNOWN'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "'RAW'", "NULL")), "a raw row without expiry");
+			assertThrows(SQLException.class, () -> statement.execute(row("'VISITED'", "'REGION'", 12, "NULL", "NULL", "'{}'", "''", "'KNOWN'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "'DURABLE'", "NOW(3) + INTERVAL 1 DAY")), "a durable row with an expiry");
 
-			// Shared pages: no lead relation exists for a shared fact; facts are frozen.
-			statement.execute("INSERT INTO lc_mem_shared_page (page_id, author_char, title, created_at, observations_from, observations_to) VALUES (5, 268477011, 'D-grade spoil', NOW(3), NOW(3) - INTERVAL 10 DAY, NOW(3))");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_shared_fact (page_id, seq, relation, subject_kind, subject_ref, value, observed_at) VALUES (5, 1, 'LEAD', 'PLAYER', 268477099, '{}', NOW(3))"), "intel on a shared page");
-			statement.execute("INSERT INTO lc_mem_shared_fact (page_id, seq, relation, subject_kind, subject_ref, object_kind, object_ref, value, observed_at) VALUES (5, 1, 'OBTAINED_FROM', 'ITEM', 1864, 'MONSTER', 20537, '{}', NOW(3))");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_mem_shared_fact SET subject_ref = 1 WHERE page_id = 5"));
+			// Shared pages: every fact has an origin; no lead or rumor relation exists; facts are frozen.
+			statement.execute("INSERT INTO lc_mem_shared_page (page_id, author_char, title, created_at, observations_from, observations_to) VALUES (7, 268477011, 'D-grade spoil', NOW(3), NOW(3) - INTERVAL 10 DAY, NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_shared_fact (page_id, seq, relation, subject_kind, subject_ref, value, observed_at) VALUES (7, 1, 'OBTAINED_FROM', 'ITEM', 1864, '{}', NOW(3))"), "a fact without origin");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_shared_fact (page_id, seq, relation, subject_kind, subject_ref, value, observed_at, origin_char, origin_at) VALUES (7, 1, 'RUMOR', 'ITEM', 1864, '{}', NOW(3), 268477011, NOW(3))"), "a rumor on a page");
+			statement.execute("INSERT INTO lc_mem_shared_fact (page_id, seq, relation, subject_kind, subject_ref, value, observed_at, origin_char, origin_at) VALUES (7, 1, 'OBTAINED_FROM', 'ITEM', 1864, '{}', NOW(3), 268477013, NOW(3) - INTERVAL 3 DAY)");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_mem_shared_fact SET subject_ref = 1 WHERE page_id = 7"));
 
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_note (char_id, text, created_at) VALUES (268477000, REPEAT('x', 401), NOW(3))"), "a note over its bound");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_companion (char_id, other_char, party_key, overlap_minutes, at) VALUES (1, 1, 'p', 30, NOW(3))"), "a companion of oneself");
 
+			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_mem_observation WHERE relation = 'SOLD_BY'"))
+			{
+				result.next();
+				assertEquals(4, result.getInt(1), "two prices and two tellers are four rows");
+			}
 			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_expiring_table WHERE owner_module = 'WAYFARER'"))
 			{
 				result.next();
@@ -75,8 +86,18 @@ class MemSchemaTest
 		}
 	}
 
-	private static String observation(String relation, String subjectKind, long subject, String objectKind, Integer object, String value, String provenance, String sourceChar, String sourcePage, String intel, String tier, String expires)
+	private static String told(String teller, String page)
 	{
-		return "INSERT INTO lc_mem_observation (char_id, relation, subject_kind, subject_ref, object_kind, object_ref, value, provenance, source_char, source_page, intel_id, first_at, last_at, tier, expires_at) VALUES (268477000, " + relation + ", " + subjectKind + ", " + subject + ", " + objectKind + ", " + (object == null ? "NULL" : object.toString()) + ", " + value + ", " + provenance + ", " + sourceChar + ", " + sourcePage + ", " + intel + ", NOW(3), NOW(3), " + tier + ", " + expires + ")";
+		return row("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", "268477010", "'{\"price\":78000}'", "'78000/0'", "'TOLD'", "NULL", teller, page, "268477013", "NOW(3) - INTERVAL 2 DAY", "NULL", "'DURABLE'", "NULL");
+	}
+
+	private static String intel(String relation, String provenance, String rumorSource, long intelId, String value, String region, String tier, String expires)
+	{
+		return row(relation, "'PLAYER'", 268477099, "NULL", "NULL", value, "''", provenance, rumorSource, "NULL", "NULL", "NULL", "NULL", Long.toString(intelId), tier, expires).replace("object_ref, value,", "object_ref, region_id, value,").replace(", NULL, NULL, " + value + ", ''", ", NULL, NULL, " + region + ", " + value + ", ''");
+	}
+
+	private static String row(String relation, String subjectKind, long subject, String objectKind, String object, String value, String valueKey, String provenance, String rumorSource, String sourceChar, String sourcePage, String originChar, String originAt, String intel, String tier, String expires)
+	{
+		return "INSERT INTO lc_mem_observation (char_id, relation, subject_kind, subject_ref, object_kind, object_ref, value, value_key, provenance, rumor_source, source_char, source_page, origin_char, origin_at, intel_id, first_at, last_at, tier, expires_at) VALUES (268477000, " + relation + ", " + subjectKind + ", " + subject + ", " + objectKind + ", " + object + ", " + value + ", " + valueKey + ", " + provenance + ", " + rumorSource + ", " + sourceChar + ", " + sourcePage + ", " + originChar + ", " + originAt + ", " + intel + ", NOW(3), NOW(3), " + tier + ", " + expires + ")";
 	}
 }

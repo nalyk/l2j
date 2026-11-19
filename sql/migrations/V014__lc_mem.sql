@@ -6,44 +6,71 @@
 CREATE TABLE lc_mem_profile (
 	char_id INT NOT NULL,
 	enabled BOOLEAN NOT NULL DEFAULT TRUE,
-	history_public BOOLEAN NOT NULL DEFAULT FALSE,
+	history_publishable BOOLEAN NOT NULL DEFAULT FALSE,
 	collaborate_with_signal BOOLEAN NOT NULL DEFAULT FALSE,
 	raw_retention_days SMALLINT NOT NULL DEFAULT 30,
 	PRIMARY KEY (char_id),
 	CONSTRAINT chk_mem_retention CHECK (raw_retention_days BETWEEN 1 AND 365)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- One row per (character, relation, subject, object, region, provenance): repeats coalesce into times and last_at.
+-- One row per coalescing key: (character, relation, subject, object, region, provenance, teller, value key); a row with an
+-- intel reference is unique by that reference instead, holds no content, and is purged with its item (spec §2.1).
 CREATE TABLE lc_mem_observation (
 	obs_id BIGINT NOT NULL AUTO_INCREMENT,
 	char_id INT NOT NULL,
-	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD', 'RUMOR', 'LEAD') NOT NULL,
+	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'QUEST_ABANDONED', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD', 'RUMOR', 'LEAD') NOT NULL,
 	subject_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NOT NULL,
 	subject_ref BIGINT NOT NULL,
 	object_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NULL,
 	object_ref BIGINT NULL,
 	region_id SMALLINT NULL,
 	value JSON NOT NULL,
+	value_key VARCHAR(64) NOT NULL DEFAULT '',
 	provenance ENUM('KNOWN', 'TOLD', 'RUMORED', 'INFERRED', 'HISTORICAL') NOT NULL,
+	rumor_source ENUM('WORLD', 'INTEL') NULL,
 	state ENUM('CURRENT', 'STALE', 'CONTRADICTED') NOT NULL DEFAULT 'CURRENT',
 	source_char INT NULL,
 	source_page BIGINT NULL,
+	origin_char INT NULL,
+	origin_at TIMESTAMP(3) NULL,
 	intel_id BIGINT NULL,
 	first_at TIMESTAMP(3) NOT NULL,
 	last_at TIMESTAMP(3) NOT NULL,
 	times INT NOT NULL DEFAULT 1,
 	tier ENUM('RAW', 'SUMMARY', 'DURABLE') NOT NULL DEFAULT 'RAW',
 	expires_at TIMESTAMP(3) NULL,
-	coalesce_key VARCHAR(160) AS (CONCAT_WS('/', char_id, relation, subject_kind, subject_ref, IFNULL(object_kind, '-'), IFNULL(object_ref, '-'), IFNULL(region_id, '-'), provenance, tier)) PERSISTENT,
+	coalesce_key VARCHAR(200) AS (IF(intel_id IS NOT NULL, CONCAT('intel/', char_id, '/', intel_id), CONCAT_WS('/', char_id, relation, subject_kind, subject_ref, IFNULL(object_kind, '-'), IFNULL(object_ref, '-'), IFNULL(region_id, '-'), provenance, IFNULL(source_char, '-'), IFNULL(source_page, '-'), value_key, tier))) PERSISTENT,
 	PRIMARY KEY (obs_id),
 	UNIQUE KEY uk_mem_coalesce (coalesce_key),
 	KEY idx_mem_char (char_id, relation, last_at),
+	KEY idx_mem_intel (intel_id),
 	KEY idx_mem_expiry (expires_at),
 	CONSTRAINT chk_mem_value CHECK (JSON_VALID(value)),
 	CONSTRAINT chk_mem_times CHECK (times >= 1 AND last_at >= first_at),
-	CONSTRAINT chk_mem_told CHECK ((provenance = 'TOLD') = (source_char IS NOT NULL AND source_page IS NOT NULL)),
-	CONSTRAINT chk_mem_lead CHECK ((intel_id IS NULL OR (relation = 'LEAD' AND provenance <> 'HISTORICAL')) AND (relation <> 'LEAD' OR intel_id IS NOT NULL OR provenance = 'HISTORICAL') AND (relation <> 'LEAD' OR intel_id IS NOT NULL OR JSON_LENGTH(value) <= 1)),
+	CONSTRAINT chk_mem_told CHECK ((provenance = 'TOLD') = (source_char IS NOT NULL AND source_page IS NOT NULL AND origin_char IS NOT NULL AND origin_at IS NOT NULL)),
+	CONSTRAINT chk_mem_rumor CHECK ((provenance = 'RUMORED') = (rumor_source IS NOT NULL) AND (rumor_source <=> 'INTEL') <= (intel_id IS NOT NULL)),
+	CONSTRAINT chk_mem_lead CHECK ((relation = 'LEAD') <= (intel_id IS NOT NULL AND provenance = 'KNOWN')),
+	CONSTRAINT chk_mem_intel CHECK (intel_id IS NULL OR (relation IN ('LEAD', 'RUMOR') AND JSON_LENGTH(value) = 0 AND object_kind IS NULL AND object_ref IS NULL AND region_id IS NULL AND tier = 'RAW' AND expires_at IS NOT NULL)),
 	CONSTRAINT chk_mem_tier CHECK ((tier = 'DURABLE') = (expires_at IS NULL))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- The only trace of an expired lead: the mark and the day (spec §2.1).
+CREATE TABLE lc_mem_lead_history (
+	char_id INT NOT NULL,
+	mark_char INT NOT NULL,
+	first_day DATE NOT NULL,
+	PRIMARY KEY (char_id, mark_char, first_day)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- Pairwise time together per party incarnation (spec §2.1).
+CREATE TABLE lc_mem_companion (
+	char_id INT NOT NULL,
+	other_char INT NOT NULL,
+	party_key VARCHAR(48) NOT NULL,
+	overlap_minutes INT NOT NULL,
+	at TIMESTAMP(3) NOT NULL,
+	PRIMARY KEY (char_id, other_char, party_key),
+	CONSTRAINT chk_mem_companion CHECK (char_id <> other_char AND overlap_minutes >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_mem_project (
@@ -84,7 +111,8 @@ CREATE TABLE lc_mem_note (
 	KEY idx_mem_note_remind (remind_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- A shared page holds frozen copies of its author's observations; never intel (spec §4.5).
+-- A shared page holds frozen copies of its author's observations, each with its origin; never intel (spec §4.5): no lead or
+-- rumor relation exists for a shared fact.
 CREATE TABLE lc_mem_shared_page (
 	page_id BIGINT NOT NULL AUTO_INCREMENT,
 	author_char INT NOT NULL,
@@ -99,7 +127,7 @@ CREATE TABLE lc_mem_shared_page (
 CREATE TABLE lc_mem_shared_fact (
 	page_id BIGINT NOT NULL,
 	seq INT NOT NULL,
-	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD', 'RUMOR') NOT NULL,
+	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'QUEST_ABANDONED', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD') NOT NULL,
 	subject_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NOT NULL,
 	subject_ref BIGINT NOT NULL,
 	object_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NULL,
@@ -107,6 +135,8 @@ CREATE TABLE lc_mem_shared_fact (
 	region_id SMALLINT NULL,
 	value JSON NOT NULL,
 	observed_at TIMESTAMP(3) NOT NULL,
+	origin_char INT NOT NULL,
+	origin_at TIMESTAMP(3) NOT NULL,
 	PRIMARY KEY (page_id, seq),
 	CONSTRAINT fk_mem_fact_page FOREIGN KEY (page_id) REFERENCES lc_mem_shared_page (page_id) ON DELETE CASCADE,
 	CONSTRAINT chk_mem_fact_value CHECK (JSON_VALID(value))
@@ -121,7 +151,7 @@ CREATE TABLE lc_mem_milestone (
 	ref BIGINT NOT NULL,
 	region_id SMALLINT NULL,
 	at TIMESTAMP(3) NOT NULL,
-	public BOOLEAN NOT NULL DEFAULT FALSE,
+	publishable BOOLEAN NOT NULL DEFAULT FALSE,
 	PRIMARY KEY (milestone_id),
 	UNIQUE KEY uk_mem_milestone (char_id, kind, ref)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

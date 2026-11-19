@@ -80,7 +80,7 @@ TR-aden-signal-future-sessions,90 §2,Aden Signal: future sessions,13 §1–§5,
 TR-aden-signal-no-rewards,90 §2,Aden Signal: no rewards,13 §1–§5,aden-signal.md,SIG-R08,,,,AT-SIG-09,,specified
 TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class preservation,13 §1–§5,aden-signal.md,SIG-R08;SIG-R09,,,,AT-SIG-09;AT-SIG-10,,specified
 TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,wayfarers-memory.md,MEM-R07;MEM-R09,,,,AT-MEM-07;AT-MEM-09,,specified
-TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,wayfarers-memory.md,MEM-R01;MEM-R05;MEM-R08,,,,AT-MEM-01;AT-MEM-05;AT-MEM-08,,specified
+TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,wayfarers-memory.md,MEM-R01;MEM-R05;MEM-R08;MEM-R11,,,,AT-MEM-01;AT-MEM-05;AT-MEM-08;AT-MEM-11,,specified
 TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,wayfarers-memory.md,MEM-R02,,,,AT-MEM-02,,specified
 TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,intel-service.md;wayfarers-memory.md,INTEL-R03;INTEL-R06;MEM-R03,lc_trace;lc_intel,,,AT-INTEL-03;AT-INTEL-06;AT-MEM-03,,specified
 TR-wayfarer-s-memory-projects-notes,90 §2,Wayfarer's Memory: projects/notes,14 §1–§9,wayfarers-memory.md,MEM-R07,,,,AT-MEM-07,,specified

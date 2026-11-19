@@ -1,11 +1,12 @@
 # SPEC-MEM — Wayfarer's Memory
 
-- Status: draft (revision 1)
-- Blueprint: 14 (Wayfarer's Memory); 01 §2.5 (shared content is just content); 02 §1, §4; 03 §4.4 (party seams); 04 §4
-  (Intel Service: registered copies), §5 (Codex: the login recap); 12 (Aden Remembers moves the world); 13 (Signal reads
-  "played together before"); 15 (PACT contracts in projects); 16 §8 / 14 §8 (the Ledger boundary); 17 (publication).
-- Depends on: intel-service.md (copies, `intel.read`, publication registry), codex-ui.md (pages, recap), actor-identity.md
-  (activity, policy), aden-signal.md (§4.3's `collaborated` term), pact.md (contract facts), fact-journal.md (facts).
+- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Blueprint: 14 (Wayfarer's Memory); 01 §2.5 (shared content is just content); 02 §1, §4, §6 (capture ≤ 2 µs p99); 03 §4.4
+  (party seams); 04 §4 (Intel Service: registered copies), §5 (Codex: the login recap); 12 (Aden Remembers moves the
+  world); 13 (Signal reads "played together before"); 15 (PACT contracts in projects); 16 §8 / 14 §8 (the Ledger boundary);
+  17 (Chronicle owns website publication).
+- Depends on: intel-service.md (copies, `intel.read`), codex-ui.md (pages, recap, queue), actor-identity.md (activity),
+  aden-signal.md (§4.3's `collaborated` term), pact.md (contract facts), fact-journal.md (telemetry).
 - DDL: `sql/migrations/V014__lc_mem.sql` (after Signal's V013).
 - Upstream facts cited as `file:line` are at the fork's current upstream snapshot (`upstream` c9ca4c31); paths are under
   `java/org/l2jmobius/gameserver/` unless they start with `dist/`.
@@ -13,208 +14,267 @@
 ## 1. Scope
 
 Aden Remembers answers "what happened to the world"; Wayfarer's Memory answers "what happened to me, and what do I know".
-It owns, per character: **observations** captured from that character's own experience, with **provenance**; their
-**ageing, contradiction and summarisation**; the **login recap**; **projects**, **notes** and **reminders**; **shared
-pages** and their import; the **personal history**; and its side of the **Ledger boundary**.
+It owns, per character: **observations** captured from that character's own experience, with **provenance**; their ageing,
+contradiction and summarisation; the **login recap**; **projects**, **notes** and **reminders**; **shared pages** and their
+import; the **personal history** (private); and its side of the **Ledger boundary**.
 
 It does not own: the world's state (Mobius, Aden Remembers), anyone else's experience, intel (the Intel Service: Wayfarer
-keeps only registered references, read through it), recipes (Mobius's `RecipeData`).
+keeps registered references only), recipes (Mobius's `RecipeData`), or the website (Chronicle, 17, which may publish
+milestones a character opted into; this spec only marks them).
 
-**No global wiki** (14 §4): every query answers from the asking character's own observations and the pages they
-imported; nothing aggregates across characters, and there is no "best spot", "best farm" or "optimal route" query.
-**Nothing is granted**: no item, no buff, no hint the character did not experience (02 §1).
+**No global wiki** (14 §4): the query set (§4.1) is closed and answers only from the asking character's own rows; nothing
+aggregates across characters; there is no ranking of places, monsters or routes. **Nothing is granted** (02 §1).
+
+**Memory is best-effort.** It is a personal journal, not a record of the world: captures can be dropped under overload or
+during a database outage (counted and alarmed), and a crash loses what was not yet committed. Nothing in the game depends
+on a Wayfarer row.
 
 ## 2. Data
 
 ### 2.1 Observations
 
 ```text
-lc_mem_observation(obs_id BIGINT PK auto, char_id, relation {SOLD_BY|BOUGHT_FROM|BUYS|CRAFTS|PRICED_AT_NPC|OBTAINED_FROM|
-                   HUNTED|TALKED_TO|QUEST_FROM|QUEST_DONE|LEARNED_RECIPE|SAW_BOSS|HUNTED_WITH|TRADED_WITH|MET|VISITED|
-                   TOLD|RUMOR|LEAD}, subject_kind {ITEM|NPC|MONSTER|PLAYER|REGION|RECIPE|QUEST|BOSS|CONTRACT},
-                   subject_ref BIGINT, object_kind NULL, object_ref NULL, region_id SMALLINT NULL, value JSON,
-                   provenance {KNOWN|TOLD|RUMORED|INFERRED|HISTORICAL}, state {CURRENT|STALE|CONTRADICTED},
-                   source_char NULL, source_page NULL, intel_id NULL, first_at, last_at, times INT,
-                   tier {RAW|SUMMARY|DURABLE}, expires_at NULL)
+lc_mem_observation(obs_id PK, char_id, relation {SOLD_BY|BOUGHT_FROM|BUYS|CRAFTS|PRICED_AT_NPC|OBTAINED_FROM|HUNTED|TALKED_TO|
+                   QUEST_FROM|QUEST_DONE|QUEST_ABANDONED|LEARNED_RECIPE|SAW_BOSS|HUNTED_WITH|TRADED_WITH|MET|VISITED|TOLD|
+                   RUMOR|LEAD}, subject_kind, subject_ref, object_kind NULL, object_ref NULL, region_id NULL,
+                   value JSON, value_key VARCHAR(64), provenance {KNOWN|TOLD|RUMORED|INFERRED|HISTORICAL},
+                   rumor_source {WORLD|INTEL} NULL, state {CURRENT|STALE|CONTRADICTED}, source_char NULL, source_page NULL,
+                   origin_char NULL, origin_at NULL, intel_id NULL, first_at, last_at, times, tier {RAW|SUMMARY|DURABLE},
+                   expires_at NULL, coalesce_key (stored, unique))
+lc_mem_lead_history(char_id, mark_char, first_day DATE, PRIMARY KEY(char_id, mark_char, first_day))
+lc_mem_companion(char_id, other_char, party_key VARCHAR(48), overlap_minutes INT, at, PRIMARY KEY(char_id, other_char, party_key))
 ```
 
-- **Provenance** (14 §3): `KNOWN` the character experienced it; `TOLD` imported from another player's shared page (with
-  who and when); `RUMORED` heard from an NPC or the world (Aden Remembers' rumors, the Intel Service's rumors);
-  `INFERRED` derived from the character's own observations (a project's missing items); `HISTORICAL` an expired lead or a
-  fact kept only as history. A query result is always grouped by provenance: the page never merges a rumor into a fact.
-- **State**: `CURRENT`; `STALE` once older than its relation's `StaleAfter` (§8); `CONTRADICTED` when a newer `KNOWN`
-  observation of the same relation and subject gives another value (a price, a seller who left). Ageing is by time only:
-  if Aden Remembers moved supply, old knowledge stays old (14 §3).
-- **Coalescing**: an observation is keyed by (char, relation, subject, object, region, provenance); a repeat updates
-  `last_at`, `times` and the value, never a new row, so 400 identical kills are one row with `times` 400 (14 §9).
-- **Values** are typed per relation (a price and a count, an enchant level, a quest step), never free text, except notes
-  (§2.2).
+- **Provenance** (14 §3) is never merged in a result (§4.1): `KNOWN` the character experienced it; `TOLD` imported from a
+  page, with its **teller** (`source_char`, `source_page`) and its **origin** (`origin_char`, `origin_at`: who first observed
+  it and when, kept through any number of forwards); `RUMORED` heard from an NPC (`rumor_source WORLD`: Aden Remembers' crier
+  and tavern lines) or from the Intel Service (`INTEL`: `LEDGER_RUMOR` disclosures to this character); `INFERRED` derived from
+  the character's own rows (a project's missing items); `HISTORICAL` kept only as history.
+- **Coalescing**: a row's key is (char, relation, subject, object, region, provenance, teller, `value_key`). `value_key` is the
+  part of the value that identifies a distinct observation: price and enchant for `SOLD_BY`, `BUYS`, `PRICED_AT_NPC`,
+  `BOUGHT_FROM`; nothing for counts. A repeat with the same key updates `last_at` and `times`; a different price or enchant
+  is a **new row**, so the older one remains to be marked `CONTRADICTED` (§3.1), and two copies of an item at two enchant
+  levels stay apart. Different tellers of the same thing stay apart.
+- **Intel never coalesces**: a row with an `intel_id` (`LEAD`, and `RUMOR` from `INTEL`) is unique by its `intel_id`, holds
+  **no content** of its own (value `{}`, no object, no region: what is shown is read through `intel.read`), and is registered
+  as a copy of exactly that item (intel-service.md §4.5). When the item expires, the Intel Service's purge deletes the row
+  with its other copies; nothing of it remains in `lc_mem_observation`.
+- **Lead history** is the only trace of an expired lead: when a `LEAD` row is first stored, `lc_mem_lead_history` records
+  the mark (whose identity the dossier already gave the hunter) and the day, nothing else, and no dependency. The Journal
+  shows "you once had a lead on *mark* (*day*)" once the lead row is gone (14 §8).
+- **Companions** are pairwise: `lc_mem_companion` records, per party incarnation (the party seams' party key, 03 §4.4), the
+  minutes two characters were members **at the same time**; a `HUNTED_WITH` observation exists for a pair once an
+  incarnation's overlap reaches `HuntedWithMinutes`, and its count of sessions is the number of such incarnations.
 
 ### 2.2 The rest
 
 ```text
 lc_mem_project(project_id PK, char_id, target_item_id, state {OPEN|DONE|ABANDONED}, created_at)
-lc_mem_project_req(project_id, item_id, qty_needed, via_recipe INT NULL, PRIMARY KEY(project_id, item_id))
-lc_mem_project_contract(project_id, contract_id, PRIMARY KEY(project_id, contract_id))
+lc_mem_project_req(project_id, item_id, qty_needed, via_recipe NULL)
+lc_mem_project_contract(project_id, contract_id)
 lc_mem_note(note_id PK, char_id, text VARCHAR(400), pinned, remind_at NULL, created_at)
 lc_mem_shared_page(page_id PK, author_char, title VARCHAR(64), created_at, observations_from, observations_to)
-lc_mem_shared_fact(page_id, seq, relation, subject_kind, subject_ref, object_kind, object_ref, region_id, value, observed_at,
-                   PRIMARY KEY(page_id, seq))
-lc_mem_milestone(milestone_id PK, char_id, kind, ref BIGINT, region_id NULL, at, public BOOLEAN)
-lc_mem_session(char_id, session_end, summary JSON, expires_at, PRIMARY KEY(char_id, session_end))
-lc_mem_profile(char_id PK, history_public BOOLEAN, collaborate_with_signal BOOLEAN, raw_retention_days)
+lc_mem_shared_fact(page_id, seq, relation, subject…, value, observed_at, origin_char, origin_at)   -- frozen
+lc_mem_milestone(milestone_id PK, char_id, kind, ref, region_id NULL, at, publishable BOOLEAN)
+lc_mem_session(char_id, session_end, summary JSON, expires_at)
+lc_mem_profile(char_id PK, enabled, history_publishable, collaborate_with_signal, raw_retention_days)
 ```
 
-- A shared page holds **copies** of the author's observations, frozen when the page is made; editing the author's memory
-  later does not change it.
-- Notes are the only free text: bounded, stripped (codex-ui.md §4.2), private to the character, never shared unless the
-  character puts the note itself on a page.
+Bounds per character (§8): `MaxPages`, `MaxPageFacts` per page, `MaxImportedFacts`, `MaxDurableRows` (pins count), `MaxNotes`,
+`MaxProjects`. An action that would pass a bound is refused with the reason.
 
 ### 2.3 Tiers and retention
 
 | Tier | What | Kept |
 |---|---|---|
-| `RAW` | observations as captured and coalesced | `raw_retention_days` (default `RawRetentionDays`, 30) after `last_at`, then summarised |
-| `SUMMARY` | a summary row per (relation, subject, object kind, region, provenance) with counts and the first and last time ("obtained X from family Y repeatedly") | `SummaryRetentionDays` |
-| `DURABLE` | pinned observations, notes, projects, milestones, imported pages | until the character deletes them or is deleted |
+| `RAW` | observations as captured and coalesced | `raw_retention_days` after `last_at`, then summarised |
+| `SUMMARY` | one row per (relation, subject, object kind, region, provenance) with counts and first and last times | `SummaryRetentionDays` |
+| `DURABLE` | pinned observations, imported facts, notes, projects, milestones, lead history | until the character deletes them, within the bounds, or the character is deleted |
 
-Sessions expire with `SessionRetentionDays`. Every expiring table is listed in `lc_expiring_table` (intel-service.md §4.5).
+Intel-bearing rows are never summarised or made durable: they live exactly as long as their item. Every expiring table is
+listed in `lc_expiring_table` (intel-service.md §4.5).
 
-## 3. Capture
+## 3. State machines
 
-### 3.1 Only the character's own experience
+### 3.1 Observation
 
-Every capture point records what **this character was shown or did**, at the moment the server shows or does it, never
-global state (14 §2). Mobius dispatches no usable event for most of them, and its asynchronous ones race the state they
-describe (`mechanics/events/EventDispatcher.java:159-166`), so capture is a set of **experience seams**, small synchronous
-core patches (ledgered in `CORE_PATCHES.md` when implemented), each copying primitives into the character's capture
-buffer (§3.3):
-
-| Relation | Seam (upstream point) | What is copied |
+| From | Event | To |
 |---|---|---|
-| `SOLD_BY`, `BUYS`, `CRAFTS` | `Player.doInteract`, `entity/actor/Player.java:4470-4494`, when it sends a store's list to the viewer | per listed item: item id, count, price, enchant (sell store); the store's own buy list (`getBuyList().getItems()`, not the viewer-adjusted packet, `entity/itemcontainer/PlayerInventory.java:343-376`); per recipe: its product and cost, resolved through `RecipeData.getRecipeList` (the packet carries only recipe ids, `network/serverpackets/RecipeShopSellList.java:54-59`); the store owner and region |
-| `BOUGHT_FROM` | `TradeList.privateStoreBuy` / `privateStoreSell`, `network/holders/TradeList.java:791`, `:959`, after each item moves | item, count, price, the other party |
-| `PRICED_AT_NPC` | `Merchant.showBuyWindow`, `entity/actor/instance/Merchant.java:87-110`, when the buy list is sent | per product: item id and the price shown, tax included (`network/serverpackets/BuyList.java:89`); the merchant and town |
-| `OBTAINED_FROM` | `Player.addItem` and `addAdena`, `Player.java:3485-3581`, `:3192`, `:3223`, for the processes `LOOT`, `SWEEP` and `PICKUP` | item, count, and the monster when the reference is one (auto-loot and party loot pass it, `Player.java:4514-4527`, `entity/groups/Party.java:677-686`); a ground pickup knows no monster (Mobius clears the dropper, `entity/item/instance/Item.java:1628-1639`) and records only the region |
-| `HUNTED` | the monster death, `ON_CREATURE_DEATH` on `Containers.Monsters()` (synchronous, `entity/actor/Creature.java:2626-2628`) | the monster template, region, and the killer's acting player |
-| `TALKED_TO` | `NpcClick`, `dist/game/data/scripts/handlers/actions/click/NpcClick.java:121-128`, in range, before the NPC's chat or first-talk event | the NPC and region (never a listener on `Containers.Npcs()`: that would route every NPC to its first-talk event and skip default chat windows) |
-| `QUEST_FROM`, `QUEST_DONE` | `QuestState.setState`, `setCond`, `exitQuest`, `mechanics/script/QuestState.java:162-184`, `:467-522`, `:680-704` | quest, step, and the NPC `player.getLastFolkNPC()` names at that moment |
+| — | a capture, an import, a rumor told, a grant | `CURRENT`, tier `RAW` (imports: `DURABLE`) |
+| `CURRENT` | its relation's `StaleAfter` passes since `last_at` | `STALE` |
+| `CURRENT`, `STALE` | a newer `KNOWN` row of the same relation, subject and object with another `value_key` | `CONTRADICTED` |
+| `RAW` | `raw_retention_days` pass, not pinned, no `intel_id` | folded into its `SUMMARY` row, deleted |
+| `RAW`, `SUMMARY` | pinned (within `MaxDurableRows`), no `intel_id` | `DURABLE` |
+| any with `intel_id` | the item expires | deleted by the Intel Service's purge |
+
+### 3.2 Quest observation
+
+`QUEST_FROM` (a step given at a talk) → `QUEST_DONE` (completed) or `QUEST_ABANDONED` (the player aborted it), each a separate
+row (§3.3).
+
+### 3.3 Capture: the experience seams
+
+Every capture records what **this character was shown or did**, at the moment it happens, never global state (14 §2). Mobius
+dispatches no usable event for most of these, and its asynchronous ones race the state they describe
+(`mechanics/events/EventDispatcher.java:159-166`), so capture is a set of small synchronous **experience seams** (core
+patches, ledgered in `CORE_PATCHES.md` when implemented), each copying primitives into the character's capture buffer (§3.4):
+
+| Relation | Seam | What is copied |
+|---|---|---|
+| `SOLD_BY`, `BUYS`, `CRAFTS` | the **serialisation** of the store list packets, `network/serverpackets/PrivateStoreListSell.java:42-61`, `PrivateStoreListBuy.java:37-58`, `RecipeShopSellList.java:54-59`, in `writeImpl`, while the values are written | exactly the item ids, counts, prices and enchant levels written to this viewer, the store owner and region; recipe ids resolved to their products through `RecipeData.getRecipeList` (the packet has only recipe ids); capturing at the write, not at `Player.doInteract` (`entity/actor/Player.java:4470-4494`), because these packets read live lists when serialised (`PrivateStoreListSell.java:35`), after a queue (`commons/network/Client.java:85-94`) |
+| `BOUGHT_FROM` | `TradeList.privateStoreBuy` / `privateStoreSell` after each item moves, `network/holders/TradeList.java:791`, `:959` | item, count, price, the other party |
+| `PRICED_AT_NPC` | `BuyList.writeImpl`, `network/serverpackets/BuyList.java:55-90` | per product written: item id and the price written, tax included; the merchant and town |
+| `OBTAINED_FROM` | `Player.addItem` (both overloads, `Player.java:3388`, `:3485-3581`) and `addAdena` (`:3192`, `:3223`) for `LOOT`, `SWEEP`, `PICKUP` | item, count; the monster when the reference is one (auto-loot and party item loot pass it, `Player.java:4514-4527`, `entity/groups/Party.java:677-686`); for a **ground** item, the monster from Wayfarer's drop map, filled at `Npc.dropItem` (`entity/actor/Npc.java:1935`: object id → monster template and region, bounded, entries removed at pickup or after `DropMapSeconds`), because Mobius clears the dropper (`entity/item/instance/Item.java:1628-1639`); party Adena passes the initiating player (`Party.java:772`) and records no monster; herbs are consumed on pickup (`Player.java:4653-4666`) and are not obtained |
+| `HUNTED` | the monster death, `ON_CREATURE_DEATH` on `Containers.Monsters()` (synchronous, `entity/actor/Creature.java:2626-2628`) | the monster template, region, the killer's acting player |
+| `TALKED_TO` | `NpcClick`, `dist/game/data/scripts/handlers/actions/click/NpcClick.java:121-128`, in range, when the chat or first-talk dispatch happens (never on targeting, :66; never a listener on `Containers.Npcs()`, which would skip default chat windows) | the NPC and region |
+| `QUEST_FROM` | `Quest.notifyTalk` and `Quest.notifyEvent` (`mechanics/script/Quest.java:638`, `:618`), when the quest state changes during that call | quest, step, and **the NPC that call was dispatched with**; a state change outside a talk (a kill advancing a step) records no NPC (`player.getLastFolkNPC()`, set on targeting, is never used) |
+| `QUEST_DONE`, `QUEST_ABANDONED` | `QuestState.exitQuest` (`mechanics/script/QuestState.java:680-704`); `RequestQuestAbort` (`network/clientpackets/RequestQuestAbort.java:58`) marks its own call as an abort | abandoned when reached from `RequestQuestAbort`, done otherwise |
 | `LEARNED_RECIPE` | `Player.registerRecipeList`, `Player.java:1371`, `:1386` | the recipe |
-| `SAW_BOSS` | `ON_CREATURE_SEE` for raid and grand boss ids (`Npc.addCreatureSeeId`, `entity/actor/Npc.java:1341-1347`; polled every second, `taskmanagers/CreatureSeeTaskManager.java:39`) | the boss and region |
-| `HUNTED_WITH` | the party seams (03 §4.4), for parties lasting at least `HuntedWithMinutes` | the other members |
-| `TRADED_WITH`, `MET` | `TradeList.doExchange`, `TradeList.java:584-628`, before the transfer; whisper delivery, `dist/game/data/scripts/handlers/chat/channels/ChatWhisper.java:122-123` | the other character |
+| `SAW_BOSS` | the point Mobius sends a raid or grand boss's info **to this player**, `Npc.sendInfo(player)` (`entity/actor/Npc.java:1548`), called when the boss becomes known to the player's client (`entity/World.java:366-394`, `:600-619`) | the boss and region; the check is one template flag, so the hot path pays a branch for other NPCs |
+| `HUNTED_WITH` | the party seams (03 §4.4): join and leave times per member and party incarnation | pairwise overlap into `lc_mem_companion` (§2.1) |
+| `TRADED_WITH` | `TradeList.doExchange` **after success**, at `onTradeFinish(true)` (`TradeList.java:623-628`; a failed exchange, overweight or full, finishes with `false`) | the other character |
+| `MET` | whisper delivery, `dist/game/data/scripts/handlers/chat/channels/ChatWhisper.java:122-123` | the other character |
 | `VISITED` | the first entry of a region in a session (the journal's region index, fact-journal.md §2.3) | the region |
 
-`TOLD` comes only from imported pages (§4.5); `RUMORED` only from rumors the character was told by an NPC (Aden
-Remembers' crier and tavern lines, the Intel Service's `LEDGER_RUMOR` disclosures to that character); `LEAD` only from the
-character's own Intel grants (§4.6). Chat is never parsed.
+`TOLD` comes only from imported pages (§4.5); `RUMORED` only from rumors an NPC told the character or the Intel Service
+disclosed to them; `LEAD` only from the character's own Intel grants. Chat is never parsed.
 
-### 3.2 Who is captured
+### 3.4 The capture buffer
 
-Any player character whose owner has not turned Wayfarer off (`lc_mem_profile`; on by default, as a personal journal is).
-Offline traders and offline play capture nothing (their client is detached; `Player.java:4447` drops packets with no
-client). Citizens keep their own observation store (10) and use Wayfarer only if their persona enables it.
+Each online character has a bounded buffer of primitive records (`CaptureSlotsPerChar`), a multi-producer ring like the
+journal's (fact-journal.md §3.2: claim, fill, publish; no lock, no I/O, no allocation), because its producers are the packet,
+network, combat and event threads. A seam's work is bounded: at most `MaxStoreItemsCaptured` entries per store list, the
+rest counted as truncated. Every seam is wrapped so that **any exception inside capture is caught, counted and dropped**:
+retail processing continues exactly as it would without Wayfarer. A full buffer refuses new records (counted); records are
+never overwritten. The Wayfarer writer coalesces in memory and commits every `FlushSeconds` and at the **logout seam**, a
+synchronous hook before `storeMe()` (`network/Disconnection.java:110-120`; Mobius's logout event runs after the save,
+`Player.java:11766-11770`). During a database outage the writer keeps coalesced rows in memory up to `WriterBacklogRows` and
+drops the oldest beyond that (counted, alarmed); a crash loses what was not committed.
 
-### 3.3 The capture buffer
+### 3.5 Who is captured
 
-Each online character has a bounded buffer (`CaptureSlotsPerChar`) of primitive records, filled at the seams without a
-lock or I/O. A Wayfarer writer coalesces records in memory (§2.1) and flushes each character's coalesced rows every
-`FlushSeconds`, and at the **logout seam**, a synchronous hook before `storeMe()` (`network/Disconnection.java:110-120`;
-Mobius's logout event is asynchronous and runs after the save, `Player.java:11766-11770`). A full buffer drops the oldest
-records and counts them. A crash loses at most the last `FlushSeconds` of memories: an accepted limit for a journal, never
-for money (no Wayfarer row is a fact of the world).
+Any player character whose profile is enabled (on by default). Offline traders and offline play capture nothing (detached
+client; `Player.java:4447` sends nothing without a client). Citizens keep their own observation store (10) and use Wayfarer
+only if their persona enables it.
 
 ## 4. Operations
 
-### 4.1 Queries
+### 4.1 The query set
 
-Codex → Journal: "who sold *item*", "where did I get *item*", "what does *NPC* sell", "which NPC gave *quest*", "what was I
-crafting", "where did I see *boss*", "who did I hunt with". Each runs over the asking character's own observations and
-imported pages only, and returns rows grouped by provenance, each with its age and state. There is no query that ranks
-places, monsters or routes, no "best", and no query across characters (AT-MEM-04 is a static check of the query set).
+Closed: each query is a named server operation over the asking character's own rows and the pages they imported, with
+results grouped by provenance and each row's age and state:
+
+| Query | Answers from |
+|---|---|
+| `who_sold(item)` | own `SOLD_BY`, `BOUGHT_FROM`, imported `TOLD` rows of those relations |
+| `where_obtained(item)` | own `OBTAINED_FROM`, `TOLD` |
+| `npc_sells(npc)` | own `PRICED_AT_NPC`, `TOLD` |
+| `quest_giver(quest)` | own `QUEST_FROM` |
+| `projects()` | own projects |
+| `boss_seen(boss)` | own `SAW_BOSS`, `TOLD` |
+| `hunted_with()` | own `HUNTED_WITH` (`KNOWN` only) |
+| `rumors(subject)` | own `RUMORED` |
+| `leads()` | own `LEAD` rows through `intel.read`, and the lead history |
+| `history()` | own milestones |
+
+No other query exists; none reads another character's rows; none sorts subjects by any yield, price or frequency across
+characters. A request names a query id from this table and nothing else (AT-MEM-04 enumerates them).
 
 ### 4.2 The login recap
 
-At login, if the character has one, the recap (14 §1): the open projects and what they still miss; the latest relevant
-observations for those missing items (by provenance, with age); where the character was last hunting; pinned notes and due
-reminders. Shown through the Codex as `TutorialShowHtml` (codex-ui.md §4.7), dismissable, and in the Journal tab. It is not
-shown to characters below level 6 at login, whose tutorial quest uses that window (`dist/game/data/scripts/quests/Q00255_Tutorial/Q00255_Tutorial.java:139-150`,
-`:2228`); they see it in the Journal tab. No item is generated; no optimal answer is offered.
+At login, if there is something to recap (14 §1): open projects and what they still miss; the latest observations for the
+missing items, by provenance, with age; where the character was last hunting; pinned notes and due reminders. Through the
+Codex as `TutorialShowHtml` (codex-ui.md §4.7), dismissable, and in the Journal tab; not as a popup below level 6, whose
+tutorial owns that window at login (`dist/game/data/scripts/quests/Q00255_Tutorial/Q00255_Tutorial.java:139-150`, `:2228`).
 
 ### 4.3 Projects
 
-A project pins a target item. Its requirements are derived from the recipes **the character knows or has observed**
-(`LEARNED_RECIPE`, `CRAFTS`): Wayfarer builds, at startup, an index from product to recipes from Mobius's recipe data
-(`data/xml/RecipeData.java:217`, `:244`; Mobius keeps no product index, its `getRecipeByItemId` matches the recipe scroll,
-`:227-238`), and expands intermediate materials through recipes the character also knows or has observed. Quantities
-held are read from the character's own inventory when the page renders. PACT contracts the character signed for a
-project's items appear in it (`lc_mem_project_contract`, from PACT's facts). Reminders send a system message at
-`remind_at` if the character is online, else at their next login.
+A project pins a target item; its requirements come from recipes **the character knows or observed** (`LEARNED_RECIPE`,
+`CRAFTS`), expanded through intermediate materials whose recipes the character also knows or observed. Wayfarer builds a
+product-to-recipe index at startup from `RecipeData` (`data/xml/RecipeData.java:217`, `:244`; Mobius's `getRecipeByItemId`
+matches the scroll, `:227-238`). Held quantities come from the character's own inventory when the page renders. PACT
+contracts the character signed for a project's items appear in it. Reminders are system messages at `remind_at`, or at the
+next login.
 
-### 4.4 Ageing, contradiction, summarisation
+### 4.4 Ageing and summarisation
 
-A daily job marks observations `STALE` past their relation's `StaleAfter`, `CONTRADICTED` when a newer `KNOWN` one disagrees,
-summarises `RAW` rows past retention into `SUMMARY` rows and deletes them, and deletes expired summaries and sessions.
-Pinned observations are `DURABLE` and never summarised away.
+A daily job applies §3.1: stale by time, contradicted by newer known values, summarised and deleted past retention.
 
 ### 4.5 Shared pages
 
-A character makes a page from a subset of their own observations (by relation, subject, region and time span), never from
-intel (`LEAD` rows and anything carrying an `intel_id` are refused: shareable intel is the Intel Service's decision, and a
-copy of intel on a page would escape its expiry). Another character imports the page in person from the author or a
-link the author gave them (a Codex action): each fact becomes a `TOLD` observation with `source_char` = the author,
-`source_page`, and the observation's own date; an import never becomes `KNOWN`. Shared content is just content: it can be
-forwarded, which is fine (01 §2.5); a forwarded import keeps the original author.
+A character makes a page from a subset of their own rows (by relation, subject, region and span), never from a row with
+an `intel_id`, never from `RUMORED` rows (a rumor is the world's or the Intel Service's to tell, not the character's to
+re-certify), never lead history. Each fact on the page carries its
+**origin**: for the author's own `KNOWN` rows, the author and the observation's time; for rows the author imported, their
+original origin. Importing (a Codex action, in person from the author or through a link the author gave) makes `TOLD` rows
+with the page's author as teller and the fact's origin preserved; an import never becomes `KNOWN`. Forwarding imported facts
+on a new page keeps their origin (01 §2.5).
 
 ### 4.6 The Ledger boundary
 
-Legitimately learned Ledger intel is kept as `LEAD` rows that hold only the Intel Service item id (registered as a copy in
-the writing transaction, intel-service.md §4.5) and are shown through `intel.read`, with its confidence class, provenance and
-age band. When the item expires (the read returns nothing), the row becomes `HISTORICAL`: "you once had a lead on *mark*
-(expired)", with the day only, no place, no confidence, no payload. A rebuild or replay reads intel only through
-`intel.read`, so it can never resurrect an expired lead (14 §8, 20 §1).
+Ledger intel is kept only as content-free `LEAD` rows referencing their item and shown through `intel.read`, with its
+confidence, provenance and age band; Ledger rumors likewise as `RUMORED`/`INTEL` rows. When the item expires the Intel
+Service's purge deletes the row; the lead history alone remains: "you once had a lead on *mark* (*day*)". A rebuild or replay
+reads intel only through `intel.read`, and summaries, sessions, milestones and pages never take intel content, so nothing can
+resurrect an expired lead (14 §8, 20 §1).
 
 ### 4.7 Personal history
 
-Milestones are promoted from the character's own observations and its own facts (PACT contracts, Ledger outcomes as the
-hunter or mark they already know, sieges attended from battle facts): first visit of a region, a boss witnessed, clans
-joined and left, a contract completed, a significant craft (grade B or above, or masterwork), a memorable PvP (a siege kill,
-a kill of a higher-level character), a recurring companion (`HUNTED_WITH` at least `CompanionSessions` times), an economic
-milestone (first million, first ten million of own Adena). They are private unless the character opts in
-(`history_public`); then each public milestone is a publication row of type `wayfarer_history` (intel-service.md §4.7:
-the character's name, the milestone kind, a day, public entities only; never a place finer than a territory, never another
-player unless that player also opted in), after the tactical delay.
+Milestones are promoted from the character's own rows and facts: first visit of a region, a boss witnessed, clans joined and
+left, a contract completed, a significant craft (grade B or above, or masterwork), a memorable PvP (a siege kill, a kill of a
+higher-level character), a recurring companion (`CompanionSessions` incarnations), an economic milestone. They are private.
+A character may mark them **publishable**; Chronicle (17) owns any website publication and its types, and may publish only
+milestones marked so, of a character who set `history_publishable`, never one about a private PACT contract or a Ledger
+outcome that is not already public, never naming another player who has not also set it; withdrawing the flag removes the
+character's milestones from what Chronicle may publish. Until Chronicle is specified, nothing is published.
 
 ### 4.8 Signal's soft input
 
-When both characters set `collaborate_with_signal`, Wayfarer answers Signal's `collaborated(a, b)` with whether they share a
-`HUNTED_WITH` observation; otherwise it answers no (aden-signal.md §4.3). Nothing else of the memory leaves the character.
+When both characters set `collaborate_with_signal`, Wayfarer answers Signal's `collaborated(a, b)` with whether
+`lc_mem_companion` holds an incarnation of theirs with overlap ≥ `HuntedWithMinutes` (only the character's own experience;
+imported rows never count); otherwise no (aden-signal.md §4.3).
+
+### 4.9 Character deletion
+
+The character deletion path (`network/GameClient.java:342`, `deleteCharByObjId`, which deletes a fixed list of tables and
+none of Wayfarer's) gains, in the same core patch the Asset Service's deletion guard makes there (asset-service.md §11.21), a
+step that deletes every `lc_mem_*` row of the character, and their shared pages; imports others made of those pages stay
+theirs, with their recorded origin.
+
+### 4.10 Production checks
+
+A verifier samples `VerifySample` rows per cycle: no row of one character is reachable from another's queries; every
+`TOLD` row has a teller and an origin; every row with an `intel_id` has its copy registration; no row's provenance is
+`KNOWN` without a capture seam. A violation is an alarm and freezes Wayfarer (`lc_module_state`): captures continue into the
+buffer, pages show the journal unavailable, until an admin unfreezes it.
 
 ## 5. Facts
 
-Telemetry only (fact-journal.md §2.6): `Mem.Captured` (relation, count), `Mem.BufferDropped`, `Mem.Flushed`. Outbox:
-`Mem.PageShared` (page, author), `Mem.PageImported` (page, importer), `Mem.MilestoneReached` (kind, public). No fact holds an
-observation's content.
+Telemetry only (fact-journal.md §2.6): `Mem.Captured` (relation, count), `Mem.Dropped` (reason: buffer, backlog, truncated,
+exception), `Mem.Flushed`. Outbox: `Mem.PageShared` (page, author), `Mem.PageImported` (page, importer),
+`Mem.MilestoneReached` (kind, publishable), `Mem.Frozen`. No fact holds an observation's content.
 
 ## 6. Invariants
 
 | Id | Invariant | Checked |
 |---|---|---|
-| MEM-INV01 | every observation is the owner's own experience, an import, an NPC rumor told to them, or their own grant | the seams are the only writers; the static scan; AT-MEM-01 |
-| MEM-INV02 | provenance is never merged in a query result, and an import is never `KNOWN` | the query layer; AT-MEM-02 |
-| MEM-INV03 | no query reads another character's observations or ranks places, monsters or routes | the static scan of the query set; AT-MEM-04 |
-| MEM-INV04 | no expired intel is readable, rebuilt or shared | `intel.read`; the page builder; AT-MEM-06 |
-| MEM-INV05 | Wayfarer grants nothing and calls no mechanics API | static scan; AT-MEM-09 |
+| MEM-INV01 | every observation is the owner's own experience, an import, an NPC or Intel rumor told to them, or their own grant | the seams are the only writers; the verifier; AT-MEM-01 |
+| MEM-INV02 | provenance is never merged and an import is never `KNOWN`; tellers and origins are kept | the schema; the query layer; AT-MEM-02 |
+| MEM-INV03 | no query reads another character's rows or ranks across characters | the closed query set; the verifier; AT-MEM-04 |
+| MEM-INV04 | no intel content outlives its item | content-free intel rows, purge by the Intel Service; AT-MEM-06 |
+| MEM-INV05 | capture never changes retail processing | the seam wrapper; AT-MEM-08 |
 
 ## 7. Failure model
 
 | Fault | End state |
 |---|---|
-| crash | at most `FlushSeconds` of captures lost; nothing else |
-| buffer full | oldest records dropped and counted; the character's journal is incomplete, never wrong |
-| Intel Service down | `LEAD` rows show "unavailable"; nothing else changes |
-| the daily job late | rows stay a day longer; queries mark them stale by time anyway |
-| a seam missing (not yet patched) | its relation is absent; the rest works |
+| an exception inside a seam | caught, counted; retail unchanged |
+| buffer full, backlog full | records dropped and counted, alarmed; the journal incomplete, never wrong |
+| database outage | rows held in memory up to the backlog bound |
+| crash | uncommitted rows lost |
+| Intel Service down | `LEAD` and Intel rumor rows show "unavailable" |
+| a seam not yet patched | its relation is absent; the rest works |
+| a verifier violation | Wayfarer frozen until unfrozen |
 
 ## 8. Configuration
 
@@ -222,67 +282,84 @@ observation's content.
 
 | Key | Range | Default | truth / dev / sim / hobby / live | Test |
 |---|---|---|---|---|
-| `CaptureSlotsPerChar` | 64–8192 | 1024 | 1024 everywhere | AT-MEM-08 |
-| `FlushSeconds` | 5–600 | 60 | 60 everywhere | AT-MEM-08 |
-| `RawRetentionDays` | 1–365 | 30 | 30 everywhere | AT-MEM-05 |
-| `SummaryRetentionDays` | 30–3650 | 365 | 365 everywhere | AT-MEM-05 |
-| `SessionRetentionDays` | 1–90 | 14 | 14 everywhere | AT-MEM-05 |
-| `StaleAfter` per relation (days) | 1–365 | prices 3, stores 3, drops 30, NPCs 90, quests 365 | as default everywhere | AT-MEM-03 |
+| `CaptureSlotsPerChar`, `MaxStoreItemsCaptured` | 64–8192, 10–200 | 1024, 100 | as default everywhere | AT-MEM-08 |
+| `FlushSeconds`, `WriterBacklogRows` | 5–600, 1000–1000000 | 60, 200000 | as default everywhere | AT-MEM-08 |
+| `DropMapSeconds` | 60–3600 | 600 | 600 everywhere | AT-MEM-01 |
+| `RawRetentionDays`, `SummaryRetentionDays`, `SessionRetentionDays` | 1–365, 30–3650, 1–90 | 30, 365, 14 | as default everywhere | AT-MEM-05 |
+| `StaleAfter` per relation (days) | 1–365 | prices and stores 3, drops 30, NPCs 90, quests 365 | as default everywhere | AT-MEM-03 |
 | `HuntedWithMinutes`, `CompanionSessions` | 5–240, 2–100 | 20, 5 | as default everywhere | AT-MEM-07 |
-| `MaxNoteChars`, `MaxPageFacts` | 50–2000, 10–1000 | 400, 200 | as default everywhere | AT-MEM-05 |
+| `MaxPages`, `MaxPageFacts`, `MaxImportedFacts`, `MaxDurableRows`, `MaxNotes`, `MaxProjects` | — | 20, 200, 2000, 1000, 200, 50 | as default everywhere | AT-MEM-05 |
+| `VerifySample` | 1–1000 | 50 | 50 everywhere | AT-MEM-11 |
 
 ## 9. Interface
 
-Codex → Journal tab and the Wayfarer's Journal item: recap, search, projects, notes and reminders, share a page, import a
-page, personal history, settings (off, history public, Signal collaboration). A contextual "remember this" action on store
-windows and NPC pages pins the observation it shows. Admin: `lc why mem <char> <obs>`.
+Codex → Journal tab and the Wayfarer's Journal item: recap, the queries of §4.1, projects, notes and reminders, share and
+import pages, history (with the publishable marks), settings. A "remember this" action on store windows and NPC pages pins
+the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 
 ## 10. Requirements
 
 | Id | Requirement | Proven by |
 |---|---|---|
-| MEM-R01 | Observations MUST come only from the experience seams, imports, rumors told to the character and their own grants, each copying primitives at the moment of the experience. | AT-MEM-01 |
-| MEM-R02 | Every result MUST keep KNOWN, TOLD, RUMORED and the internal provenances apart, and an import MUST never become KNOWN. | AT-MEM-02 |
-| MEM-R03 | Observations MUST age into STALE by time and become CONTRADICTED by newer knowledge, never updated from global state. | AT-MEM-03 |
-| MEM-R04 | No query MUST read another character's observations or rank places, monsters or routes. | AT-MEM-04 |
-| MEM-R05 | Repetition MUST coalesce, raw rows MUST summarise and expire by tier, and expiring tables MUST be registered. | AT-MEM-05 |
-| MEM-R06 | Ledger intel MUST be kept only as registered references read through the Intel Service, never shared, and become an expired lead without content when it expires. | AT-MEM-06 |
-| MEM-R07 | Projects, recap and history MUST be derived from the character's own knowledge, recipes they know or saw, and their own facts; public history only by opt-in through the publication registry. | AT-MEM-07 |
-| MEM-R08 | Capture MUST not block the game: bounded buffers, flushes off the game thread, at most `FlushSeconds` lost on a crash. | AT-MEM-08 |
+| MEM-R01 | Observations MUST come only from the experience seams, imports, rumors told to the character and their own grants, each copying what was shown or done at that moment. | AT-MEM-01 |
+| MEM-R02 | Results MUST keep provenances apart; an import MUST never become KNOWN; tellers and origins MUST survive forwarding. | AT-MEM-02 |
+| MEM-R03 | Observations MUST age by time and be contradicted only by newer known values kept as their own rows. | AT-MEM-03 |
+| MEM-R04 | Only the closed query set MUST exist, each over the asker's own rows, none ranking across characters. | AT-MEM-04 |
+| MEM-R05 | Repeats MUST coalesce by their key, tiers MUST summarise and expire, durable growth MUST stay within its bounds, and a deleted character's rows MUST go. | AT-MEM-05 |
+| MEM-R06 | Intel MUST be kept only as content-free registered references, never coalesced, summarised, shared or made durable, and leave only the lead history when it expires. | AT-MEM-06 |
+| MEM-R07 | Projects, recap and history MUST derive from the character's own knowledge and facts; history MUST be publishable only by Chronicle under §4.7's conditions. | AT-MEM-07 |
+| MEM-R08 | Capture MUST stay within 2 µs p99 per seam call, never block or change retail processing, and drop rather than wait. | AT-MEM-08 |
 | MEM-R09 | Wayfarer MUST grant nothing. | AT-MEM-09 |
-| MEM-R10 | Signal MUST learn from Wayfarer only whether two characters who both opted in share a `HUNTED_WITH` observation. | AT-MEM-10 |
+| MEM-R10 | Signal MUST learn only whether two characters who both opted in share a companion incarnation of their own. | AT-MEM-10 |
+| MEM-R11 | A verifier MUST sample rows each cycle and freeze Wayfarer on a violation. | AT-MEM-11 |
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-MEM-00 | integration | the migration applies; keys and checks refuse an import as `KNOWN`, a shared fact carrying intel, a lead without its intel reference, duplicate coalescing keys, a note over its bound; expiring tables registered |
-| AT-MEM-01 | integration | each seam in turn: a store opened, a store trade, an NPC buy list, auto-loot, party loot, a ground pickup (no monster), a kill, a click on an NPC in range (its default chat unchanged), a quest started, advanced and completed, a recipe learned, a boss seen, a party, a trade, a whisper: one coalesced observation of the right relation for the experiencing character only |
-| AT-MEM-02 | integration | the same item known, told and rumored: three groups on the page; an imported page's facts `TOLD` with author and dates, still after forwarding |
-| AT-MEM-03 | integration | prices stale after 3 days; a newer price contradicts the older; a supply change by Aden Remembers leaves old knowledge old |
-| AT-MEM-04 | unit | the static scan of the query set: none reads another character's rows, none ranks or aggregates across characters; the absent queries ("best farm", "optimal route") are not reachable from any page |
-| AT-MEM-05 | integration | 400 identical kills one row with `times` 400; raw rows summarised after retention and deleted; summaries and sessions expire |
-| AT-MEM-06 | integration, restart | a lead read through the Intel Service; after the item expires the row is an expired lead with no place or confidence; a rebuild and a replay after expiry do not resurrect it; a page from a lead refused |
-| AT-MEM-07 | integration | a project's requirements from known and observed recipes only, intermediates expanded, inventory read at render; the recap's content; milestones; public history rows only for opted-in characters and opted-in companions |
-| AT-MEM-08 | sim | the 800-citizen benchmark with Wayfarer on for all: capture adds no measurable tick time, buffers never block, flushes keep up; a crash loses at most `FlushSeconds` |
+| AT-MEM-00 | integration | the migration applies; keys and checks refuse an import without teller or origin, an import as `KNOWN`, intel content on a row, intel on a durable or summary row, a second row for an intel item, a second row for one coalescing key, a durable row with an expiry, a shared fact without origin, a changed shared fact, a note over its bound; expiring tables registered |
+| AT-MEM-01 | integration | each seam: the captured values equal the bytes the client was sent (store lists, buy list) or the change made (trade, loot, quest); a store changed between the interaction and the write captures what was written; a ground pickup with its monster from the drop map, party Adena without one, herbs not obtained; a quest advanced by a kill records no NPC; an abort is `QUEST_ABANDONED`; a failed trade records nothing; a boss sent to the player recorded, one hidden from them not |
+| AT-MEM-02 | integration | the same item known, told by two tellers and rumored: four rows, three groups; a page forwarded twice keeps the original origin |
+| AT-MEM-03 | integration | a new price makes the old row `CONTRADICTED`; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
+| AT-MEM-04 | unit, integration | the query set is exactly §4.1's; two characters with disjoint rows see only their own through every query; a forged page id or query id refused; nothing sorts across characters |
+| AT-MEM-05 | integration | 400 kills one row; raw rows summarised and deleted after retention, pinned ones kept; each bound refused at its limit; a deleted character leaves no `lc_mem_*` row |
+| AT-MEM-06 | integration, restart | a lead and an Intel rumor read through the Intel Service; after expiry both rows gone and the lead history alone shown; no summary, session, milestone or page holds their content; a rebuild and a replay after expiry show nothing more |
+| AT-MEM-07 | integration | requirements from known and observed recipes only; recap content; milestones; a publishable mark refused for a private contract or another player's name; Signal-free history |
+| AT-MEM-08 | sim, fault | the 800-citizen benchmark with Wayfarer on for all: each seam ≤ 2 µs p99, no tick time beyond the benchmark's band; exceptions injected in every seam leave retail packets and state identical to a run without Wayfarer; a database outage drops beyond the backlog, counted |
 | AT-MEM-09 | unit | the static scan: no Wayfarer code calls a mechanics API or grants anything |
-| AT-MEM-10 | integration | `collaborated(a, b)` true only when both opted in and share a `HUNTED_WITH` row; false when either did not opt in; no other memory reaches Signal |
+| AT-MEM-10 | integration | `collaborated` true only for both opted in with a qualifying own incarnation; a short overlap in a long party not counted; imported `HUNTED_WITH` never counted |
+| AT-MEM-11 | integration | a planted cross-character row, a `TOLD` row without origin and an unregistered intel row: the verifier alarms and freezes Wayfarer |
 
 ## 11. Upstream constraints
 
-1. **Most experiences dispatch no event**: store views, store trades, NPC buy lists, quest progress, recipes, player trades
-   (`Player.java:4470-4494`; `TradeList.java:584-628`, `:791`, `:959`; `Merchant.java:87-110`; `QuestState.java:162-704`;
+1. **Most experiences dispatch no event** (store views, trades, NPC buy lists, quest progress, recipes, player trades:
+   `Player.java:4470-4494`; `TradeList.java:584-628`, `:791`, `:959`; `Merchant.java:87-110`; `QuestState.java:162-704`;
    `Player.java:1371`). → experience seams.
-2. **Asynchronous events race their state**: `ON_PLAYER_ITEM_ADD` carries no process or source and the stack may have
-   changed (`PlayerInventory.java:464-466`); `ON_ATTACKABLE_KILL` is delayed 2.5 s (`Attackable.java:125`, `:314-330`).
-   → synchronous seams, primitives copied.
-3. **Listener traps**: a Global pickup listener disables per-player ones (`Item.java:278-288`); a container-wide first-talk
+2. **Store packets read live lists when serialised**, after a queue (`PrivateStoreListSell.java:35`, `Client.java:85-94`).
+   → capture in `writeImpl`.
+3. **Asynchronous events race their state** (`PlayerInventory.java:464-466`; `Attackable.java:125`, `:314-330`). → synchronous
+   seams.
+4. **Listener traps**: a Global pickup listener disables per-player ones (`Item.java:278-288`); a container-wide first-talk
    listener skips default chat windows (`NpcClick.java:121-128`). → seams, never such listeners.
-4. **The buy-store packet shows the viewer's adjusted items** (`PlayerInventory.java:343-376`) and the recipe-shop packet
-   only recipe ids (`RecipeShopSellList.java:54-59`). → read the store's own lists and resolve recipes server-side.
-5. **The logout event runs after the save** (`Disconnection.java:110-120`). → a synchronous logout seam.
-6. **No product index for recipes** (`RecipeData.java:227-238`). → Wayfarer's own index at startup.
-7. **The tutorial owns `TutorialShowHtml` for new characters** (`Q00255_Tutorial.java:139-150`). → no recap popup below
-   level 6.
+5. **The dropper is cleared at drop** (`Item.java:1628-1639`). → Wayfarer's drop map.
+6. **`lastFolkNPC` is set on targeting** (`NpcClick.java:66`) and aborts call `exitQuest(true)` like repeatable completions
+   (`RequestQuestAbort.java:58`). → the talk dispatch's NPC; the abort marked at its own call.
+7. **`ON_CREATURE_SEE` is the boss's observation**, asynchronous, without line of sight (`Creature.java:7465-7485`). → the
+   player-side `sendInfo`.
+8. **The logout event runs after the save** (`Disconnection.java:110-120`); **character deletion lists its tables**
+   (`GameClient.java:342`). → a logout seam and a deletion step.
+9. **No product index for recipes** (`RecipeData.java:227-238`). → Wayfarer's own.
+10. **The tutorial owns `TutorialShowHtml` for new characters** (`Q00255_Tutorial.java:139-150`). → no recap popup below
+    level 6.
 
 ## 12. Review record
 
-- Revision 1: draft, not yet reviewed.
+- Round 1 (Codex, a different model family), NO SIGN-OFF, 17 findings: Ledger rumors outside the boundary; intel content
+  allowed in rows; coalescing merging intel dependencies, tellers and prices; expired-lead conversion against the purge;
+  `SAW_BOSS` from the boss's side; quest givers from targeting and aborts as completions; trades before success; party Adena
+  and ground pickups mis-sourced; store capture before serialisation; companions by party lifetime; a crash-loss promise a
+  flush interval cannot keep; no capture budget or containment; unbounded durable growth and no deletion; unregistered public
+  history; tests without oracles. Revision 2: intel rows content-free, never coalesced, purged by the Intel Service, with a
+  content-free lead history; Intel rumors as intel rows; coalescing by value key and teller, origins preserved; capture at
+  serialisation and at the player-side `sendInfo`; quest NPCs from talk dispatch, aborts marked; trades after success; a
+  drop map for ground loot; pairwise companion overlap; memory stated as best-effort with a backlog bound; a 2 µs seam
+  budget, exception containment and no overwrite; durable bounds and a deletion step; publication moved to Chronicle; a
+  closed query set; a verifier; oracles per seam.

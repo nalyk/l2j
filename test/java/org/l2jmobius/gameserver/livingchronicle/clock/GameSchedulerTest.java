@@ -518,31 +518,58 @@ class GameSchedulerTest
 	}
 
 	/**
-	 * A task that sleeps again after its simulation is released does not sleep for real: its sleep ends at once, as a pool's threads are interrupted when it shuts down now, and the release does not wait for it.
+	 * A task asleep when its simulation is released never acts again, even one written as the festival manager is, ignoring an interrupt and sleeping again in a loop: it neither runs on in real time nor spins, and the release does not wait for it.
 	 */
 	@Test
-	void aReleasedTaskThatSleepsAgainEndsAtOnce()
+	void aReleasedTaskNeverActsAgain() throws InterruptedException
+	{
+		final List<String> ticks = java.util.Collections.synchronizedList(new ArrayList<>());
+		GameScheduler.schedule(() ->
+		{
+			while (true)
+			{
+				try
+				{
+					GameScheduler.sleep(50);
+				}
+				catch (Exception e)
+				{
+					// Ignored, as the festival manager does.
+				}
+				ticks.add("tick@" + (GameClock.millis() - START));
+			}
+		}, 0);
+		GameScheduler.advance(120);
+		assertEquals(List.of("tick@50", "tick@100"), ticks);
+
+		final long started = System.nanoTime();
+		GameScheduler.releaseControl();
+		assertTrue((System.nanoTime() - started) < TimeUnit.SECONDS.toNanos(5), "the release waited for the task");
+		Thread.sleep(300);
+		assertEquals(List.of("tick@50", "tick@100"), ticks, "the task acted after its simulation was released");
+	}
+
+	/**
+	 * Releasing control from inside the simulation is refused: it would wait for the advance it runs in.
+	 */
+	@Test
+	void releasingFromInsideIsRefused()
 	{
 		GameScheduler.schedule(() ->
 		{
 			try
 			{
-				GameScheduler.sleep(50);
-				_log.add("first sleep over");
-				GameScheduler.sleep(60_000);
-				_log.add("second sleep over");
+				GameScheduler.releaseControl();
+				_log.add("released");
 			}
-			catch (InterruptedException e)
+			catch (IllegalStateException e)
 			{
-				_log.add("ended");
+				_log.add("refused");
 			}
-		}, 0);
-		GameScheduler.advance(10);
-
-		final long started = System.nanoTime();
-		GameScheduler.releaseControl();
-		assertTrue((System.nanoTime() - started) < TimeUnit.SECONDS.toNanos(5), "the release waited for a real sleep");
-		assertEquals(List.of("ended"), _log);
+		}, 10);
+		GameScheduler.advance(100);
+		assertEquals(List.of("refused"), _log);
+		assertTrue(GameScheduler.isControlled());
 	}
 
 	@Test

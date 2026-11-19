@@ -61,7 +61,11 @@ public class RandomAnimationTaskManager implements Runnable
 				if (!npc.isSpawned() || !npc.isInActiveRegion())
 				{
 					// Left on the list by a race between threads (it decayed, or its region fell asleep, while another thread put it on): dropped, nothing drawn for it.
-					PENDING_ANIMATIONS.remove(npc, entry.getValue());
+					// Checked again once it is off: a region that woke meanwhile found it still on and left it, so it goes back as it was.
+					if (PENDING_ANIMATIONS.remove(npc, entry.getValue()) && npc.isSpawned() && npc.isInActiveRegion())
+					{
+						PENDING_ANIMATIONS.putIfAbsent(npc, entry.getValue());
+					}
 					continue;
 				}
 				

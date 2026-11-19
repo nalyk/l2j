@@ -2,9 +2,11 @@
 #
 # Fail unless CORE_PATCHES.md lists exactly the upstream files this fork changed.
 #
-# "Changed" is measured, not remembered: every path that exists on the
-# `upstream` branch and is modified, deleted, renamed or retyped in the working
-# tree. A core change without a ledger entry fails; so does a ledger entry for
+# "Changed" is measured, not remembered: every path that exists in the upstream
+# snapshot this branch is built on and is modified, deleted, renamed or retyped
+# in the working tree. That snapshot is the newest `upstream` mirror commit in
+# the branch's history, not the tip of `upstream`: mirroring a newer commit for
+# an intake moves the tip before any branch has merged it. A core change without a ledger entry fails; so does a ledger entry for
 # a file that no longer differs.
 #
 # Usage: tools/intake/check-core-ledger.sh
@@ -16,16 +18,19 @@ cd "$(git rev-parse --show-toplevel)"
 git rev-parse -q --verify refs/heads/upstream >/dev/null ||
 	{ echo "check-core-ledger: no local 'upstream' branch; fetch it first" >&2; exit 1; }
 
+base=$(git merge-base HEAD refs/heads/upstream) ||
+	{ echo "check-core-ledger: this branch has no upstream mirror commit in its history" >&2; exit 1; }
+
 # Compare against the working tree so the check also covers uncommitted work.
-changed=$(git diff --name-only --no-renames --diff-filter=MDT upstream -- | LC_ALL=C sort -u)
+changed=$(git diff --name-only --no-renames --diff-filter=MDT "$base" -- | LC_ALL=C sort -u)
 
 [[ -f CORE_PATCHES.md ]] || { echo "check-core-ledger: CORE_PATCHES.md is missing" >&2; exit 1; }
 
 # Paths are the backticked items on each "- Files:" line. A ledger with no entries is valid.
 ledgered=$(sed -n 's/^- Files://p' CORE_PATCHES.md | { grep -oE '`[^`]+`' || true; } | tr -d '`' | LC_ALL=C sort -u)
 
-unledgered=$(comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$ledgered") | sed '/^$/d')
-stale=$(comm -13 <(printf '%s\n' "$changed") <(printf '%s\n' "$ledgered") | sed '/^$/d')
+unledgered=$(LC_ALL=C comm -23 <(printf '%s\n' "$changed") <(printf '%s\n' "$ledgered") | sed '/^$/d')
+stale=$(LC_ALL=C comm -13 <(printf '%s\n' "$changed") <(printf '%s\n' "$ledgered") | sed '/^$/d')
 
 status=0
 if [[ -n $unledgered ]]; then

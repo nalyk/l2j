@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 7, answering six adversarial review rounds; record in §12)
+- Status: reviewed (revision 7; signed off by Codex, a different model family, in round 7; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -600,6 +600,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Round 7 (Codex): **SIGN-OFF.** The deletion guard covers both deletion paths (`deletetime` and `DeleteDays = 0`) with
+  the mark committed before any deleting statement; pending marks protect a mandatory refund; the traceability test
+  checks that a row's tests cover its requirements' and that its blueprint documents exist. Remaining, as named N4
+  obligations and not spec defects: the complete site table and its `PENDING` rows (AT-ASSET-12), and implementing the
+  fault and INV12 checks.
 - Round 6 (Codex), NO SIGN-OFF: confirmed the stack-monitor rule (no cycle found between item monitors, write locks and the
   inventory monitor in the paths examined), retire-first under item then container, refund finality and treasury
   compensation after commit, the narrowed restart guarantee, and the claim record; accepted the seed table, `PENDING`

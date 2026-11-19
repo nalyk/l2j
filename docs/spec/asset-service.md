@@ -355,8 +355,8 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `supply(manifest, town, assets)` | `TOWN_SUPPLY` source (origin) → manifest, within the town's budget | `Asset.SupplyEntered` |
 | `arrive(manifest, town)` | manifest → `TOWN_SUPPLY` sink (destination) | `Asset.SupplyArrived` |
 | `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
-| `craft(custody, output, materials, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → output custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
-| `route(custody, drops)` | `LOOT_DROP` source → the charter's custody, then (in the same operation) releases by service mail as the charter chose (pact.md §4.5) | `Asset.LootRouted` |
+| `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
+| `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
 | `issue(character, parchment)` | `PACT_PARCHMENT` source → system mail | `Asset.ParchmentIssued` |
 | `close(custody)` | `OPEN` → `CLOSED`, empty only | `Asset.CustodyClosed` |
 | `correct(...)`, `unfreeze(module)` | admin (§4.5) | `Asset.AdminCorrection` |

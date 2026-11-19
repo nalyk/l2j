@@ -1,6 +1,6 @@
 # SPEC-PACT — PACT and the Notarius
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 15 (PACT and the Notarius); 03 §4.2-§4.4 (loot routing, crafting boundary, new events); 04 §3 (Asset
   Service), §5 (Codex), §7 (keyed randomness); 12 §6.2 (Crown Law Market Charters), §8 (Caravan Escort); 17
   (publication); consensus §4.
@@ -44,7 +44,8 @@ lc_pact_party(contract_id, party_no TINYINT, role {CLIENT|CONTRACTOR|LENDER|BORR
 lc_pact_clause(contract_id, clause_no SMALLINT, kind {DELIVER_ITEMS|PAY_ADENA|CRAFT_ATTEMPT|DEADLINE|PARTICIPATION|
                REGISTRATION|LOOT_POLICY|COLLATERAL|REPAY|FORFEIT|CANCEL_CONDITION}, params JSON, PRIMARY KEY(contract_id, clause_no))
 lc_pact_custody(contract_id, purpose {FUNDING|COLLATERAL|OUTPUT|CHARTER|FORFEIT}, party_no TINYINT NULL, custody_id INT → lc_custody)
-lc_pact_unit(contract_id, clause_no, unit INT, state {OPEN|PAID|RETURNED|FORFEITED|NONE}, owed JSON, skey VARCHAR(96) NULL
+lc_pact_unit(contract_id, clause_no, unit INT, parent_unit INT NULL, state {OPEN|PAID|RETURNED|FORFEITED|NONE|SPLIT}, owed JSON,
+             skey VARCHAR(96) NULL
              → lc_settlement_key, op_id BINARY(16) NULL, at TIMESTAMP(3) NULL, PRIMARY KEY(contract_id, clause_no, unit))
 lc_pact_craft_intent(contract_id, attempt_no INT, recipe_id INT, crafter_char INT, secret_version INT, success_rate INT,
                      masterwork_rate_ppm INT, created_at TIMESTAMP(3), PRIMARY KEY(contract_id, attempt_no))
@@ -53,7 +54,7 @@ lc_pact_craft_outcome(contract_id, attempt_no INT → intent, success BOOLEAN, m
 lc_pact_roll_secret(secret_version INT PK, secret BINARY(32), created_at TIMESTAMP(3))
 lc_pact_charter_member(contract_id, char_id INT, state {FROZEN_IN|LEFT|DISCONNECTED}, PRIMARY KEY(contract_id, char_id))
 lc_pact_charter_active(char_id INT PK, contract_id)                       -- at most one active charter per character
-lc_pact_kill(kill_key VARCHAR(48) PK, contract_id, op_id BINARY(16), at TIMESTAMP(3))  -- one routing per kill
+lc_pact_kill(kill_key VARCHAR(64) PK, contract_id, op_id BINARY(16), at TIMESTAMP(3))  -- one routing per kill
 lc_pact_participation(contract_id, battle_id BIGINT, char_id INT, clan_id INT, minute TIMESTAMP, qualifying BOOLEAN,
                       PRIMARY KEY(contract_id, battle_id, char_id, minute))
 lc_pact_registry(contract_id PK, public_text_key VARCHAR(64), registered_at TIMESTAMP(3))
@@ -69,8 +70,13 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
   `terms_hash = SHA2(terms)`. `terms`, `terms_version`, `visibility`, `publishable`, the party rows (but their signature
   columns) and the clause rows change only in `DRAFT`, `PROPOSED` and `PARTIALLY_SIGNED`; triggers refuse anything else.
   Clause and party rows are written from `terms` in the same transaction, and a startup check compares them.
-- **Units and their owed content.** `lc_pact_unit.owed` is what the unit will move when it settles (items and Adena, by
-  party), fixed at funding; the custody holds exactly the sum of the `owed` of its `OPEN` units (§6, INV02).
+- **Units and their owed content.** A unit is one movement-to-be: what it will move when it settles (items and Adena, by
+  receiver) is its `owed`, fixed when the unit is created and never changed. A contract's custody holds exactly the sum
+  of the `owed` of its `OPEN` units (§6, INV02). A staged obligation is several units, created as its stages are funded
+  (a loan: principal, collateral and repayment units, §4.2). A budget drawn in parts (a Purchase Order's maximum spend) is
+  a unit that is **split**: a fill settles the budget unit as `SPLIT` and creates, in the same operation, a `PAID` unit for
+  the fill and an `OPEN` unit for the remainder (`parent_unit` links them), so every unit stays immutable once settled
+  and the custody still equals the open units.
 - **Craft intent.** An attempt's inputs are committed before it rolls (§4.3); the outcome references them; both are
   immutable.
 - `lc_pact_roll_secret` is generated once at installation, never changed (a new version is added only by an audited admin
@@ -98,12 +104,16 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
 | effect | the journal's application id and attempt (fact-journal.md §4.4) | a settlement caused by facts: a deadline, a battle's end, a treaty violation, a repayment's evaluation |
 | settlement key | `PACT/<contract>/<clause>/<unit>` | the one movement that settles a unit; written only by it |
 | funding key | `PACT/<contract>/fund/<party>/<clause>` | the one movement that funds a party's obligation for a clause |
-| kill key | `PACT/kill/<npc object id>/<incarnation>` | the one routing of a kill's drops |
+| signing key | `PACT/<contract>/sign/<terms version>` | the last signature's operation: the fee and the parchments |
+| bid key | `PACT/<contract>/bid/<lot>/<bidder>/<n>` | the escrow of a charter auction bid (its *n*-th raise) |
+| split key | `PACT/<contract>/<clause>/<unit>/split` | a unit settled as `SPLIT` (§2.1) |
+| kill | the journal epoch (fact-journal.md §2, `lc_journal_epoch`) and a kill sequence the routing hook assigns in memory, `PACT/kill/<epoch>/<seq>` | the one routing of a kill's drops; its `OpId` is derived from it |
 | roll | (contract, attempt) | the craft roll (§4.3), independent of any operation id |
 
-An operation's `OpId` is the request's or the effect's; uniqueness of what it does comes from the key it writes. A refunded
+An operation's `OpId` is the request's, the effect's or the kill's; what it does is made unique by the key it writes: every
+movement writes **exactly one** key of this table (a settlement, funding, signing, bid, split or kill key). A refunded
 operation (asset-service.md §3.2) leaves its key unwritten, so the next request or effect attempt, with a new `OpId`, can
-write it.
+write it. A kill key is unique across restarts because the epoch is (one per server start).
 
 ## 3. State machines
 
@@ -162,10 +172,10 @@ lot (Loot Charter), a mercenary party (Mercenary), a (violating signatory, windo
 | Type | Funding (funding keys) | Units and settlement | Expiry, failure |
 |---|---|---|---|
 | Crafting Pact | client: materials for *n* attempts + fee per attempt | per attempt (§4.3): the attempt's fee to the contractor whatever the outcome; product, if any, to the client; materials consumed per retail | unattempted attempts' materials and fees returned |
-| Craft Order | client: materials and fee per batch | per batch, each attempt of it under §4.3; partial batches settle as made | unfilled batches returned |
-| Purchase Order | buyer: maximum spend | per fill: a seller hands items to a Notarius (in person) or, if the order allows, through the Codex; items to the buyer and price × quantity to the seller, in one operation; the buyer's custody shrinks by exactly that | the rest returned |
+| Craft Order | client: materials and fee per batch, a unit per attempt of the batch | per attempt under §4.3, as for a Crafting Pact; a batch is the funding group of its attempts, so a partial batch is the attempts made so far | unattempted attempts' units returned |
+| Purchase Order | buyer: maximum spend (the budget unit) | per fill: a seller hands items to a Notarius (in person) or, if the order allows, through the Codex; in one operation the items go to the buyer, the budget unit is split (§2.1) into the fill's price × quantity `PAID` to the seller and the remainder `OPEN` | the remainder unit `RETURNED` |
 | Delivery Order | client: payment | the delivery: the deliverer hands the named items at the named Notarius before the deadline; items to the receiver, payment to the deliverer | payment returned |
-| Loan | lender: principal; borrower: collateral | activation mails the principal; repayment (the borrower funds the repayment) returns the collateral and pays the lender | at the deadline, unrepaid: the collateral to the lender, never more |
+| Loan | lender: principal (unit *P*); borrower: collateral (unit *C*) | activation settles *P* (`PAID` to the borrower); repayment is a request that creates unit *R* (the repayment, funded from the borrower) and in the same operation settles *R* (`PAID` to the lender) and *C* (`RETURNED` to the borrower) | at the deadline, unrepaid: *C* `FORFEITED` to the lender, never more |
 | Loot Charter | bidders' bids, during an auction | per routed lot (§4.5) | an unfinished auction's lot to the charter's fallback receiver |
 | Mercenary | employer: payment per mercenary party | per mercenary party, on the battle's end (§4.6) | payment returned for parties that did not qualify; all of it if the battle did not happen |
 | Caravan Escort | the Caravan Guild: payment | delivery + participation, on the caravan's arrival (12 §8) | per the issuing terms |
@@ -191,8 +201,8 @@ A contractual attempt, run by the crafter (who must know the recipe, as retail r
    on time, order, retries or configuration changes after the intent. (N2's `KeyedRandom` is a seeded stream for
    simulation; this roll is a keyed hash, specified here.)
 3. **Apply**, one Asset `craft` operation with the request's `OpId`: materials from the `FUNDING` custody to the
-   `CRAFT_INPUT` sink; on success the product from the `CRAFT_OUTPUT` source and straight to the client by service mail
-   (asset-service.md ASSET-R20); the attempt's fee to the contractor; the outcome row; the unit settled; the crafter's
+   `CRAFT_INPUT` sink; on success the product from the `CRAFT_OUTPUT` source **straight to the client by service mail**
+   (it never enters a custody, so its eligibility for custody does not matter); the attempt's fee to the contractor; the outcome row; the unit settled; the crafter's
    HP/MP consumed in memory as retail does (not restored on abort, as retail does not restore it on a failed craft).
 
 If *apply* aborts, the intent stands; the next request applies the same intent, which rolls the same. An attempt is never
@@ -218,15 +228,17 @@ results (AT-PACT-04).
 ### 4.5 Loot Charter
 
 **Scope.** A charter is proposed by a party leader for that party, or by a command channel leader for that channel, and
-signed by every member. At activation PACT records the group (the party, or the command channel, by its leader's object
-id) and freezes its members (`lc_pact_charter_member`); a character is frozen in at most one active charter
+signed by every member. At activation PACT binds the charter to **that group object** (the `Party` or `CommandChannel`
+instance, held by reference, never by its leader's id: retail lets a leader disband and form a new party,
+`entity/groups/Party.java:109,551`, and a new party is not the signed one) and freezes its members (`lc_pact_charter_member`); a character is frozen in at most one active charter
 (`lc_pact_charter_active`). A charter lists **which items it routes and how**: `RESERVED` (an item id to a named member),
 `AUCTION` (an item id to a post-kill auction among members), `ROTATION` (an item id to members in the charter's order,
-cycling). Everything else a kill drops, and all Adena and spoil, follows retail untouched.
+cycling). Only item ids that may be in a custody (asset-service.md §4.4) can be listed as `AUCTION`; the drafting form
+refuses others. Everything else a kill drops, and all Adena and spoil, follows retail untouched.
 
 **Applicability.** A kill is routed by a charter only if, at the moment Mobius decides the kill's drop owner
 (`entity/actor/Attackable.java:483-497`: the top-damage party's leader, or the top damage dealer), that owner is a frozen
-member of an active charter, **is in the charter's group at that moment** (same party, or same command channel), and, if a
+member of an active charter, **is in the charter's group object at that moment** (its current party, or command channel, is that very object), and, if a
 command channel holds the raid's loot rights (`Attackable.java:242-264`; `managers/ItemManager.java:97-101`), the charter's
 group is that command channel. Otherwise retail runs unchanged, including the competing channel's rights.
 
@@ -237,7 +249,13 @@ Asset `route` operation** with the kill key (§2.3): every routed item enters fr
 `ROTATION` items go to their receiver by service mail; `AUCTION` items into the charter's custody. If the operation cannot
 commit (the database is down, the module is frozen), the hook returns the routed items to retail, which drops them as it
 would have, and a `Pact.RoutingFailed` fact names the kill. So a kill's routed items are either all in PACT's operation or
-all in retail's hands; none is lost between.
+all in retail's hands; none is lost between them while the server runs. **Stated limit**: if the JVM dies between the
+kill and the routing commit, the routed items are lost with it, as retail's own drops of that kill are (ground items
+survive a restart only with `SaveDroppedItem`, off by default, `config/GeneralConfig.java:252`); the kill's fact was not
+written either, so nothing claims them.
+
+When the group object dissolves (the party disbands, the channel closes, a restart: parties do not survive one), the
+charter ends: open auctions resolve by the fallback rule, and the charter completes.
 
 The auction runs at the charter NPC page with bids escrowed (funding keys per bid); the winning bid is split among the
 members as the charter says; losing bids are returned.
@@ -254,10 +272,12 @@ Mercenary contract runs (from its start fact to its end fact; the battle id is t
 
 - *present*: inside the battle's zone: the castle's siege zone (`entity/zone/type/SiegeZone.java`) for a castle siege, the
   fortress's siege zone for a fortress siege, any siege zone of the territory's castle or forts during Territory War;
-- *active*: within that minute, dealt damage to or received damage from a player on another side of that battle
-  (`ON_CREATURE_DAMAGE_DEALT`, `ON_CREATURE_DAMAGE_RECEIVED`, `mechanics/events/EventType.java:139-140`), or killed one.
-  A side is the siege's registration (attacker, defender, owner) or Territory War's siege side
-  (`TerritoryWarManager.java:1226`) at that moment;
+- *active*: within that minute, dealt damage to or received damage from a player on another side of that battle, or
+  killed one. Captured **synchronously at the hit**: `ON_CREATURE_DAMAGE_DEALT` is dispatched on the attacker's thread
+  before the damage applies (`entity/actor/Creature.java:7201`; the received-damage event is asynchronous, :7206, and is
+  not used). The listener reads, at that moment, both players' sides (the siege's registration, attacker, defender or
+  owner, or Territory War's siege side, `TerritoryWarManager.java:1226`), clans and the battle, and marks the current
+  minute active for both, if they are on different sides of the same running battle;
 - *member*: in the party (the clan) at the sample.
 
 A minute qualifies when all three hold; it is a row of `lc_pact_participation`. A clan party qualifies when at least the
@@ -294,7 +314,7 @@ publication types (intel-service.md §4.7):
 | Type | Fields (rule) | When |
 |---|---|---|
 | `pact_registered` | contract type (`TEXT_FROM_FACT`), public names of parties (`PUBLIC_ENTITY`), day (`DAY`) | a `PARTIES` or `PUBLIC` contract signed |
-| `pact_completed` | contract type, public names of parties, outcome, day; for a `PUBLIC` and `publishable` contract also the clause kinds and the item and Adena totals (`COUNT`) | a terminal state |
+| `pact_completed` | contract type, public names of parties, outcome, day; for a `PUBLIC` and `publishable` contract also the clause kinds and the item and Adena totals (`COUNT`) | a terminal state of a `PARTIES` or `PUBLIC` contract; never for `PRIVATE` |
 
 No field holds free text; clauses are typed, so there is no text in which a sealed term could hide. The rows are written
 by PACT's projector from the contract's frozen visibility.
@@ -318,7 +338,7 @@ player kill facts; caravan facts (12 §8).
 
 | Id | Invariant | Checked |
 |---|---|---|
-| PACT-INV01 | every movement of a contract is an Asset operation writing exactly one funding or settlement key; no key is written twice | the keys; AT-PACT-02 |
+| PACT-INV01 | every movement of a contract is an Asset operation writing exactly one key of §2.3 (settlement, funding, signing, bid, split or kill); no key is written twice | the keys; AT-PACT-02 |
 | PACT-INV02 | each contract custody holds exactly the sum of the `owed` of its `OPEN` units | PACT's holding predicate, checked in every operation (asset-service.md INV05) and by AT-PACT-02's reference model |
 | PACT-INV03 | a contract leaves the signing states only with every party's signature on the current terms version; terms never change after | triggers; AT-PACT-00 |
 | PACT-INV04 | an attempt has one intent and at most one outcome, both immutable; the outcome is the keyed function of the intent | keys and triggers; AT-PACT-03 |
@@ -362,7 +382,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | Id | Requirement | Proven by |
 |---|---|---|
 | PACT-R01 | A contract MUST move only by §3.1; signatures MUST bind a terms version and every amendment MUST clear them; terms MUST never change after signing. | AT-PACT-00, AT-PACT-01 |
-| PACT-R02 | Every movement MUST be one Asset operation writing exactly one funding or settlement key, and each custody MUST hold exactly what its open units owe, across restarts at every state and faults between statements. | AT-PACT-02 |
+| PACT-R02 | Every movement MUST be one Asset operation writing exactly one key of §2.3, and each custody MUST hold exactly what its open units owe, across restarts at every state and faults between statements. | AT-PACT-02 |
 | PACT-R03 | A contractual craft MUST follow retail rules and rates exactly, with materials from escrow, and its outcome MUST be the keyed function of an intent committed before the roll, never rerolled. | AT-PACT-03 |
 | PACT-R04 | Clauses MUST be machine-verifiable and each kind's evaluator MUST compute its unit result from its named inputs only. | AT-PACT-04 |
 | PACT-R05 | A Loot Charter MUST apply only to kills its group owns at the drop owner's decision and MUST route that kill's listed items entirely or not at all; everything else MUST stay retail. | AT-PACT-05 |
@@ -373,13 +393,13 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-PACT-00 | integration | the migration applies; triggers refuse every transition outside §3.1 (each pair tried), insertion in another state than `DRAFT`, resolution to other than `review_from` or terminal, leaving signing without every signature on the current terms version, any change of terms, clauses or parties after signing, a terms hash not of the terms, a unit leaving `OPEN` without its key or changing after, a second or changed intent or outcome |
+| AT-PACT-00 | integration | the migration applies; triggers refuse every transition outside §3.1 and allow every one inside it (all 132 pairs of distinct states tried, each on a fresh contract), insertion in another state than `DRAFT`, resolution to other than `review_from` or terminal, leaving signing without every signature on the current terms version, any change of terms, clauses or parties after signing, a terms hash not of the terms, a unit leaving `OPEN` without its key or changing after, a second or changed intent or outcome, a second active charter of a character (with valid member rows), a kill key twice |
 | AT-PACT-01 | integration | every transition of §3.1 through the operations; two parties signing in either order without re-signing; an amendment clears signatures; a token of an old terms version refused; a Royal contract's last signature away from the Notarius refused |
 | AT-PACT-02 | integration, fault, restart | an automated suite of every type against an **independent reference model** that computes, from the scenario alone, each character's expected receipts and each custody's expected content: after every step, restarts at every state and faults between statements, actual equals expected per character, per item and object id, and no key is written twice |
 | AT-PACT-03 | integration, sim | contractual crafts against retail: the same validation refusals and MP cost; over 10⁶ intents per test recipe, the success frequency within the 99.9 % binomial interval of the recipe's rate; an apply aborted at each step and retried, and a restart between intent and apply, give the same outcome; a configuration change after the intent does not change it |
 | AT-PACT-04 | unit | each clause kind's evaluator against a table of inputs and expected results, including boundaries (a deadline at the same millisecond, a member reaching the minutes exactly); the static scan finds no evaluator reading outside its named inputs |
-| AT-PACT-05 | integration | raids and kills with charters and without: a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
-| AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
+| AT-PACT-05 | integration | raids and kills with charters and without; the charter's leader disbanding and forming a new party (the new party's kills retail); a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
+| AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
 | AT-PACT-07 | integration | fees: values and fees computed independently from the terms, charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
 | AT-PACT-08 | integration | publication rows of both types for every visibility; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
 | AT-PACT-09 | integration | acts outside contracts (attacking a treaty party, keeping a lent weapon outside a loan, leaving a party) stay possible; a clan member without the leader's authority cannot sign or fund, and with `ACCESS_WAREHOUSE` can fund only when `AltMembersCanWithdrawFromClanWH` is on |
@@ -401,6 +421,15 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: thirteen of nineteen fixed, five partly, and five new: precommit loss of routed drops
+  on a JVM crash; groups identified by a leader's id; asynchronous damage events; `pact_completed` for private contracts;
+  immutable `owed` unable to model staged obligations and budgets; movements without a key (signing, loan principal,
+  bids, kills); a kill key not durable across restarts and object reuse; custody-ineligible sourced items; and a schema
+  test short of its promise. Revision 3: the precommit crash stated as a limit, equal to retail's own; charters bound to
+  the group object and ended with it; activity captured synchronously at the hit; completion published only for
+  non-private contracts; units created per stage and budgets split into immutable children; signing, bid, split and kill
+  keys, kills keyed by the journal epoch and an in-memory sequence; crafted products and reserved or rotated drops go
+  straight to mail, auctions only of custody-eligible items; the full 132-pair transition matrix in the test.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 19 findings: signing staled earlier signatures (one counter
   for row and terms); signed terms mutable through other states, the JSON or the clause and party rows; the review
   machine; operation identities conflicting with Codex tokens and journal effects, and funding sharing settlement keys;

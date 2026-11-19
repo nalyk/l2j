@@ -86,12 +86,14 @@ CREATE TABLE lc_pact_custody (
 	CONSTRAINT fk_pact_custody_custody FOREIGN KEY (custody_id) REFERENCES lc_custody (custody_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- A unit is OPEN with what it owes until the one movement that settles it writes its key; then it never changes.
+-- A unit is OPEN with what it owes until the one movement that settles it writes its key; then it never changes. A budget
+-- drawn in parts is SPLIT into a settled child and an open remainder, both naming it as parent (spec §2.1).
 CREATE TABLE lc_pact_unit (
 	contract_id BIGINT NOT NULL,
 	clause_no SMALLINT NOT NULL,
 	unit INT NOT NULL,
-	state ENUM('OPEN', 'PAID', 'RETURNED', 'FORFEITED', 'NONE') NOT NULL DEFAULT 'OPEN',
+	parent_unit INT NULL,
+	state ENUM('OPEN', 'PAID', 'RETURNED', 'FORFEITED', 'NONE', 'SPLIT') NOT NULL DEFAULT 'OPEN',
 	owed JSON NOT NULL,
 	scope VARCHAR(16) NOT NULL DEFAULT 'PACT',
 	skey VARCHAR(96) NULL,
@@ -100,6 +102,7 @@ CREATE TABLE lc_pact_unit (
 	PRIMARY KEY (contract_id, clause_no, unit),
 	UNIQUE KEY uk_pact_unit_key (scope, skey),
 	CONSTRAINT fk_pact_unit_clause FOREIGN KEY (contract_id, clause_no) REFERENCES lc_pact_clause (contract_id, clause_no),
+	CONSTRAINT fk_pact_unit_parent FOREIGN KEY (contract_id, clause_no, parent_unit) REFERENCES lc_pact_unit (contract_id, clause_no, unit),
 	CONSTRAINT fk_pact_unit_key FOREIGN KEY (scope, skey) REFERENCES lc_settlement_key (scope, skey),
 	CONSTRAINT chk_pact_unit_scope CHECK (scope = 'PACT'),
 	CONSTRAINT chk_pact_unit_owed CHECK (JSON_VALID(owed)),
@@ -108,7 +111,7 @@ CREATE TABLE lc_pact_unit (
 
 CREATE TRIGGER lc_pact_unit_insert BEFORE INSERT ON lc_pact_unit FOR EACH ROW IF NEW.state <> 'OPEN' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pact_unit: a unit starts open'; END IF;
 
-CREATE TRIGGER lc_pact_unit_settle BEFORE UPDATE ON lc_pact_unit FOR EACH ROW IF OLD.state <> 'OPEN' OR NOT (NEW.owed <=> OLD.owed) OR NEW.contract_id <> OLD.contract_id OR NEW.clause_no <> OLD.clause_no OR NEW.unit <> OLD.unit THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pact_unit: a unit settles once and owes what it owed'; END IF;
+CREATE TRIGGER lc_pact_unit_settle BEFORE UPDATE ON lc_pact_unit FOR EACH ROW IF OLD.state <> 'OPEN' OR NOT (NEW.owed <=> OLD.owed) OR NOT (NEW.parent_unit <=> OLD.parent_unit) OR NEW.contract_id <> OLD.contract_id OR NEW.clause_no <> OLD.clause_no OR NEW.unit <> OLD.unit THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pact_unit: a unit settles once and owes what it owed'; END IF;
 
 CREATE TRIGGER lc_pact_unit_kept BEFORE DELETE ON lc_pact_unit FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pact_unit: units are never deleted';
 
@@ -178,9 +181,9 @@ CREATE TABLE lc_pact_charter_active (
 	CONSTRAINT fk_pact_active_member FOREIGN KEY (contract_id, char_id) REFERENCES lc_pact_charter_member (contract_id, char_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- A kill is routed at most once: its key (npc object id and incarnation) written by the one routing operation.
+-- A kill is routed at most once: its key (journal epoch and the hook's kill sequence) written by the one routing operation.
 CREATE TABLE lc_pact_kill (
-	kill_key VARCHAR(48) NOT NULL,
+	kill_key VARCHAR(64) NOT NULL,
 	contract_id BIGINT NOT NULL,
 	op_id BINARY(16) NOT NULL,
 	at TIMESTAMP(3) NOT NULL,

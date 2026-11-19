@@ -105,10 +105,23 @@ class PactSchemaTest
 			// A character is in at most one active charter; a kill is routed once.
 			statement.execute(contract(3, "'DRAFT'", TERMS, TERMS));
 			statement.execute("INSERT INTO lc_pact_charter_member (contract_id, char_id, state) VALUES (3, 268477000, 'FROZEN_IN')");
+			statement.execute(contract(5, "'DRAFT'", TERMS, TERMS));
+			statement.execute("INSERT INTO lc_pact_charter_member (contract_id, char_id, state) VALUES (5, 268477000, 'FROZEN_IN')");
 			statement.execute("INSERT INTO lc_pact_charter_active (char_id, contract_id) VALUES (268477000, 3)");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pact_charter_active (char_id, contract_id) VALUES (268477000, 1)"));
-			statement.execute("INSERT INTO lc_pact_kill (kill_key, contract_id, op_id, at) VALUES ('PACT/kill/300001/4', 3, UNHEX(REPEAT('31', 16)), NOW(3))");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pact_kill (kill_key, contract_id, op_id, at) VALUES ('PACT/kill/300001/4', 3, UNHEX(REPEAT('32', 16)), NOW(3))"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pact_charter_active (char_id, contract_id) VALUES (268477000, 5)"), "a second active charter, its member row valid");
+			statement.execute("INSERT INTO lc_pact_kill (kill_key, contract_id, op_id, at) VALUES ('PACT/kill/7/1', 3, UNHEX(REPEAT('31', 16)), NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pact_kill (kill_key, contract_id, op_id, at) VALUES ('PACT/kill/7/1', 3, UNHEX(REPEAT('32', 16)), NOW(3))"));
+
+			// A budget split: the parent settles as SPLIT with its key; a child names it; the remainder stays open.
+			statement.execute("INSERT INTO lc_pact_clause (contract_id, clause_no, kind, params) VALUES (5, 1, 'PAY_ADENA', '{}')");
+			statement.execute("INSERT INTO lc_pact_unit (contract_id, clause_no, unit, owed) VALUES (5, 1, 1, '{\"adena\":1000}')");
+			statement.execute("INSERT INTO lc_asset_op (op_id, module, action, subject_ref, committed_at) VALUES (UNHEX(REPEAT('41', 16)), 'PACT', 'FILL', 5, NOW(3))");
+			statement.execute("INSERT INTO lc_settlement_key (scope, skey, op_id) VALUES ('PACT', 'PACT/5/1/1/split', UNHEX(REPEAT('41', 16))), ('PACT', 'PACT/5/1/2', UNHEX(REPEAT('41', 16)))");
+			statement.execute("UPDATE lc_pact_unit SET state = 'SPLIT', skey = 'PACT/5/1/1/split', op_id = UNHEX(REPEAT('41', 16)), at = NOW(3) WHERE contract_id = 5 AND unit = 1");
+			statement.execute("INSERT INTO lc_pact_unit (contract_id, clause_no, unit, parent_unit, owed) VALUES (5, 1, 2, 1, '{\"adena\":300}'), (5, 1, 3, 1, '{\"adena\":700}')");
+			statement.execute("UPDATE lc_pact_unit SET state = 'PAID', skey = 'PACT/5/1/2', op_id = UNHEX(REPEAT('41', 16)), at = NOW(3) WHERE contract_id = 5 AND unit = 2");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pact_unit (contract_id, clause_no, unit, parent_unit, owed) VALUES (5, 1, 4, 99, '{}')"), "a child of no unit");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_pact_unit SET parent_unit = NULL WHERE contract_id = 5 AND unit = 3"), "a child re-parented");
 
 			// Terminal is final; contracts are kept; a private contract is never publishable.
 			statement.execute("UPDATE lc_pact_contract SET state = 'COMPLETED', version = 9 WHERE contract_id = 1");
@@ -116,6 +129,80 @@ class PactSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_pact_contract WHERE contract_id = 1"));
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pact_contract (contract_id, type, state, visibility, publishable, notarius_tier, notarius_town, created_by, created_at, deadline, terms, terms_hash) VALUES (4, 'LOAN', 'DRAFT', 'PRIVATE', TRUE, 'TOWN', 7, 1, NOW(3), NOW(3), " + TERMS + ", UNHEX(SHA2(" + TERMS + ", 256)))"));
 		}
+	}
+
+	/**
+	 * Every pair of states (spec §3.1), each tried on a fresh contract driven to the source state: allowed exactly when the table has it.
+	 */
+	@Test
+	void everyTransitionPairIsAllowedExactlyWhenTheStateMachineHasIt() throws SQLException
+	{
+		final String[] states =
+		{
+			"DRAFT", "PROPOSED", "PARTIALLY_SIGNED", "SIGNED", "FUNDED", "ACTIVE", "COMPLETED", "EXPIRED", "MUTUALLY_CANCELLED", "FAILED_BY_CONDITION", "WITHDRAWN", "ADMIN_REVIEW"
+		};
+		final java.util.Map<String, java.util.Set<String>> allowed = new java.util.HashMap<>();
+		allowed.put("DRAFT", java.util.Set.of("PROPOSED", "ADMIN_REVIEW"));
+		allowed.put("PROPOSED", java.util.Set.of("PARTIALLY_SIGNED", "SIGNED", "WITHDRAWN", "ADMIN_REVIEW"));
+		allowed.put("PARTIALLY_SIGNED", java.util.Set.of("PROPOSED", "SIGNED", "WITHDRAWN", "ADMIN_REVIEW"));
+		allowed.put("SIGNED", java.util.Set.of("FUNDED", "EXPIRED", "MUTUALLY_CANCELLED", "ADMIN_REVIEW"));
+		allowed.put("FUNDED", java.util.Set.of("ACTIVE", "MUTUALLY_CANCELLED", "ADMIN_REVIEW"));
+		allowed.put("ACTIVE", java.util.Set.of("COMPLETED", "EXPIRED", "FAILED_BY_CONDITION", "MUTUALLY_CANCELLED", "ADMIN_REVIEW"));
+		// Review is entered from SIGNED below, so it may return to SIGNED or end in a terminal state.
+		allowed.put("ADMIN_REVIEW", java.util.Set.of("SIGNED", "COMPLETED", "EXPIRED", "MUTUALLY_CANCELLED", "FAILED_BY_CONDITION", "WITHDRAWN"));
+		final java.util.Map<String, String[]> path = new java.util.HashMap<>();
+		path.put("DRAFT", new String[0]);
+		path.put("PROPOSED", new String[] { "PROPOSED" });
+		path.put("PARTIALLY_SIGNED", new String[] { "PROPOSED", "PARTIALLY_SIGNED" });
+		path.put("SIGNED", new String[] { "PROPOSED", "SIGNED" });
+		path.put("FUNDED", new String[] { "PROPOSED", "SIGNED", "FUNDED" });
+		path.put("ACTIVE", new String[] { "PROPOSED", "SIGNED", "FUNDED", "ACTIVE" });
+		path.put("COMPLETED", new String[] { "PROPOSED", "SIGNED", "FUNDED", "ACTIVE", "COMPLETED" });
+		path.put("EXPIRED", new String[] { "PROPOSED", "SIGNED", "EXPIRED" });
+		path.put("MUTUALLY_CANCELLED", new String[] { "PROPOSED", "SIGNED", "MUTUALLY_CANCELLED" });
+		path.put("FAILED_BY_CONDITION", new String[] { "PROPOSED", "SIGNED", "FUNDED", "ACTIVE", "FAILED_BY_CONDITION" });
+		path.put("WITHDRAWN", new String[] { "PROPOSED", "WITHDRAWN" });
+		path.put("ADMIN_REVIEW", new String[] { "PROPOSED", "SIGNED", "ADMIN_REVIEW" });
+		int id = 1000;
+		try (Connection connection = _database.connect();
+			Statement statement = connection.createStatement())
+		{
+			for (String from : states)
+			{
+				for (String to : states)
+				{
+					if (from.equals(to))
+					{
+						continue;
+					}
+					final int contract = ++id;
+					statement.execute(contract(contract, "'DRAFT'", TERMS, TERMS));
+					statement.execute("INSERT INTO lc_pact_party (contract_id, party_no, role, kind, char_id, signed_terms_version, signed_at, signed_token) VALUES (" + contract + ", 1, 'CLIENT', 'CHAR', 1, 1, NOW(3), UNHEX(REPEAT('0A', 16))), (" + contract + ", 2, 'CONTRACTOR', 'CHAR', 2, 1, NOW(3), UNHEX(REPEAT('0B', 16)))");
+					int version = 0;
+					String state = "DRAFT";
+					for (String step : path.get(from))
+					{
+						statement.execute(move(contract, state, step, ++version));
+						state = step;
+					}
+					final String sql = move(contract, state, to, version + 1);
+					if (allowed.get(from) != null && allowed.get(from).contains(to))
+					{
+						statement.execute(sql);
+					}
+					else
+					{
+						assertThrows(SQLException.class, () -> statement.execute(sql), from + " -> " + to);
+					}
+				}
+			}
+		}
+	}
+
+	private static String move(int contract, String from, String to, int version)
+	{
+		final String review = to.equals("ADMIN_REVIEW") ? ", review_from = '" + from + "', review_reason = 'audit'" : from.equals("ADMIN_REVIEW") ? ", review_from = NULL" : "";
+		return "UPDATE lc_pact_contract SET state = '" + to + "', version = " + version + review + " WHERE contract_id = " + contract;
 	}
 
 	private static String contract(int id, String state, String terms, String hashed)

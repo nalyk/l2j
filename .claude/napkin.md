@@ -69,6 +69,8 @@
    Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
 
 ## Shell & Command Reliability
+1. **[2026-11-20] An md5 list built with `$(ls a/*)` inside an ssh string breaks into lines the remote shell runs**
+   Do instead: `files=$(echo a/* b/*)` (one line) then `ssh host "md5sum $files" | diff - <(md5sum $files)`; scp every edited file (specs too) before the gate.
 1. **[2026-11-19] `git checkout -- .` on ultra leaves scp'd NEW files untracked, and push (updateInstead) then fails**
    Do instead: after committing new files, `git clean`-free fix: on ultra `rm` exactly the files listed by `git status --short` as `??` (after md5 matched), then push.
 2. **[2026-11-19] Codex verdict grep matches the echoed prompt**

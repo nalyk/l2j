@@ -1,6 +1,6 @@
 # SPEC-AR — Aden Remembers
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 12 (Aden Remembers); 01 §2.5 (rumors are content); 02 §3 (game logic never branches on origin), §4, §6
   (budgets: hot-path seams ≤ 2 µs p99, never per tick); 03 §4.2 (the loot routing patch); 04 §1 (Fact Journal,
   telemetry), §3 (Asset Service), §6 (`lc why`), §7 (keyed randomness), §8 (degradation); 10 §8 (Genesis: Aden Remembers
@@ -138,7 +138,9 @@ lc_caravan_escort(caravan_id, char_id, clan_id NULL, contract_id, joined_at, pre
   table with each other. Triggers check each price or order row against its item's band, read with a locking read of
   `lc_guild_band` (a different table, so always the latest committed row whatever the writer's isolation or snapshot),
   which also serialises them with band changes; a band change is checked against the item's prices and open orders with
-  locking reads of those tables, so it never leaves one outside. No check reads another row of its own table, so no
+  locking reads of those tables, so it never leaves one outside. A band is never deleted, every price and order row has a
+  foreign key to its item's band, and a band's insert is checked against the item's rows like a change, so no
+  delete-and-recreate can narrow one past existing rows. No check reads another row of its own table, so no
   isolation level and no ordering of writers can break the rule. The only writer is Aden Remembers' effect dispatcher
   (fact-journal.md §4.4); the triggers hold the rule for any writer.
 - `lc_guild_stock` is the projector's view of each warehouse, built from the Guild's facts (§5), so decisions read a
@@ -328,8 +330,8 @@ counted), so relocation never queues on the kill path.
 - Excluded: protected items (§2.2); kills of raid and grand bosses and of their minions; kills outside every subregion.
 - Hot path: one array read `share[subregion][family]` from an immutable snapshot swapped at each step, the item → family
   `int[]`, and a keyed roll only for family items of a subregion whose share is above zero: the 2 µs budget covers this
-  selection only. The Asset operation runs only for kills with a selected item, under the Loot Charter's routing budget
-  (pact.md §4.5), rate-capped.
+  selection only. The Asset operation runs only for kills with a selected item, rate-capped, and is held to the Asset
+  Service's commit budget (asset-service.md ASSET-R21, `CommitBudgetMillis` at p99).
 - Perception: hunters there find fewer of the family; the destination's Guild offers them; Guild prices; rumors.
 
 #### 4.3.2 Limited merchant stock (`STOCK`, per town and product)
@@ -616,7 +618,7 @@ Nothing else shows any state.
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-AR-00 | integration | the migration applies; triggers and keys refuse: a transition row after the first with no predecessor state; a protected item in a family (insert or update, both tables); an actuator row outside its bounds or its kind's ceiling, changed or deleted; a second open situation of a kind and region; a situation inserted other than `EMERGING`; a state change without its newest transition row; a transition outside the machine; `ACTIVE → CLOSED` without `FROZEN`/`DISABLED`; a second enacted law of a kind per castle; a second Amnesty in a reign; an ended law changed or deleted; a band whose ceiling is not below its floor; a buy or order price above its band's ceiling, a sell price below its floor; a band narrowed past an existing price or open order; a price written against a band another transaction changed after the writer's snapshot (the locking read sees the change); a caravan transition outside its machine or a node going back; a rumor beyond its life |
+| AT-AR-00 | integration | the migration applies; triggers and keys refuse: a transition row after the first with no predecessor state; a protected item in a family (insert or update, both tables); an actuator row outside its bounds or its kind's ceiling, changed or deleted; a second open situation of a kind and region; a situation inserted other than `EMERGING`; a state change without its newest transition row; a transition outside the machine; `ACTIVE → CLOSED` without `FROZEN`/`DISABLED`; a second enacted law of a kind per castle; a second Amnesty in a reign; an ended law changed or deleted; a band whose ceiling is not below its floor; a buy or order price above its band's ceiling, a sell price below its floor; a band narrowed past an existing price or open order, deleted, or deleted-and-recreated narrower; a price written against a band another transaction changed after the writer's snapshot (the locking read sees the change); a caravan transition outside its machine or a node going back; a rumor beyond its life |
 | AT-AR-01 | integration, sim | `AR-OVERHARVEST`: 10⁶ kills of a drop list with groups, protected items, Adena and champions, with relocation at its ceiling and off: every item's frequency (relocated counted as dropped) equal between the two within a chi-square test at p ≥ 0.001; per kill, rolled family items = dropped + relocated exactly, and none both; an aborted operation returns the items to retail; an uncertain commit resolved either way leaves each item in exactly one place; past `RelocationOpsPerSecond` selections are skipped to retail; the overharvest situation opens at the declared threshold and windows and recovers after pressure stops |
 | AT-AR-02 | unit, integration | property test over random situations: every value within bounds and rate, recovery to neutral, kill switch and freeze neutral at once |
 | AT-AR-03 | unit | actor-identity.md's static scan passes over Aden Remembers; no code writes rates, skills, stats, spawns, respawn times, prices or Hellbound or seed state; the actuator set is exactly §4.3's |
@@ -629,7 +631,7 @@ Nothing else shows any state.
 | AT-AR-10 | sim | each of the eight kinds, driven by synthetic inputs: opens at its threshold after its confirmation steps, makes its asks, recedes and closes after its release steps; `AR-CATCHIN`: a mature world with new characters gets orders for catch-in items within 2 days of a shortage; `AR-TRADESHIFT`: a tax raise moves trade to neighbours within 3 days |
 | AT-AR-11 | integration | for random applied rows, `lc why` returns the situations, facts and windows behind them, and recomputing from those gives the value |
 | AT-AR-12 | integration | a planted out-of-bounds row, a relocated protected item, a `World.Relocated` fact without its operation, a custody mismatch at the boundary, a looping price, an over-share recycle and a rumor with a forbidden field: alarm and freeze; a trade committed but not yet projected raises no alarm |
-| AT-AR-13 | sim, fault | the 800-citizen benchmark: the relocation lookup and selection and each telemetry seam ≤ 2 µs p99; the relocation's Asset operation, run only for kills with a selected item and rate-capped, is measured against the Loot Charter's routing budget (pact.md §4.5), not the 2 µs one; an exception injected in each seam leaves the retail outcome |
+| AT-AR-13 | sim, fault | the 800-citizen benchmark: the relocation lookup and selection and each telemetry seam ≤ 2 µs p99; the relocation's Asset operation, run only for kills with a selected item and rate-capped, is measured against the Asset Service's commit budget (ASSET-R21), not the 2 µs one; an exception injected in each seam leaves the retail outcome |
 
 ## 11. Upstream constraints
 
@@ -662,6 +664,9 @@ Nothing else shows any state.
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: a band could be deleted and recreated narrower, past existing rows; the relocation
+  operation's budget named one PACT does not define. Revision 5: bands are never deleted, prices and orders reference
+  their band by foreign key, a band's insert is checked like a change; the budget is ASSET-R21's.
 - Round 3 (Codex), NO SIGN-OFF: open were an isolation guard that reads the session default, not the active
   transaction's level; formula operands the declared inputs could not supply (store units per family, clan presence);
   craft consumption counted only on success; a latency oracle describing a removed queue. Revision 4: a per-item band

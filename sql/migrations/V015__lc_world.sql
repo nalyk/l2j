@@ -247,7 +247,8 @@ CREATE TABLE lc_guild_price (
 	PRIMARY KEY (town_id, item_id),
 	CONSTRAINT chk_guild_spread CHECK (buy_price > 0 AND sell_price > buy_price),
 	CONSTRAINT fk_guild_price_town FOREIGN KEY (town_id) REFERENCES lc_guild_town (town_id),
-	CONSTRAINT fk_guild_price_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id)
+	CONSTRAINT fk_guild_price_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id),
+	CONSTRAINT fk_guild_price_band FOREIGN KEY (item_id) REFERENCES lc_guild_band (item_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_guild_order (
@@ -263,7 +264,8 @@ CREATE TABLE lc_guild_order (
 	UNIQUE KEY uk_guild_order_contract (contract_id),
 	CONSTRAINT chk_guild_order CHECK (qty > 0 AND unit_price > 0),
 	CONSTRAINT fk_guild_order_town FOREIGN KEY (town_id) REFERENCES lc_guild_town (town_id),
-	CONSTRAINT fk_guild_order_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id)
+	CONSTRAINT fk_guild_order_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id),
+	CONSTRAINT fk_guild_order_band FOREIGN KEY (item_id) REFERENCES lc_guild_band (item_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- No loop gains Adena: each item's band has its buy ceiling below its sell floor; every buy and open order price is at
@@ -279,6 +281,10 @@ CREATE TRIGGER lc_guild_order_band BEFORE INSERT ON lc_guild_order FOR EACH ROW 
 CREATE TRIGGER lc_guild_order_state BEFORE UPDATE ON lc_guild_order FOR EACH ROW IF OLD.state <> 'POSTED' OR NEW.unit_price <> OLD.unit_price OR NEW.item_id <> OLD.item_id OR NEW.qty <> OLD.qty OR NEW.contract_id <> OLD.contract_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_order: an order only moves from posted to filled or expired'; END IF;
 
 CREATE TRIGGER lc_guild_band_change BEFORE UPDATE ON lc_guild_band FOR EACH ROW BEGIN DECLARE max_buy BIGINT; DECLARE min_sell BIGINT; DECLARE max_order BIGINT; SELECT MAX(buy_price), MIN(sell_price) INTO max_buy, min_sell FROM lc_guild_price WHERE item_id = NEW.item_id FOR UPDATE; SELECT MAX(unit_price) INTO max_order FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED' FOR UPDATE; IF NEW.item_id <> OLD.item_id OR NEW.buy_ceiling < IFNULL(GREATEST(IFNULL(max_buy, 0), IFNULL(max_order, 0)), 0) OR NEW.sell_floor > IFNULL(min_sell, NEW.sell_floor) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_band: a band never leaves an existing price or open order outside it'; END IF; END;
+
+CREATE TRIGGER lc_guild_band_insert BEFORE INSERT ON lc_guild_band FOR EACH ROW BEGIN DECLARE max_buy BIGINT; DECLARE min_sell BIGINT; DECLARE max_order BIGINT; SELECT MAX(buy_price), MIN(sell_price) INTO max_buy, min_sell FROM lc_guild_price WHERE item_id = NEW.item_id FOR UPDATE; SELECT MAX(unit_price) INTO max_order FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED' FOR UPDATE; IF NEW.buy_ceiling < IFNULL(GREATEST(IFNULL(max_buy, 0), IFNULL(max_order, 0)), 0) OR NEW.sell_floor > IFNULL(min_sell, NEW.sell_floor) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_band: a band never leaves an existing price or open order outside it'; END IF; END;
+
+CREATE TRIGGER lc_guild_band_kept BEFORE DELETE ON lc_guild_band FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_band: bands are never deleted';
 
 -- Derived: the projector's view of each warehouse (spec §2.5).
 CREATE TABLE lc_guild_stock (

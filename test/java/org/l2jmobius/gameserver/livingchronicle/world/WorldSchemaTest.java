@@ -108,6 +108,11 @@ class WorldSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_price SET buy_price = 16 WHERE town_id = 9"), "raising a buy price past the ceiling");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_order SET unit_price = 18 WHERE contract_id = 7002"), "repricing an order");
 			statement.execute("UPDATE lc_guild_band SET sell_floor = 17 WHERE item_id = 1870");
+			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_guild_band WHERE item_id = 1870"), "deleting a band");
+			// An item with a band and no rows yet: a band inserted over existing rows is checked like a change.
+			statement.execute("INSERT INTO lc_guild_band (item_id, buy_ceiling, sell_floor, application_id) VALUES (1871, 30, 40, " + APP + ")");
+			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1871, 25, 45, " + APP + ")");
+			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_guild_band WHERE item_id = 1871"), "deleting a band to recreate it narrower");
 
 			// Caravans: start scheduled, follow the machine, never go back a node.
 			statement.execute("INSERT INTO lc_caravan_route (route_name, origin_town, dest_town, nodes, scheduled_minutes, fort_ids) VALUES ('lc_caravan_giran_oren', 9, 10, 12, 90, '[]')");

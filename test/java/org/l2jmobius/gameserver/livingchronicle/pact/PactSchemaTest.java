@@ -199,6 +199,59 @@ class PactSchemaTest
 		}
 	}
 
+	/**
+	 * Review entered from every non-terminal state returns only to that state (or ends in a terminal one), never to another non-terminal state.
+	 */
+	@Test
+	void reviewReturnsOnlyWhereItCameFrom() throws SQLException
+	{
+		final String[][] paths =
+		{
+			{},
+			{ "PROPOSED" },
+			{ "PROPOSED", "PARTIALLY_SIGNED" },
+			{ "PROPOSED", "SIGNED" },
+			{ "PROPOSED", "SIGNED", "FUNDED" },
+			{ "PROPOSED", "SIGNED", "FUNDED", "ACTIVE" }
+		};
+		final String[] nonTerminal =
+		{
+			"DRAFT", "PROPOSED", "PARTIALLY_SIGNED", "SIGNED", "FUNDED", "ACTIVE"
+		};
+		int id = 5000;
+		try (Connection connection = _database.connect();
+			Statement statement = connection.createStatement())
+		{
+			for (String[] path : paths)
+			{
+				final String from = path.length == 0 ? "DRAFT" : path[path.length - 1];
+				for (String back : nonTerminal)
+				{
+					final int contract = ++id;
+					statement.execute(contract(contract, "'DRAFT'", TERMS, TERMS));
+					statement.execute("INSERT INTO lc_pact_party (contract_id, party_no, role, kind, char_id, signed_terms_version, signed_at, signed_token) VALUES (" + contract + ", 1, 'CLIENT', 'CHAR', 1, 1, NOW(3), UNHEX(REPEAT('0A', 16)))");
+					int version = 0;
+					String state = "DRAFT";
+					for (String step : path)
+					{
+						statement.execute(move(contract, state, step, ++version));
+						state = step;
+					}
+					statement.execute(move(contract, state, "ADMIN_REVIEW", ++version));
+					final String sql = move(contract, "ADMIN_REVIEW", back, version + 1);
+					if (back.equals(from))
+					{
+						statement.execute(sql);
+					}
+					else
+					{
+						assertThrows(SQLException.class, () -> statement.execute(sql), "review from " + from + " back to " + back);
+					}
+				}
+			}
+		}
+	}
+
 	private static String move(int contract, String from, String to, int version)
 	{
 		final String review = to.equals("ADMIN_REVIEW") ? ", review_from = '" + from + "', review_reason = 'audit'" : from.equals("ADMIN_REVIEW") ? ", review_from = NULL" : "";

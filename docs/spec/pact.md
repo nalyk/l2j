@@ -1,6 +1,6 @@
 # SPEC-PACT — PACT and the Notarius
 
-- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
+- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
 - Blueprint: 15 (PACT and the Notarius); 03 §4.2-§4.4 (loot routing, crafting boundary, new events); 04 §3 (Asset
   Service), §5 (Codex), §7 (keyed randomness); 12 §6.2 (Crown Law Market Charters), §8 (Caravan Escort); 17
   (publication); consensus §4.
@@ -110,8 +110,10 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
 | kill | the journal epoch (fact-journal.md §2, `lc_journal_epoch`) and a kill sequence the routing hook assigns in memory, `PACT/kill/<epoch>/<seq>` | the one routing of a kill's drops; its `OpId` is derived from it |
 | roll | (contract, attempt) | the craft roll (§4.3), independent of any operation id |
 
-An operation's `OpId` is the request's, the effect's or the kill's; what it does is made unique by the key it writes: every
-movement writes **exactly one** key of this table (a settlement, funding, signing, bid, split or kill key). A refunded
+An operation's `OpId` is the request's, the effect's or the kill's; what it does is made unique by the keys it writes:
+every movement writes **the set of keys its effect requires, each once and atomically** (a repayment writes the
+repayment's and the collateral's settlement keys; a fill writes the split key and the fill's settlement key; a routing
+writes its kill key), and no key of this table is ever written by two operations. A refunded
 operation (asset-service.md §3.2) leaves its key unwritten, so the next request or effect attempt, with a new `OpId`, can
 write it. A kill key is unique across restarts because the epoch is (one per server start).
 
@@ -144,10 +146,11 @@ resolution only to `review_from` or a terminal state.
 
 ### 3.2 Unit
 
-`OPEN` → `PAID` | `RETURNED` | `FORFEITED` | `NONE`, once: the transition writes the unit's settlement key in the same
-transaction (a trigger refuses leaving `OPEN` without one and any change after). A unit is what settles on its own: an
-attempt (Crafting Pact), a batch (Craft Order), a fill (Purchase Order), the delivery (Delivery Order), the loan, a routed
-lot (Loot Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (Treaty).
+`OPEN` → `PAID` | `RETURNED` | `FORFEITED` | `NONE` | `SPLIT`, once: the transition writes the unit's settlement key (or,
+for `SPLIT`, its split key) in the same transaction (a trigger refuses leaving `OPEN` without one and any change after).
+A unit is one movement-to-be (§2.1): an attempt (Crafting Pact, Craft Order), a fill and the remaining budget (Purchase
+Order), the delivery (Delivery Order), the principal, the collateral and the repayment (Loan), a routed lot (Loot
+Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (Treaty).
 
 ## 4. Operations
 
@@ -272,12 +275,18 @@ Mercenary contract runs (from its start fact to its end fact; the battle id is t
 
 - *present*: inside the battle's zone: the castle's siege zone (`entity/zone/type/SiegeZone.java`) for a castle siege, the
   fortress's siege zone for a fortress siege, any siege zone of the territory's castle or forts during Territory War;
-- *active*: within that minute, dealt damage to or received damage from a player on another side of that battle, or
-  killed one. Captured **synchronously at the hit**: `ON_CREATURE_DAMAGE_DEALT` is dispatched on the attacker's thread
-  before the damage applies (`entity/actor/Creature.java:7201`; the received-damage event is asynchronous, :7206, and is
-  not used). The listener reads, at that moment, both players' sides (the siege's registration, attacker, defender or
-  owner, or Territory War's siege side, `TerritoryWarManager.java:1226`), clans and the battle, and marks the current
-  minute active for both, if they are on different sides of the same running battle;
+- *active*: within that minute, **damage was actually taken** by one of two players on different sides of the same
+  running battle from the other (an attempted hit that dealt nothing does not count), or one killed the other. Mobius's
+  damage events do not say this: `ON_CREATURE_DAMAGE_DEALT` is dispatched after `reduceCurrentHp` whatever it refused
+  (`entity/actor/Creature.java:5358`, `:7201`; skills likewise,
+  `dist/game/data/scripts/handlers/skill/effects/StaticDamage.java:54`), and the received-damage event is asynchronous
+  (:7206). So PACT uses the **damage seam**, a core patch in `PlayerStatus.reduceHp`
+  (`entity/actor/status/PlayerStatus.java:71`) after its refusals (offline no-damage, :80-83; invulnerability, :85-88), at
+  the points where CP or HP is actually lowered (:224-230, :292), when the lowered amount is positive and the attacker's
+  acting player is another player: a synchronous primitive snapshot (attacker, target, amount, time) handed to PACT's
+  in-memory minute counters, which read both players' sides (the siege's registration, attacker, defender or owner, or
+  Territory War's siege side, `TerritoryWarManager.java:1226`), clans and the battle at that moment and mark the minute
+  active for both;
 - *member*: in the party (the clan) at the sample.
 
 A minute qualifies when all three hold; it is a row of `lc_pact_participation`. A clan party qualifies when at least the
@@ -338,7 +347,7 @@ player kill facts; caravan facts (12 §8).
 
 | Id | Invariant | Checked |
 |---|---|---|
-| PACT-INV01 | every movement of a contract is an Asset operation writing exactly one key of §2.3 (settlement, funding, signing, bid, split or kill); no key is written twice | the keys; AT-PACT-02 |
+| PACT-INV01 | every movement of a contract is an Asset operation writing atomically the keys of §2.3 its effect requires; no key is written by two operations | the keys; AT-PACT-02 |
 | PACT-INV02 | each contract custody holds exactly the sum of the `owed` of its `OPEN` units | PACT's holding predicate, checked in every operation (asset-service.md INV05) and by AT-PACT-02's reference model |
 | PACT-INV03 | a contract leaves the signing states only with every party's signature on the current terms version; terms never change after | triggers; AT-PACT-00 |
 | PACT-INV04 | an attempt has one intent and at most one outcome, both immutable; the outcome is the keyed function of the intent | keys and triggers; AT-PACT-03 |
@@ -352,7 +361,8 @@ player kill facts; caravan facts (12 §8).
 |---|---|
 | crash during any operation | the Asset Service's: committed or not; a later request or effect attempt writes the key once |
 | crash between a craft's intent and its apply | the intent stands; the next request applies it with the same roll |
-| crash or database fault during a kill's routing | routed entirely, or returned to retail with `Pact.RoutingFailed` |
+| database fault or frozen module during a kill's routing | routed entirely, or returned to retail with `Pact.RoutingFailed` |
+| JVM crash between a kill and its routing commit | the routed items are lost, as retail's own drops of that kill are (§4.5, a stated limit) |
 | a party offline at settlement | service mail waits for them |
 | a receiver deleted | the release aborts with `RECEIVER_GONE` (asset-service.md §2.1); the contract goes to `ADMIN_REVIEW` |
 | a clan disbanded or an alliance dissolved | payouts to the last leader if they exist; otherwise `ADMIN_REVIEW` |
@@ -382,7 +392,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | Id | Requirement | Proven by |
 |---|---|---|
 | PACT-R01 | A contract MUST move only by §3.1; signatures MUST bind a terms version and every amendment MUST clear them; terms MUST never change after signing. | AT-PACT-00, AT-PACT-01 |
-| PACT-R02 | Every movement MUST be one Asset operation writing exactly one key of §2.3, and each custody MUST hold exactly what its open units owe, across restarts at every state and faults between statements. | AT-PACT-02 |
+| PACT-R02 | Every movement MUST be one Asset operation writing atomically the keys of §2.3 its effect requires, none written by two operations, and each custody MUST hold exactly what its open units owe, across restarts at every state and faults between statements. | AT-PACT-02 |
 | PACT-R03 | A contractual craft MUST follow retail rules and rates exactly, with materials from escrow, and its outcome MUST be the keyed function of an intent committed before the roll, never rerolled. | AT-PACT-03 |
 | PACT-R04 | Clauses MUST be machine-verifiable and each kind's evaluator MUST compute its unit result from its named inputs only. | AT-PACT-04 |
 | PACT-R05 | A Loot Charter MUST apply only to kills its group owns at the drop owner's decision and MUST route that kill's listed items entirely or not at all; everything else MUST stay retail. | AT-PACT-05 |
@@ -394,12 +404,12 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | Test | Kind | What it does |
 |---|---|---|
 | AT-PACT-00 | integration | the migration applies; triggers refuse every transition outside §3.1 and allow every one inside it (all 132 pairs of distinct states tried, each on a fresh contract), insertion in another state than `DRAFT`, resolution to other than `review_from` or terminal, leaving signing without every signature on the current terms version, any change of terms, clauses or parties after signing, a terms hash not of the terms, a unit leaving `OPEN` without its key or changing after, a second or changed intent or outcome, a second active charter of a character (with valid member rows), a kill key twice |
-| AT-PACT-01 | integration | every transition of §3.1 through the operations; two parties signing in either order without re-signing; an amendment clears signatures; a token of an old terms version refused; a Royal contract's last signature away from the Notarius refused |
+| AT-PACT-01 | integration | every transition of §3.1 through the operations; two parties signing in either order without re-signing; after an amendment no earlier signature counts (each is on an old terms version, and the operation clears them from the page); a token of an old terms version refused; a Royal contract's last signature away from the Notarius refused |
 | AT-PACT-02 | integration, fault, restart | an automated suite of every type against an **independent reference model** that computes, from the scenario alone, each character's expected receipts and each custody's expected content: after every step, restarts at every state and faults between statements, actual equals expected per character, per item and object id, and no key is written twice |
 | AT-PACT-03 | integration, sim | contractual crafts against retail: the same validation refusals and MP cost; over 10⁶ intents per test recipe, the success frequency within the 99.9 % binomial interval of the recipe's rate; an apply aborted at each step and retried, and a restart between intent and apply, give the same outcome; a configuration change after the intent does not change it |
 | AT-PACT-04 | unit | each clause kind's evaluator against a table of inputs and expected results, including boundaries (a deadline at the same millisecond, a member reaching the minutes exactly); the static scan finds no evaluator reading outside its named inputs |
 | AT-PACT-05 | integration | raids and kills with charters and without; the charter's leader disbanding and forming a new party (the new party's kills retail); a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
-| AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
+| AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, hits on an invulnerable or offline-protected target (no activity), expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
 | AT-PACT-07 | integration | fees: values and fees computed independently from the terms, charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
 | AT-PACT-08 | integration | publication rows of both types for every visibility; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
 | AT-PACT-09 | integration | acts outside contracts (attacking a treaty party, keeping a lent weapon outside a loan, leaving a party) stay possible; a clan member without the leader's authority cannot sign or fund, and with `ACCESS_WAREHOUSE` can fund only when `AltMembersCanWithdrawFromClanWH` is on |
@@ -421,6 +431,12 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Round 3 (Codex), NO SIGN-OFF: seventeen fixed or accepted; open were a one-key-per-movement rule that repayments and
+  splits contradict, §3.2 not listing split and staged units, the Asset source definitions still saying "into custody",
+  the damage event firing for refused damage, the failure table contradicting the crash limit, and review tested from one
+  state only. Revision 4: keys as an atomic set per movement; §3.2 restated; Asset §2.5 aligned; the damage seam at the
+  points `PlayerStatus.reduceHp` actually lowers CP or HP; the failure table split; review entered from and returned to
+  every non-terminal state in the test.
 - Round 2 (Codex), NO SIGN-OFF: thirteen of nineteen fixed, five partly, and five new: precommit loss of routed drops
   on a JVM crash; groups identified by a leader's id; asynchronous damage events; `pact_completed` for private contracts;
   immutable `owed` unable to model staged obligations and budgets; movements without a key (signing, loan principal,

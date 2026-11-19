@@ -152,14 +152,14 @@ change.
 | `ROAD_LOSS` | SINK | caravan | the rest of a raided manifest |
 | `ADMIN_CORRECTION` | SOURCE / SINK | audit fact | a corrective admin operation (§4.5) |
 | `CRAFT_INPUT` | SINK | contract | a contractual craft's materials, consumed from the contract's custody exactly as retail consumes them from an inventory (pact.md §4.3) |
-| `CRAFT_OUTPUT` | SOURCE | contract | a contractual craft's product, created into the contract's custody exactly as retail creates it in an inventory |
-| `LOOT_DROP` | SOURCE | charter | a kill's drops routed by a Loot Charter (pact.md §4.5): created into the charter's custody instead of on the ground or in an inventory, the same items and counts the kill made |
+| `CRAFT_OUTPUT` | SOURCE | contract | a contractual craft's product, created exactly as retail creates it in an inventory, and sent straight to the client by system mail (pact.md §4.3) |
+| `LOOT_DROP` | SOURCE | charter | a kill's drops routed by a Loot Charter (pact.md §4.5), the same items and counts the kill made: reserved and rotated ones sent straight to their receiver by system mail, auctioned (custody-eligible) ones into the charter's custody, instead of on the ground or in an inventory |
 | `PACT_PARCHMENT` | SOURCE | contract | the non-tradable Notarized Contract item of a signed contract (pact.md §4.8) |
 
 Living Chronicle mints nothing for players: a `TOWN_SUPPLY` source is matched by the supply budget it draws down (owned
 by Aden Remembers); `CRAFT_OUTPUT` and `LOOT_DROP` create exactly what the retail craft or kill would have created at
-that moment, by the same retail code through the crafting and loot seams (03 §4.2-§4.3), only into a custody instead of
-an inventory or the ground; `PACT_PARCHMENT` is a non-tradable representation with no value; every other source is an
+that moment, by the same retail code through the crafting and loot seams (03 §4.2-§4.3), only into system mail or a
+custody instead of an inventory or the ground; `PACT_PARCHMENT` is a non-tradable representation with no value; every other source is an
 audited correction. Each is a classified site (§2.7).
 
 ### 2.6 The economy monitor

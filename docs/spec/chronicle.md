@@ -1,6 +1,6 @@
 # SPEC-CHR — Chronicle of Aden
 
-- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
+- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
 - Blueprint: 17 (Chronicle of Aden); 01 §2.6 (deterministic engine, optional narration); 02 §7 (three processes; the
   narrator an external local service), §6 (budgets); 04 §4 (publication DTOs, a separate database user), §8 (narrator
   down); 10 §8 (Genesis: the Chronicle runs from day 0); 12 §9 (Aden Remembers decides what became history); 14 §7
@@ -116,7 +116,7 @@ with its item template; never an object id).
 
 ```text
 lc_chr_pending(pending_id PK, pub_type, fields JSON, event_at, due_at, source_fact_from, source_fact_to)   -- private
-lc_chr_day(day DATE PK, closed_at, fact_id)
+lc_chr_day(day DATE PK, closed_at, fact_id, composed_at NULL, issue_no NULL)
 lc_chr_issue(issue_no PK, day UNIQUE, composed_at)
 lc_chr_issue_entry(issue_no, seq, pub_row_id UNIQUE, section)
 lc_chr_reading(char_id, issue_no, paid_op, PRIMARY KEY(char_id, issue_no))
@@ -141,8 +141,10 @@ reads them.
 
 ### 3.1 Day and issue
 
-`lc_chr_day` rows are written by Chronicle's own clock (§4.3), one per game day, in order; a day `CLOSED` composes its issue
-once (`COMPOSED`, in one transaction with its entries); an issue is never recomposed.
+`lc_chr_day` rows are written by Chronicle's own clock (§4.3), one per game day, in order (`CLOSED`); the day's
+composition is one transaction that sets its `composed_at` and, when it has entries, its `issue_no` with the issue and its
+entries (`COMPOSED`), or `issue_no` null for a day with none (`COMPOSED_EMPTY`). Either way it is never composed again, so
+after a restart a closed but uncomposed day is composed, and a composed empty day is not reconsidered.
 
 ### 3.2 Monument
 
@@ -160,7 +162,7 @@ The NPC is a projection of the row: at startup every `STANDING` monument is spaw
 ### 3.4 Letter
 
 `QUEUED` → `APPROVED` or `REJECTED` (a moderator, with a reason) → `PUBLISHED` (in the first issue after its delay) →
-`WITHDRAWN` (its author withdrew publication: its row superseded with `WITHDRAWAL`).
+`WITHDRAWN` (its author withdrew publication: its row's `withdrawn_at` set).
 
 ## 4. Operations
 
@@ -229,7 +231,7 @@ existing statue or stele model (`displayId`), at a free slot of `lc_chr_monument
 startup: in the town, on the geodata), with its inscription rendered from that row and resolved tokens. Raising is an
 actuator effect with an application id (fact-journal.md §4.4): spawned once, re-spawned from its row after a restart. When
 the town's slots are full, the least significant, oldest monument retires if the new one is more significant; otherwise the
-new one is website-only. A superseded history row's monument shows its successor's inscription; a withdrawn one retires.
+new one is website-only. A corrected history row's monument shows its final successor's inscription; a withdrawn one retires.
 
 ### 4.5 Letters
 
@@ -238,7 +240,7 @@ A character whose `history_publishable` is set submits a letter in the Codex (�
 is a character name (case-insensitive, whole words) before the letter reaches a moderator. Admins moderate it
 (`lc chr letters`) against a checklist: no character named or described, no position or route, no contract terms, no
 claim about hidden identities, aliases, informants or intel, no events younger than the tactical delay. An approved
-letter is published after the tactical delay from submission, signed with its author's token; withdrawal supersedes it
+letter is published after the tactical delay from submission, signed with its author's token; withdrawal sets its row's `withdrawn_at`
 (§4.1).
 
 ### 4.6 Item sagas
@@ -303,10 +305,25 @@ EN, RO and RU; a missing translation is a test failure, not a fallback.
 
 ## 5. Facts
 
-Emitted: `Chronicle.DayClosed` (day), `Chronicle.IssueComposed` (issue, day, entry count), `Chronicle.MonumentRaised` /
-`Retired` (monument, history row), `Chronicle.SagaBegan` (lifecycle, kind), `Chronicle.SagaEvent` (lifecycle, kind),
-`Chronicle.SagaEnded`, `Chronicle.BattleOpened` / `Closed` (battle key), `Chronicle.LetterDecided` (letter, decision),
-`Chronicle.Withdrawn` (character, rows superseded), `Chronicle.Refused` (type, reason). None holds a name or a position.
+Emitted (durable, the payloads complete, so a replay rebuilds Chronicle's derived tables from them alone; the decisions
+that depend on what was committed when, a composition's membership and a battle's samples, are recorded in their facts,
+not recomputed):
+
+| Fact | Payload |
+|---|---|
+| `Chronicle.DayClosed` | day, closed time |
+| `Chronicle.IssueComposed` | day, issue number or none (an empty day), every entry: row id, section, sequence |
+| `Chronicle.MonumentRaised`, `…Retired` | monument, town, slot, history row, application id |
+| `Chronicle.SagaBegan` | lifecycle, item, object id, kind, holder character |
+| `Chronicle.SagaEvent` | lifecycle, sequence, kind, time, territory, character, other character, reference |
+| `Chronicle.SagaEnded` | lifecycle, kind |
+| `Chronicle.BattleOpened`, `…Closed` | battle key, kind, place, time, end fact |
+| `Chronicle.BattleSample` | battle key, minute, every kept cell (cell, side, count) and mark (kind, reference, count): one per minute, sensitivity private |
+| `Chronicle.LetterDecided` | letter, decision, moderator, reason |
+| `Chronicle.Withdrawn` | character, consent generation after, rows withdrawn |
+| `Chronicle.Refused` | type, reason |
+
+None holds a name or a position finer than a battle cell; character ids appear only in private facts.
 Consumed: Aden Remembers' history, owner and law facts; PACT and Ledger facts; Olympiad hero facts
 (`mechanics/olympiad/Hero.java:607`); Wayfarer's flag and milestone facts; Asset lifecycle facts.
 
@@ -332,7 +349,7 @@ Consumed: Aden Remembers' history, owner and law facts; PACT and Ledger facts; O
 | crash after a monument row, before its spawn | spawned at restart |
 | a battle without an end fact | closed by its place's next fact |
 | `intel.publishable` refuses a row | not written; counted and alarmed |
-| withdrawal | tokens stop resolving at once; the character's own rows superseded |
+| withdrawal | tokens stop resolving at once, for good; the character's own rows withdrawn |
 
 ## 8. Configuration
 
@@ -361,7 +378,7 @@ was missed, idempotent).
 |---|---|---|
 | CHR-R01 | Every public output MUST be rendered only from current rows through the views, by roles that can read nothing else. | AT-CHR-01 |
 | CHR-R02 | No row MUST be written before its type's delay counted from its newest source fact, and battle samples MUST stay private. | AT-CHR-02 |
-| CHR-R03 | A character MUST be named only through a token whose basis holds at render; withdrawal MUST unname them everywhere at once and supersede their own rows. | AT-CHR-03 |
+| CHR-R03 | A character MUST be named only through a token whose basis holds at render; withdrawal MUST unname them everywhere at once, for good, and withdraw their own rows. | AT-CHR-03 |
 | CHR-R04 | Narrated text MUST consist only of our template alternatives and flavour sentences, chosen. | AT-CHR-04 |
 | CHR-R05 | Every game day MUST close once, its issue composed once from its span's rows, each row in at most one issue. | AT-CHR-05 |
 | CHR-R06 | A monument MUST be raised at most once, only for a written row, and re-spawned from its row. | AT-CHR-06 |
@@ -380,7 +397,7 @@ was missed, idempotent).
 | AT-CHR-02 | integration | a location-related row refused before its delay from its source fact; raising the tactical delay raises the database floor; a replay dated from its battle's end; cells below the minimum absent |
 | AT-CHR-03 | integration | each basis resolves only while it holds and only on its row types; a withdrawal unnames the character in an archived issue at once and withdraws its milestones, letters and saga entries; opting in again resolves no old token and gives a new, unlinked page; two rows naming one character share no token; for one event with a human and a citizen swapped in a role, every per-event and per-name response is identical, and the humans-only view changes at most a monthly aggregate |
 | AT-CHR-04 | unit | the narrator protocol: only valid choice indices are kept, any free text discarded, in EN, RO and RU; every alternative and flavour sentence of every template is checked by a test that it holds for every row its template serves (a reversed relationship has no alternative); narrator down gives the first alternatives |
-| AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
+| AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a restart after an empty day's composition does not reconsider it, and a row committed afterwards goes to the next issue; a replay from facts rebuilds the same issues, sagas and battle frames; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
 | AT-CHR-06 | integration, restart, fault | a monument raised once under a crash at each step, only after its row is written; re-spawned after a restart; retirement order; a withdrawn history row's monument retires |
 | AT-CHR-07 | integration | a player just outside the town zone, though visible to the crier, does not hear it; one proclamation per interval per crier across a restart; each once |
 | AT-CHR-08 | integration, restart | a saga through craft, trade, private store, warehouse, mail, death drop, PvP kills with a saga weapon and with saga armor, a siege and crystallisation; a ground-loot privilege records no owner; a restart keeps the flag of a live saga item; a reused object id starts nothing for the old saga |
@@ -417,6 +434,9 @@ was missed, idempotent).
 
 ## 12. Review record
 
+- Round 3 (Codex), NO SIGN-OFF: commit-dependent decisions without replayable facts; an empty day without a durable
+  composed state; stale supersession wording. Revision 4: complete fact payloads, membership and samples recorded in
+  their facts; `composed_at` and `issue_no` on the day, set atomically; the wording follows `withdrawn_at`.
 - Round 2 (Codex), NO SIGN-OFF: flavour paragraphs could still state invented facts; re-enabling consent revived old
   tokens; role bases unconditioned and pages unidentifiable; a withdrawal needed a visible replacement; frames could not
   carry marks; a future `written_at` published at once; a non-current successor accepted and only one hop followed;

@@ -97,8 +97,11 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
   charter, so no charter state can change a quoted fee. After that signature commits, if a Market Charter is enacted in
   the territory and not suspended, its custody pays the payer a **rebate** of ⌊(1 − factor) × the registration part of
   `fee_adena`⌋ (never of the sealing fee) by service mail (Asset
-  `release`), once, under the settlement key `CHARTER/<law>/<contract>`; if the custody cannot pay, no rebate is paid
-  (the Codex shows the rebate as expected, never as part of the terms) (aden-remembers.md §4.5).
+  `release`), once, under the settlement key `CHARTER/<law>/<contract>`. The rebate is an **effect intent** written in the
+  last signature's own transaction (fact-journal.md §4.4), so a restart between the signing and the payment still pays it;
+  its effect ends in one of two completed outcomes, never a failure: paid (`Pact.RebatePaid`), or skipped because the
+  charter is suspended, ended or its custody cannot pay (`Pact.RebateSkipped`, with the reason). The Codex shows the
+  rebate as expected, never as part of the terms (aden-remembers.md §4.5).
 - A contract with `value_adena` ≥ `RoyalThresholdAdena`, a clan or alliance party, or of type Treaty needs a Royal
   Notarius; Mercenary contracts the Castle Notarius of the castle concerned; Caravan Escorts the Caravan Guild (15 §8);
   Guild Orders the Guild Master (tier `TOWN` of the Guild's town).
@@ -201,7 +204,7 @@ counter-proposes, and its contracts are `PUBLIC`. Received items go into its goo
 | Loan | lender: principal (unit *P*); borrower: collateral (unit *C*) | activation settles *P* (`PAID` to the borrower); repayment is a request that creates unit *R* (the repayment, funded from the borrower) and in the same operation settles *R* (`PAID` to the lender) and *C* (`RETURNED` to the borrower) | at the deadline, unrepaid: *C* `FORFEITED` to the lender, never more |
 | Loot Charter | bidders' bids, during an auction | per routed lot (§4.5) | an unfinished auction's lot to the charter's fallback receiver |
 | Mercenary | employer: payment per mercenary party | per mercenary party, on the battle's end (§4.6) | payment returned for parties that did not qualify; all of it if the battle did not happen |
-| Caravan Escort | the `CARAVAN_GUILD` institution (§4.1a) as employer: payment moved from a Guild pool (plus a Caravan Protection law's custody) at dispatch | on the caravan's arrival, the escrow split among escorts by the participation shares Aden Remembers computes (aden-remembers.md §4.6) | refunded to the pool on a raid or a recall, and the unqualified remainder on arrival |
+| Caravan Escort | the `CARAVAN_GUILD` institution (§4.1a), its only party: payment moved from a Guild pool (plus a Caravan Protection law's custody) at issuance | escorts are **participants, not parties**: they register at the Guild Master (aden-remembers.md §4.6, `lc_caravan_escort`) without signing; on the caravan's arrival the escrow is split among them by the participation shares Aden Remembers computes, each share a unit `PAID` by service mail to its escort, as a Mercenary contract pays qualifying parties (§4.6) | refunded to the pool on a raid or a recall, and the unqualified remainder on arrival |
 | Treaty | each signatory: its forfeit | per (violating signatory, window): at the first violation (§4.7) in the window, that signatory's forfeit goes to the victim's side; later violations in the window are facts only | at the end of the window, every **unspent** forfeit returned to its signatory |
 
 ### 4.3 Craft for contract
@@ -326,7 +329,8 @@ forfeit to the victim's side's receiver. Nothing stops the kill.
 
 ### 4.8 The parchment
 
-At `SIGNED` each party receives, by service mail, a **Notarized Contract** item: non-tradable, non-droppable,
+At `SIGNED` each **character** party (and the leader of each clan or alliance party) receives, by service mail, a
+**Notarized Contract** item; an institutional party receives none (its record is the contract and the public registry): non-tradable, non-droppable,
 non-sellable, non-depositable (`entity/item/ItemTemplate.java:152-160`), with an item handler that opens the contract's
 page (as `dist/game/data/scripts/handlers/items/Bypass.java:41-52` does), issued from the `PACT_PARCHMENT` source. No
 operation reads it; destroying it changes nothing.
@@ -455,6 +459,10 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Amendment round 4 (Codex), NO SIGN-OFF: an institution could not receive the parchment the signing gives; Caravan
+  Escort's escorts had no signing path; the rebate had no durable scheduling or terminal outcome. Fixed: parchments to
+  character parties only; escorts are participants paid by units, not parties; the rebate an effect intent of the signing
+  transaction, ending paid or skipped.
 - Amendment round 3 (Codex), NO SIGN-OFF: one institutional custody field served both the Adena pool and the goods
   warehouse; the fee formula still applied the charter factor. Fixed: `institution_pool` and `institution_receiver`; the
   fee never includes a charter, the rebate is of its registration part, with an oracle in AT-PACT-07.

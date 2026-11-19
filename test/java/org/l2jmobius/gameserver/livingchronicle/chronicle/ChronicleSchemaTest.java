@@ -138,6 +138,8 @@ class ChronicleSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_issue (issue_no, day, composed_at) VALUES (2, CURDATE() - INTERVAL 1 DAY, NOW(3))"), "a second issue for a day");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (1, 1, 1, 'REALM')"), "history in the realm section");
 			statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (1, 1, 1, 'HISTORY'), (1, 2, 7, 'REALM')");
+			statement.execute("UPDATE lc_chr_day SET composed_at = NOW(3), issue_no = 1 WHERE day = CURDATE() - INTERVAL 1 DAY");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_chr_day SET composed_at = NOW(3), issue_no = NULL WHERE day = CURDATE() - INTERVAL 1 DAY"), "a day composed twice");
 			statement.execute("INSERT INTO lc_chr_day (day, closed_at, fact_id) VALUES (CURDATE() - INTERVAL 2 DAY, NOW(3), 12)");
 			statement.execute("INSERT INTO lc_chr_issue (issue_no, day, composed_at) VALUES (2, CURDATE() - INTERVAL 2 DAY, NOW(3) - INTERVAL 1 DAY)");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_chr_issue_entry (issue_no, seq, pub_row_id, section) VALUES (2, 1, 5, 'HISTORY')"), "a row written after its issue's composition");

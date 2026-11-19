@@ -92,7 +92,10 @@ CREATE TABLE lc_chr_day (
 	day DATE NOT NULL,
 	closed_at TIMESTAMP(3) NOT NULL,
 	fact_id BIGINT NOT NULL,
-	PRIMARY KEY (day)
+	composed_at TIMESTAMP(3) NULL,
+	issue_no INT NULL,
+	PRIMARY KEY (day),
+	CONSTRAINT chk_chr_day_composed CHECK (issue_no IS NULL OR composed_at IS NOT NULL)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_chr_issue (
@@ -103,6 +106,8 @@ CREATE TABLE lc_chr_issue (
 	UNIQUE KEY uk_chr_issue_day (day),
 	CONSTRAINT fk_chr_issue_day FOREIGN KEY (day) REFERENCES lc_chr_day (day)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TRIGGER lc_chr_day_composed_once BEFORE UPDATE ON lc_chr_day FOR EACH ROW IF OLD.composed_at IS NOT NULL OR NEW.day <> OLD.day OR NEW.closed_at <> OLD.closed_at OR NEW.fact_id <> OLD.fact_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_chr_day: a day is composed once'; END IF;
 
 CREATE TABLE lc_chr_issue_entry (
 	issue_no INT NOT NULL,

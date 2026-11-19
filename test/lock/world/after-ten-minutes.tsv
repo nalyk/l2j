@@ -1,7 +1,7 @@
 # LOCK-WORLD-0002: the same world after 600000 ms of game time.
-task-runs-due-at-boot	3683
-task-runs-in-ten-minutes	152518
-pending-tasks	1032
+task-runs-due-at-boot	3684
+task-runs-in-ten-minutes	153118
+pending-tasks	1033
 objects	46429
 kind	Adventurer	76
 kind	AirShip	1

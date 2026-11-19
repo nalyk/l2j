@@ -3,6 +3,7 @@ package org.l2jmobius.gameserver;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import org.l2jmobius.gameserver.config.custom.RandomSpawnsConfig;
 import org.l2jmobius.gameserver.data.SpawnTable;
+import org.l2jmobius.gameserver.data.xml.NpcData;
 import org.l2jmobius.gameserver.data.xml.PlayerTemplateData;
 import org.l2jmobius.gameserver.entity.Location;
 import org.l2jmobius.gameserver.entity.actor.Npc;
@@ -33,6 +35,7 @@ import org.l2jmobius.gameserver.mechanics.events.Containers;
 import org.l2jmobius.gameserver.mechanics.events.EventType;
 import org.l2jmobius.gameserver.mechanics.events.holders.actor.npc.OnNpcSpawn;
 import org.l2jmobius.gameserver.mechanics.events.listeners.ConsumerEventListener;
+import org.l2jmobius.gameserver.taskmanagers.RandomAnimationTaskManager;
 import org.l2jmobius.testing.Arena;
 import org.l2jmobius.testing.Golden;
 import org.l2jmobius.testing.TestPlayers;
@@ -57,6 +60,8 @@ class TimerLockTest
 	private static final long RESPAWN_LIMIT_MILLIS = 3_600_000;
 
 	private static TestServer _server;
+
+	private static final int MALUK_WARLORD = 22839;
 
 	/** The heading each NPC of a territory spawn came back with in the respawn lock. */
 	private static final List<Integer> TERRITORY_HEADINGS = new ArrayList<>();
@@ -215,6 +220,31 @@ class TimerLockTest
 		final long east = TERRITORY_HEADINGS.stream().filter(heading -> heading == 0).count();
 		assertTrue((east * 100) < TERRITORY_HEADINGS.size(), east + " of " + TERRITORY_HEADINGS.size() + " NPCs of territory spawns came back facing due east");
 		assertTrue(new HashSet<>(TERRITORY_HEADINGS).size() > (TERRITORY_HEADINGS.size() / 2), "the NPCs of territory spawns came back facing only " + new HashSet<>(TERRITORY_HEADINGS).size() + " ways");
+	}
+
+	/**
+	 * An NPC turns idly exactly while it stands in an awake region (CORE_PATCHES.md CP-0007): it is put on the idle-animation list when it spawns into an awake region or walks into one, and taken off when it walks into a sleeping one or decays. The list used to know only the NPCs a region held when it woke, and kept them for good, deleted ones too.
+	 */
+	@Test
+	@Order(4)
+	void anNpcTurnsIdlyExactlyWhileItStandsInAnAwakeRegion() throws ReflectiveOperationException
+	{
+		final Field field = RandomAnimationTaskManager.class.getDeclaredField("PENDING_ANIMATIONS");
+		field.setAccessible(true);
+		final Map<?, ?> pending = (Map<?, ?>) field.get(null);
+
+		Arena.wake();
+		final Npc npc = Arena.spawn(NpcData.getInstance().getTemplate(MALUK_WARLORD));
+		assertTrue(pending.containsKey(npc), "an NPC spawned into an awake region is not on the idle-animation list");
+
+		// Far out over the sea, where no player is: a sleeping region.
+		npc.setXYZ(Arena.X + 60_000, Arena.Y, Arena.Z);
+		assertFalse(pending.containsKey(npc), "an NPC that walked into a sleeping region is still on the list");
+		npc.setXYZ(Arena.X, Arena.Y, Arena.Z);
+		assertTrue(pending.containsKey(npc), "an NPC that walked back into the awake arena is not on the list");
+
+		npc.deleteMe();
+		assertFalse(pending.containsKey(npc), "a deleted NPC is still on the list");
 	}
 
 	/**

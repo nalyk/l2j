@@ -103,3 +103,17 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Proof: `NpcSpawnTerritoryTest` (the swamp territory and its ban: a Splinter Stakato where the respawn lock saw one come
   back holds the territory, the flat test turned it out), `TimerLockTest.everySpawnRespawnsAsRecorded` (every NPC a
   territory placed holds it).
+
+## CP-0007 An NPC turns idly exactly while it stands in an awake region
+
+- Files: `java/org/l2jmobius/gameserver/entity/actor/Npc.java`
+- Reason: the idle-animation list (`RandomAnimationTaskManager`) is filled only when a region wakes, with the NPCs it holds
+  then, and emptied only when it falls asleep. An NPC that spawns into a region already awake, or walks into one, never
+  turns idly there; one deleted while its region is awake stays on the list for good, and the list keeps drawing for it
+  each time it falls due. In a town that never sleeps, every NPC a script or event ever spawned and removed piles up.
+- Change: `Npc` puts itself on the list when it is placed in or walks into an awake region, takes itself off when it walks
+  into a sleeping one or leaves the world, and when it decays. Regions waking and sleeping work as before.
+- Invariant: an NPC is on the idle-animation list exactly while it is spawned in an awake region; what it does once there
+  is unchanged.
+- Proof: `TimerLockTest.anNpcTurnsIdlyExactlyWhileItStandsInAnAwakeRegion` (spawned into the awake arena: on the list;
+  walked into a sleeping region: off; walked back: on; deleted: off, where before it stayed on).

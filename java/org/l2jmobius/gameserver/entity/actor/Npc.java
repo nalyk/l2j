@@ -51,6 +51,7 @@ import org.l2jmobius.gameserver.data.xml.NpcPersonalAIData;
 import org.l2jmobius.gameserver.entity.Location;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.WorldObject;
+import org.l2jmobius.gameserver.entity.WorldRegion;
 import org.l2jmobius.gameserver.entity.actor.enums.creature.InstanceType;
 import org.l2jmobius.gameserver.entity.actor.enums.creature.Race;
 import org.l2jmobius.gameserver.entity.actor.enums.creature.Team;
@@ -123,6 +124,7 @@ import org.l2jmobius.gameserver.network.serverpackets.ServerObjectInfo;
 import org.l2jmobius.gameserver.network.serverpackets.SystemMessage;
 import org.l2jmobius.gameserver.taskmanagers.DecayTaskManager;
 import org.l2jmobius.gameserver.taskmanagers.ItemsAutoDestroyTaskManager;
+import org.l2jmobius.gameserver.taskmanagers.RandomAnimationTaskManager;
 
 /**
  * This class represents a Non-Player-Creature in the world.<br>
@@ -1394,6 +1396,33 @@ public class Npc extends Creature
 		
 		// Clear script value.
 		_scriptValue = 0;
+		
+		// A decayed NPC no longer turns idly, and is not kept on the list for good.
+		RandomAnimationTaskManager.getInstance().remove(this);
+	}
+	
+	/**
+	 * Keeps the idle-animation list to the NPCs in regions that are awake: one spawned in or walking into an awake region is put on it, one walking into a sleeping region taken off. Regions waking or falling asleep put on or take off the NPCs already in them.
+	 */
+	@Override
+	public void setWorldRegion(WorldRegion region)
+	{
+		super.setWorldRegion(region);
+		if (region == null)
+		{
+			RandomAnimationTaskManager.getInstance().remove(this);
+		}
+		else if (isSpawned())
+		{
+			if (region.isActive())
+			{
+				RandomAnimationTaskManager.getInstance().add(this);
+			}
+			else
+			{
+				RandomAnimationTaskManager.getInstance().remove(this);
+			}
+		}
 	}
 	
 	/**

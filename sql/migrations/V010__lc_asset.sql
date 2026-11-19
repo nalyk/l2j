@@ -2,17 +2,15 @@
 -- the economy monitor's aggregates, and the module freeze switch.
 --
 -- Escrowed assets are not here: they stay canonical rows in `items` with owner_id = -1, loc = 'ESCROW' and
--- loc_data = custody_id (spec §2.3). `items.loc_data` is an INT, so custody ids are INTs.
+-- loc_data = custody_id (spec §2.3); what is owed to a character is system mail (`messages`, `items` loc = 'MAIL'). `items.loc_data` is an INT, so custody ids are INTs.
 --
 -- One statement per ';' at the end of a line; the test that applies migrations relies on it.
 
 CREATE TABLE lc_custody (
 	custody_id INT NOT NULL AUTO_INCREMENT,
-	kind ENUM('CONTRACT', 'POOL', 'MANIFEST', 'DELIVERY') NOT NULL,
+	kind ENUM('CONTRACT', 'POOL', 'MANIFEST') NOT NULL,
 	owner_module VARCHAR(16) NOT NULL,
 	owner_ref BIGINT NOT NULL,
-	beneficiary_char INT NULL,
-	origin_op BINARY(16) NULL,
 	state ENUM('OPEN', 'FROZEN', 'CLOSED') NOT NULL,
 	version INT NOT NULL DEFAULT 0,
 	created_op BINARY(16) NOT NULL,
@@ -21,9 +19,6 @@ CREATE TABLE lc_custody (
 	closed_at TIMESTAMP(3) NULL,
 	PRIMARY KEY (custody_id),
 	KEY idx_custody_owner (owner_module, owner_ref),
-	KEY idx_custody_beneficiary (beneficiary_char, state),
-	CONSTRAINT chk_custody_beneficiary CHECK ((kind = 'DELIVERY') = (beneficiary_char IS NOT NULL)),
-	CONSTRAINT chk_custody_origin CHECK ((kind = 'DELIVERY') = (origin_op IS NOT NULL)),
 	CONSTRAINT chk_custody_closed CHECK ((state = 'CLOSED') = (closed_op IS NOT NULL)),
 	CONSTRAINT chk_custody_closed_at CHECK ((closed_op IS NULL) = (closed_at IS NULL)),
 	CONSTRAINT chk_custody_version CHECK (version >= 0)
@@ -36,16 +31,14 @@ CREATE TABLE lc_asset_op (
 	action VARCHAR(32) NOT NULL,
 	subject_ref BIGINT NOT NULL,
 	committed_at TIMESTAMP(3) NOT NULL,
-	applied_at TIMESTAMP(3) NULL,
-	PRIMARY KEY (op_id),
-	KEY idx_asset_op_unapplied (applied_at)
+	PRIMARY KEY (op_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_ledger_posting (
 	id BIGINT NOT NULL AUTO_INCREMENT,
 	op_id BINARY(16) NOT NULL,
 	leg SMALLINT NOT NULL,
-	account_kind ENUM('CASTLE_TREASURY', 'CLAN_WAREHOUSE', 'PLAYER', 'PLAYER_WAREHOUSE', 'CUSTODY', 'GROUND', 'SINK', 'SOURCE') NOT NULL,
+	account_kind ENUM('CASTLE_TREASURY', 'CLAN_WAREHOUSE', 'PLAYER', 'PLAYER_WAREHOUSE', 'CUSTODY', 'MAIL', 'SINK', 'SOURCE') NOT NULL,
 	account_id BIGINT NOT NULL,
 	code VARCHAR(24) NULL,
 	item_id INT NOT NULL,
@@ -139,15 +132,14 @@ CREATE TABLE lc_module_state (
 	CONSTRAINT chk_module_frozen_reason CHECK ((state = 'RUNNING') OR (reason IS NOT NULL))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- Where a committed GROUND leg is to be placed; placed_at is set once it is in the world (spec §2.2, ASSET-R25).
-CREATE TABLE lc_ground_drop (
+-- Every system mail an operation wrote (spec §2.1): what a character is owed arrives as retail mail, never into a live
+-- container. The mail itself is Mobius's (`messages` and its attachment rows).
+CREATE TABLE lc_mail_delivery (
+	message_id INT NOT NULL,
 	op_id BINARY(16) NOT NULL,
-	leg SMALLINT NOT NULL,
-	x INT NOT NULL,
-	y INT NOT NULL,
-	z INT NOT NULL,
-	instance_id INT NOT NULL DEFAULT 0,
-	placed_at TIMESTAMP(3) NULL,
-	PRIMARY KEY (op_id, leg),
-	CONSTRAINT fk_ground_drop_leg FOREIGN KEY (op_id, leg) REFERENCES lc_ledger_posting (op_id, leg)
+	receiver_char INT NOT NULL,
+	reason ENUM('PAYOUT', 'REFUND', 'RETURN', 'CORRECTION') NOT NULL,
+	PRIMARY KEY (message_id),
+	KEY idx_mail_delivery_op (op_id),
+	CONSTRAINT fk_mail_delivery_op FOREIGN KEY (op_id) REFERENCES lc_asset_op (op_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

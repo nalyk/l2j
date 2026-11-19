@@ -52,7 +52,7 @@ class AssetSchemaTest
 				tables.add(result.getString(1));
 			}
 		}
-		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_ground_drop"), tables);
+		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery"), tables);
 	}
 
 	@Test
@@ -76,16 +76,12 @@ class AssetSchemaTest
 			statement.execute("INSERT INTO lc_settlement_key (scope, skey, op_id) VALUES ('PACT', '7/1', " + OP + ")");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_settlement_key (scope, skey, op_id) VALUES ('PACT', '7/1', " + OP + ")"));
 
-			// Only a delivery has a beneficiary and an origin operation, and a closed custody says which operation closed it.
-			assertThrows(SQLException.class, () -> statement.execute(custody("DELIVERY", "NULL", OP, "OPEN", "NULL")), "a delivery for no one");
-			assertThrows(SQLException.class, () -> statement.execute(custody("DELIVERY", "268477000", "NULL", "OPEN", "NULL")), "a delivery without its origin operation");
-			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "268477000", "NULL", "OPEN", "NULL")), "a contract with a beneficiary");
-			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "NULL", "NULL", "CLOSED", "NULL")), "closed by no operation");
-			assertThrows(SQLException.class, () -> statement.execute(custody("LOAN", "NULL", "NULL", "OPEN", "NULL")), "an unknown kind");
-			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "NULL", "NULL", "OPEN", OP)), "an open custody with a closing operation");
+			// A closed custody says which operation closed it, and when; an open one says neither. Deliveries are mail, not custodies.
+			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "CLOSED", "NULL")), "closed by no operation");
+			assertThrows(SQLException.class, () -> statement.execute(custody("DELIVERY", "OPEN", "NULL")), "a delivery custody");
+			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "OPEN", OP)), "an open custody with a closing operation");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_custody (kind, owner_module, owner_ref, state, created_op, closed_op, created_at, closed_at) VALUES ('CONTRACT', 'PACT', 7, 'CLOSED', " + OP + ", " + OP + ", NOW(3), NULL)"), "closed with no time");
-			statement.execute(custody("DELIVERY", "268477000", OP, "OPEN", "NULL"));
-			statement.execute(custody("CONTRACT", "NULL", "NULL", "CLOSED", OP));
+			statement.execute(custody("CONTRACT", "CLOSED", OP));
 
 			// At most one live lifecycle per object id (ASSET-INV08); an ended one, with its reason, makes room for the next.
 			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
@@ -96,9 +92,10 @@ class AssetSchemaTest
 			statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'DESTROYED' WHERE object_id = 268500001");
 			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
 
-			// A ground drop belongs to a posting leg that committed.
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ground_drop (op_id, leg, x, y, z) VALUES (" + OP + ", 9, 0, 0, 0)"));
-			statement.execute("INSERT INTO lc_ground_drop (op_id, leg, x, y, z) VALUES (" + OP + ", 0, 0, 0, 0)");
+			// A mail delivery belongs to an operation that committed, and names one message once.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OTHER_OP + ", 268477000, 'PAYOUT')"));
+			statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OP + ", 268477000, 'PAYOUT')");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OP + ", 268477000, 'REFUND')"));
 
 			// A frozen module says why.
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_module_state (module, state, since) VALUES ('PACT', 'FROZEN', NOW(3))"));
@@ -117,7 +114,7 @@ class AssetSchemaTest
 		try (Connection connection = _database.connect();
 			Statement statement = connection.createStatement())
 		{
-			statement.execute(custody("CONTRACT", "NULL", "NULL", "OPEN", "NULL"), Statement.RETURN_GENERATED_KEYS);
+			statement.execute(custody("CONTRACT", "OPEN", "NULL"), Statement.RETURN_GENERATED_KEYS);
 			final long custody;
 			try (ResultSet key = statement.getGeneratedKeys())
 			{
@@ -162,10 +159,10 @@ class AssetSchemaTest
 		return "INSERT INTO lc_ledger_posting (op_id, leg, account_kind, account_id, code, item_id, qty, direction) VALUES (" + op + ", " + leg + ", 'SINK', 0, " + code + ", 57, 5, 'CREDIT')";
 	}
 
-	private static String custody(String kind, String beneficiary, String originOp, String state, String closedOp)
+	private static String custody(String kind, String state, String closedOp)
 	{
 		final String closedAt = "NULL".equals(closedOp) ? "NULL" : "NOW(3)";
-		return "INSERT INTO lc_custody (kind, owner_module, owner_ref, beneficiary_char, origin_op, state, created_op, closed_op, created_at, closed_at) VALUES ('" + kind + "', 'PACT', 7, " + beneficiary + ", " + originOp + ", '" + state + "', " + OP + ", " + closedOp + ", NOW(3), " + closedAt + ")";
+		return "INSERT INTO lc_custody (kind, owner_module, owner_ref, state, created_op, closed_op, created_at, closed_at) VALUES ('" + kind + "', 'PACT', 7, '" + state + "', " + OP + ", " + closedOp + ", NOW(3), " + closedAt + ")";
 	}
 
 	private static long count(Statement statement, String sql) throws SQLException

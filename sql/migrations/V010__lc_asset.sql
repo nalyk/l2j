@@ -139,6 +139,8 @@ CREATE TABLE lc_mail_delivery (
 	op_id BINARY(16) NOT NULL,
 	receiver_char INT NOT NULL,
 	reason ENUM('PAYOUT', 'REFUND', 'RETURN', 'CORRECTION') NOT NULL,
+	-- Set by the claim (core patch) or by the census when retail has cleared the attachments; unset means the message must exist.
+	claimed_at TIMESTAMP(3) NULL,
 	PRIMARY KEY (message_id),
 	KEY idx_mail_delivery_op (op_id),
 	CONSTRAINT fk_mail_delivery_op FOREIGN KEY (op_id) REFERENCES lc_asset_op (op_id)

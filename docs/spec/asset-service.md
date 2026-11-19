@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -58,7 +58,12 @@ mail**, written as rows in the operation's transaction and claimed by the charac
   MessageDeletionTaskManager.java:80-110 never touches it). Its life: *sent* (in the operation's transaction) →
   *claimed* (by retail mail, which checks room; RequestPostAttachment.java:191-232). The receiver cannot delete it while
   it has attachments (RequestDeleteReceivedPost.java:83), and a character with unclaimed service mail cannot be deleted
-  (core patch §11.21). It counts toward the receiver's inbox like any mail; it is not refused by the 240-message check,
+  (core patch §11.21). Writing service mail locks the receiver's `characters` row (`SELECT … FOR UPDATE`) and requires
+it to exist and not be marked for deletion; marking a character for deletion takes the same row lock and refuses while it
+has unclaimed service mail, so a payout and a deletion are serialised. A release whose receiver is gone or marked aborts
+with the reason `RECEIVER_GONE`; the custody stays as it was and its owner module decides. Claiming records `claimed_at`
+in `lc_mail_delivery` (core patch §11.23), right after retail clears the message's attachments. It counts toward the
+receiver's inbox like any mail; it is not refused by the 240-message check,
   which belongs to sending (RequestSendPost.java:248-251), so a full inbox delays the receiver's own incoming player mail
   until they claim it: that is the policy, and the mailbox says why.
 
@@ -73,7 +78,8 @@ lc_ledger_posting(id BIGINT PK auto, op_id BINARY(16) → lc_asset_op, leg SMALL
                   CLAN_WAREHOUSE|PLAYER|PLAYER_WAREHOUSE|CUSTODY|MAIL|SINK|SOURCE}, account_id BIGINT, code VARCHAR(24) NULL,
                   item_id INT, object_id INT NULL, lifecycle_id BIGINT NULL, qty BIGINT > 0, direction {DEBIT|CREDIT},
                   fact_id BIGINT NULL, UNIQUE(op_id, leg))
-lc_mail_delivery(message_id INT PK, op_id BINARY(16) → lc_asset_op, receiver_char INT, reason {PAYOUT|REFUND|RETURN|CORRECTION})
+lc_mail_delivery(message_id INT PK, op_id BINARY(16) → lc_asset_op, receiver_char INT, reason {PAYOUT|REFUND|RETURN|CORRECTION},
+                 claimed_at TIMESTAMP(3) NULL)
 lc_asset_pending(char_id INT, op_id BINARY(16), since TIMESTAMP(3), PRIMARY KEY(char_id, op_id))
 lc_settlement_key(scope VARCHAR(16), skey VARCHAR(96), op_id BINARY(16) → lc_asset_op, PRIMARY KEY(scope, skey))
 lc_item_lifecycle(lifecycle_id BIGINT PK auto, object_id INT, item_id INT, parent_lifecycle_id BIGINT NULL, began_op BINARY(16) NULL,
@@ -155,8 +161,11 @@ it guarantees, and what it only watches, are stated separately.
 
 1. Every operation's postings balance (INV01) and every custody holds exactly what its postings say (INV11), always,
    including across crashes.
-2. Across a clean restart, every item id is conserved exactly: the census taken at the shutdown boundary equals the census
-   taken at the next startup, and the existence counters carried between them equal both (INV06).
+2. Across a clean restart, every item id is either conserved exactly or its difference is reported exactly: the census
+   taken at the shutdown boundary, the census taken at the next startup and the existence counters carried between them
+   are compared per item id (INV06). What is guaranteed is the detection, not that Mobius loses nothing: Mobius
+   disconnects players before stopping its task pools (Shutdown.java:380, 403), so a task can change a container after
+   its final save, and that change is lost and reported.
 
 **Watched (alarm, not proof):**
 
@@ -230,7 +239,7 @@ A `CLOSED` custody never reopens; a new holding is a new custody. Custody rows a
 
 | From | To | When |
 |---|---|---|
-| — | `BEGUN` | `begin(opId)`; if `lc_asset_op` has `opId`, the call returns the earlier outcome and does nothing |
+| — | `BEGUN` | `begin(opId)`; if `lc_asset_op` has `opId` or its refund `OpId.refundOf(opId)`, the call returns that earlier outcome (committed, or aborted and refunded) and does nothing: an attempt that was refunded is final, and a retry is a new attempt with a new id |
 | `BEGUN` | `MARKED` | if anything will be taken from a character, the pending mark is committed (§2.4) |
 | `MARKED` | `TAKEN` | every debit from a Mobius holder is taken in memory as §3.3 orders it, the stack write locks held from then on; a debit that is no longer possible (gone, moved, insufficient, ineligible) ends the operation as `ABORTED` |
 | `TAKEN` | `COMMITTING` | the statements (the touched Mobius rows written from memory, custody and mail rows, postings, settlement key, owner state and version, facts, deleting the pending mark, `lc_asset_op`) run on one connection, autocommit off; `COMMIT` is sent |
@@ -239,8 +248,8 @@ A `CLOSED` custody never reopens; a new holding is a new custody. Custody rows a
 | `COMMITTING` | `UNCERTAIN` | the connection failed after `COMMIT` was sent |
 | `UNCERTAIN` | `COMMITTED` / `ABORTED` | a **locking** read of `opId` in `lc_asset_op` on a new connection returns (it waits while the original transaction is unresolved): present means committed, absent means aborted |
 | `UNCERTAIN` | `UNCERTAIN` | the read times out or fails: retried, the locks still held; after `UncertainCommitLookupMillis` the module is frozen; never aborted on a timeout |
-| `ABORTED` | `REFUNDED` | the refund operation `OpId.refundOf(opId)` commits, under the locks still held: each whole object taken has its row (still where it was) moved to service mail to the holder it came from; each stack part taken is written as a new row in service mail, and the stack's row is written from memory; treasury debits are added back to memory and written; the pending mark is deleted. An uncertain refund commit is resolved like any other; a refund is retried until it commits |
-| `COMMITTED`, `REFUNDED` | `DONE` | castle treasury credits applied to memory; stack write locks released; retired items discarded; `MailManager` adopts each new message (idempotent by message id, retried until it holds); clients and caches told |
+| `ABORTED` | `REFUNDED` | the refund operation `OpId.refundOf(opId)` commits, under the locks still held: each whole object taken has its row (still where it was) moved to service mail to the holder it came from; each stack part taken is written as a new row in service mail, and the stack's row is written from memory; a treasury debit is written back as the row's memory value plus the amount, memory itself untouched until the refund has committed; the pending mark is deleted. An uncertain refund commit is resolved like any other; a refund is retried until it commits, and nothing it does to memory happens before its commit |
+| `COMMITTED`, `REFUNDED` | `DONE` | castle treasury credits (and a refunded treasury debit) applied to memory, once, under the treasury write lock; stack write locks released; retired items discarded; `MailManager` adopts each new message (idempotent by message id, retried until it holds); clients and caches told |
 
 Everything happens on the thread that began the operation, inside one `try`/`finally`; resolution and refund run before
 any lock is released. Only the death of the JVM escapes the `finally`; then memory is gone and the rows are the truth:
@@ -255,7 +264,11 @@ Two phases, so that the service never waits for a Mobius lock while holding one 
 
 1. **Whole objects first** (a non-stackable item, or a whole stack), one at a time, holding nothing else: take the item's
    monitor (`synchronized (item)`, as `transferItem`, `destroyItem` and `dropItem` take it, ItemContainer.java:340, 427;
-   Inventory.java:802, 838); check it is still in that holder's live container and eligible (§4.4); remove it from the
+   Inventory.java:802, 838), then the container's own monitor (`setPaperdollItem` is synchronized on the inventory,
+   Inventory.java:1072, and Mobius reaches it holding the item's monitor when destroying an equipped item, so item then
+   container is Mobius's order); mark the item retired first, then check it is still in that holder's live container, not
+   equipped, and eligible (§4.4), undoing the mark and aborting if not; a scheduled equip (UseItem.java:350,
+   Player.java:2257-2267) that reaches `setPaperdollItem` afterwards refuses the retired item (§11.20); remove it from the
    container (this may send the owner's client a new skill list under the player's monitor, Inventory.java:902-907, as
    Mobius itself does, and nothing else of the service's is held); mark it **retired** (core patch §11.20: a retired item
    is never written by Mobius and every Mobius operation on it refuses); under its variables lock capture its variables and
@@ -263,9 +276,11 @@ Two phases, so that the service never waits for a Mobius lock while holding one 
    `_dbLock` once, holding nothing else, so that a Mobius write of it already in progress has finished; every later one is
    a no-op. The transaction writes its row (update, or insert if it never existed) as `ESCROW` or mail, with its metadata
    rows, from the captured state.
-2. **Then parts of stacks**, in object-id order: take each stack's `_dbLock` and hold it until `DONE`; never take a monitor
-   and never call a container method while holding one. The atomic checked decrease (§11.15) takes the quantity, leaving at
-   least one unit. The transaction writes the stack's row from memory as Mobius would at that moment: its count, or its
+2. **Then parts of stacks**: take the monitors of all the stacks in object-id order, then their `_dbLock`s in object-id
+   order, and hold all of them until `DONE`; never call a container method while holding them. Under its monitor a stack's
+   decrease cannot fall between a retail transfer's reading of the count and its acting on it (`transferItem` decides and
+   acts under the source's monitor, ItemContainer.java:340-385). The atomic checked decrease (§11.15) takes the quantity,
+   leaving at least one unit. The transaction writes the stack's row from memory as Mobius would at that moment: its count, or its
    deletion if Mobius has emptied and destroyed the stack meanwhile (a retail transfer can, ItemContainer.java:365-385;
    Mobius's own deletion waits on the held write lock and then finds nothing to delete). The part taken becomes a new row
    under a new object id. The service never marks a stack as saved: the decrease left it dirty, so Mobius writes it again
@@ -303,9 +318,9 @@ the same id, so a retry after an uncertain commit can never apply twice.
 1. One connection, autocommit off, one transaction for: the touched Mobius rows and their attribute, elemental and
    variable rows, `castle.treasury`, custody rows, mail rows, the owner module's state and version, ledger postings, the
    settlement key, durable facts and the `lc_asset_op` row.
-2. Locks: as §3.3 orders them, and database row locks inside the transaction. A whole object's monitor is held alone and
-   briefly; stack write locks and the treasury write lock are held from the debit to `DONE`, and while holding them the
-   service waits for nothing Mobius holds (AT-ASSET-05 checks it with a lock-order witness, against `Player.store`, which
+2. Locks: as §3.3 orders them, and database row locks inside the transaction. A whole object's monitors are held alone
+   and briefly; stack monitors, stack write locks and the treasury write lock are held from the debit to `DONE`, all taken
+   before the first stack debit, and while holding them the service waits for nothing Mobius holds (AT-ASSET-05 checks it with a lock-order witness, against `Player.store`, which
    holds the player's monitor and then takes item write locks, Player.java:7621-7647, and against retail transfers, which
    hold the source's monitor and then write the destination, ItemContainer.java:340-388).
 3. Assets are never credited to a live Mobius container (§2.1); payouts, releases, refunds and corrections to characters
@@ -390,7 +405,7 @@ All durable (04 §1.1), written in the operation's transaction, `op_id` set.
 | ASSET-INV09 | `LazyItemsUpdate = False` (GeneralConfig.java:80, General.ini:193) | at startup; the module refuses to start otherwise |
 | ASSET-INV10 | an object id is never released while a row with that id exists | by the core patch (§11.6) on every destroy; at every census |
 | ASSET-INV11 | per custody and item id: Σ CREDIT − Σ DEBIT of the custody's postings = Σ `count` of its `ESCROW` rows | per operation for the custodies it touches; full pass at every census and at startup, including after a crash |
-| ASSET-INV12 | every `lc_mail_delivery` whose message still has attachments names a service mail (§2.1) with `senderId = -1`, `sendBySystem` nonzero, `reqAdena = 0`, whose attachment rows are exactly the operation's credit legs; and `MailManager` knows it | per operation; at every census (the census also adopts a message `MailManager` lacks) |
+| ASSET-INV12 | every `lc_mail_delivery` with `claimed_at` unset names an existing service mail (§2.1: `senderId = -1`, `sendBySystem` nonzero, `reqAdena = 0`) whose attachment rows are exactly the operation's `MAIL` credit legs to that message, and `MailManager` knows it; a missing message for an unclaimed delivery is a violation, not a claim | per operation; at every census (which also adopts a message `MailManager` lacks, and sets `claimed_at` for a message whose attachments retail cleared, RequestPostAttachment.java:232) |
 | ASSET-INV13 | a pending mark exists only while its operation is between `MARKED` and `DONE` | at startup (none may survive recovery); at every census |
 
 A violation of INV01-INV05, INV07, INV08, INV10-INV13 writes `Asset.InvariantViolated`, freezes the owning module through
@@ -454,7 +469,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R09 | An escrowed item's object id MUST stay reserved while its row exists, at runtime and across restarts. | AT-ASSET-00, AT-ASSET-09 |
 | ASSET-R10 | Every credit to a character MUST be system mail written in the operation's transaction; no asset MUST be credited to a live Mobius container. | AT-ASSET-10 |
 | ASSET-R11 | Service mail MUST be built as §2.1 says (not rejectable, not cash on delivery, never expiring) and MUST keep its attachments until claimed; the claim itself is retail and has retail's guarantees, no more. | AT-ASSET-11 |
-| ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST conserve every item id exactly; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
+| ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
 | ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget and audited `ADMIN_CORRECTION`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and the custody, write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
@@ -469,13 +484,14 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R24 | Mobius MUST release an object id only after its row is deleted. | AT-ASSET-09 |
 | ASSET-R25 | A raided share MUST be dropped at most once, after commit. | AT-ASSET-27 |
 | ASSET-R26 | A character's login MUST wait while an operation that took its items is pending. | AT-ASSET-28 |
-| ASSET-R27 | A character with unclaimed service mail MUST NOT be deletable. | AT-ASSET-29 |
+| ASSET-R27 | A character with unclaimed service mail MUST NOT be markable for deletion, and service mail MUST NOT be written to a character that is gone or marked; the two are serialised on the character's row. | AT-ASSET-29 |
+| ASSET-R28 | An attempt that was refunded MUST NOT run again under its id. | AT-ASSET-02 |
 
 | Test | Kind | What it does |
 |---|---|---|
 | AT-ASSET-00 | integration | every migration applies in order on the stock schema; keys and checks reject what this spec forbids; an escrow row with a live custody passes upstream's own cleanup and used-id queries |
 | AT-ASSET-01 | integration | every operation kind: rows, postings, mail, facts and op row appear together |
-| AT-ASSET-02 | integration | same `OpId` twice: no second effect |
+| AT-ASSET-02 | integration | same `OpId` twice after a commit, and after an abort and refund: no second effect, no second debit |
 | AT-ASSET-03 | integration | two settlements with one key: the second aborts, nothing moved |
 | AT-ASSET-04 | integration | stale owner version: aborts, refunded, nothing else moved |
 | AT-ASSET-05 | integration | random concurrent operations over several items, interleaved with `Player.store`, autosave, logout (both paths), login, `transferItem` in both directions between the same stacks, trade, private stores, mail, warehouses, castle tax, pet actions, enchanting and items with template skills, under a lock-order witness: no inversion, no deadlock |
@@ -494,13 +510,13 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-18 | unit | each ineligible kind of item (§4.4) refused |
 | AT-ASSET-20 | fault | exception and JVM kill at every point of §7 for every operation kind |
 | AT-ASSET-21 | fault | connection cut after `COMMIT` sent, both outcomes; lookup timing out keeps the locks, freezes the module, never aborts |
-| AT-ASSET-22 | fault | every abort cause, with the holder's stack emptied or merged meanwhile, and the refund's own commit cut and killed: the debited assets come back by mail exactly once, the stacks' rows match memory |
-| AT-ASSET-24 | unit | every Mobius item operation and writer refuses a retired item |
+| AT-ASSET-22 | fault | every abort cause, with the holder's stack emptied or merged meanwhile, and the refund's own commit cut, failed and killed, treasury debits included: the debited assets come back exactly once, the stacks' and treasury's rows match memory |
+| AT-ASSET-24 | unit, integration | every Mobius item operation and writer refuses a retired item; a scheduled equip racing a whole-object fund never installs it |
 | AT-ASSET-25 | restart | GameServer killed in every custody state; recovery before login; INV11 and INV12 exact |
 | AT-ASSET-26 | restart | `DatabaseCleanUp = True` with escrow and service mail rows of every kind |
 | AT-ASSET-27 | fault, restart | a raid dies after commit, before or after the drop, with and without a restart: dropped at most once |
 | AT-ASSET-28 | integration | logout and re-login racing a whole-object fund, both outcomes: no second live `Item`, the row restored is the committed one |
-| AT-ASSET-29 | integration | deleting a character with unclaimed service mail is refused; after the claim it is allowed |
+| AT-ASSET-29 | integration | marking a character with unclaimed service mail for deletion is refused, after the claim allowed; a payout racing the marking either commits first (marking then refused) or aborts with `RECEIVER_GONE` |
 | AT-ASSET-30 | sim | capacity benchmark: commit p99 within budget |
 
 ## 11. Upstream constraints (for N3 design and N4 implementation)
@@ -568,13 +584,27 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 20. **Retired items**: `Item.updateDatabase` does nothing for a retired item, and Mobius's item operations (container add,
     transfer, destroy, drop, equip, use) refuse one (core patch). → §3.3.
 21. **Character deletion** removes the character's own items (GameClient.java:439-451) and leaves owner -1 rows, so
-    service mail to a deleted character could never be claimed. Core patch: deletion is refused while the character has
-    unclaimed service mail. → ASSET-R27.
+    service mail to a deleted character could never be claimed. Core patch: marking a character for deletion locks its
+    row and is refused while it has unclaimed service mail; service mail is written under the same row lock (§2.1).
+    → ASSET-R27.
+23. **Claims of service mail** clear the message's attachments (RequestPostAttachment.java:191-232) and say nothing to the
+    service. Core patch: after clearing a service message's attachments, the claim sets `claimed_at` on its delivery; the
+    census repairs a claim whose patch step did not run.
 22. **Login** restores a character's items from rows (Player.java:7358-7360) with plain reads that do not wait for an
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
 
 ## 12. Review record
 
+- Round 5 (Codex), NO SIGN-OFF: confirmed the lock cycles gone (no further cycle found in store, autosave, transfer,
+  warehouse, mail, pet, clan warehouse or shutdown paths), the pending mark, refunds as operations, the mail flags and
+  lifecycle; found that a stack decrease without the monitor can fall between a retail transfer's decision and its
+  action (100 becomes 120), that a scheduled equip can install a whole object between removal and retirement, that an
+  attempt refunded could run again under its id, that a treasury refund touched memory before its commit, that
+  deletion and payouts were not serialised, and that INV12 held vacuously for a missing message. Revision 6: stack
+  decreases under all their monitors (taken in object-id order before their write locks); whole objects retired first,
+  under the item's and then the container's monitor; refunded attempts final; refund memory after commit; deletion and
+  payouts serialised on the character's row; deliveries record their claim; the clean-restart guarantee stated as exact
+  conservation or an exact report.
 - Round 4 (Codex), NO SIGN-OFF: confirmed mail credits, retirement, variables, at-most-once drops and thread-local
   resolution; found two lock cycles (a stack write lock held into `removeItem`; one item's write lock held while waiting
   for another's monitor), that marking a stack saved after commit could hide a later retail addition, that a logout and

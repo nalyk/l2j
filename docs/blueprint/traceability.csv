@@ -171,7 +171,7 @@ TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,,,,,,,,bluep
 TR-observability,90 §3,observability,02 §11; 04 §6,,,,,,,,blueprint
 TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
 TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,specified
-TR-persistence,90 §3,persistence,04 §9,asset-service.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28,,specified
+TR-persistence,90 §3,persistence,04 §9,asset-service.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28,,specified
 TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00,AssetSchemaTest,specified
 TR-safe-failure-modes,90 §3,safe failure modes,04 §8,asset-service.md,ASSET-R15;ASSET-R17;ASSET-R22,lc_module_state,,,AT-ASSET-15;AT-ASSET-21;AT-ASSET-22,,specified
 TR-performance-aggregation,90 §3,performance aggregation,02 §6; 04 §1,asset-service.md,ASSET-R12;ASSET-R21,lc_economy_bucket;lc_economy_census;lc_economy_counter,,,AT-ASSET-12;AT-ASSET-30,economy telemetry only; the Fact Journal spec owns the rest,specified

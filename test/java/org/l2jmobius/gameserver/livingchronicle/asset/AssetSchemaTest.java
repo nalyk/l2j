@@ -94,9 +94,10 @@ class AssetSchemaTest
 			statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'DESTROYED' WHERE object_id = 268500001");
 			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
 
-			// A mail delivery belongs to an operation that committed, and names one message once.
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OTHER_OP + ", 268477000, 'PAYOUT')"));
-			statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OP + ", 268477000, 'PAYOUT')");
+			// A mail delivery belongs to an operation that committed, and names one message once. (That the message exists while the
+			// delivery is unclaimed is INV12, checked by the service and the census, not by a key: retail deletes claimed messages.)
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason, claimed_at) VALUES (268700001, " + OTHER_OP + ", 268477000, 'PAYOUT', NOW(3))"));
+			statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason, claimed_at) VALUES (268700001, " + OP + ", 268477000, 'PAYOUT', NOW(3))");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (268700001, " + OP + ", 268477000, 'REFUND')"));
 
 			// One pending mark per character and operation.

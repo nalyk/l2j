@@ -63,16 +63,23 @@
 4. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
    Do instead: use `java.lang.classfile` to swap `invokevirtual X.m(args)R` for `invokestatic W.m(X,args)R` (same stack effect) at listed sites; `MethodRedirector` handles static calls only and never touches instructions.
 
+5. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
+   MariaDB raises error 1442 on `FOR UPDATE` of the table that fired the trigger.
+   Do instead: lock a row of another table as the mutex, require `READ COMMITTED` in the trigger, then read plainly (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
+
 ## Shell & Command Reliability
-1. **[2026-11-18] Python block replacements must match exactly once**
-   Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
-2. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
-   Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
-4. **[2026-11-19] `git checkout -- .` on ultra leaves scp'd NEW files untracked, and push (updateInstead) then fails**
+1. **[2026-11-19] `git checkout -- .` on ultra leaves scp'd NEW files untracked, and push (updateInstead) then fails**
    Do instead: after committing new files, `git clean`-free fix: on ultra `rm` exactly the files listed by `git status --short` as `??` (after md5 matched), then push.
-4. **[2026-11-19] Never wait with `pgrep -f <pattern>` from a shell whose own command line contains the pattern**
+2. **[2026-11-19] Codex verdict grep matches the echoed prompt**
+   When Codex fails (usage limit), its output echoes the prompt, which contains "NO SIGN-OFF", so a plain grep reports a fake verdict.
+   Do instead: first check the output for "hit your usage limit", then read the verdict only after the last `^codex$` line.
+3. **[2026-11-18] Python block replacements must match exactly once**
+   Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
+4. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
+   Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
+5. **[2026-11-19] Never wait with `pgrep -f <pattern>` from a shell whose own command line contains the pattern**
    Do instead: start the jobs with `&`, collect `$!`, and `wait` on those pids; a `while pgrep -f "codex exec …"` loop matches its own wrapper shell and never ends.
-3. **[2026-11-19] `git rev-parse --short` takes one revision**
+6. **[2026-11-19] `git rev-parse --short` takes one revision**
    Do instead: loop `for r in a b; do git rev-parse --short $r; done`; with two it fails and stops an `&&` chain silently.
 
 ## User Directives

@@ -73,12 +73,12 @@ TR-npc-reactions-banditry,90 §2,NPC reactions: banditry,"12 §5 (situations), �
 TR-npc-reactions-shortages,90 §2,NPC reactions: shortages,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
 TR-npc-reactions-migration,90 §2,NPC reactions: migration,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
 TR-npc-reactions-opportunity,90 §2,NPC reactions: opportunity (App. E.3),"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
-TR-aden-signal-intent-broadcasting,90 §2,Aden Signal: intent broadcasting,13 §1–§5,intel-service.md,INTEL-R13,,,,AT-INTEL-13,,reviewed
-TR-aden-signal-objective-role-time-language-travel,90 §2,Aden Signal: objective/role/time/language/travel/pace matching,13 §1–§5,,,,,,,,blueprint
-TR-aden-signal-latent-party,90 §2,Aden Signal: latent party,13 §1–§5,,,,,,,,blueprint
-TR-aden-signal-future-sessions,90 §2,Aden Signal: future sessions,13 §1–§5,,,,,,,,blueprint
-TR-aden-signal-no-rewards,90 §2,Aden Signal: no rewards,13 §1–§5,,,,,,,,blueprint
-TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class preservation,13 §1–§5,,,,,,,,blueprint
+TR-aden-signal-intent-broadcasting,90 §2,Aden Signal: intent broadcasting,13 §1–§5,intel-service.md;aden-signal.md,INTEL-R13;SIG-R01;SIG-R02;SIG-R04;SIG-R07,,,,AT-INTEL-13;AT-SIG-05;AT-SIG-02;AT-SIG-04;AT-SIG-08,,specified
+TR-aden-signal-objective-role-time-language-travel,90 §2,Aden Signal: objective/role/time/language/travel/pace matching,13 §1–§5,aden-signal.md,SIG-R02;SIG-R03,,,,AT-SIG-02;AT-SIG-03,,specified
+TR-aden-signal-latent-party,90 §2,Aden Signal: latent party,13 §1–§5,aden-signal.md,SIG-R05,,,,AT-SIG-06,,specified
+TR-aden-signal-future-sessions,90 §2,Aden Signal: future sessions,13 §1–§5,aden-signal.md,SIG-R05,,,,AT-SIG-06,,specified
+TR-aden-signal-no-rewards,90 §2,Aden Signal: no rewards,13 §1–§5,aden-signal.md,SIG-R08,,,,AT-SIG-09,,specified
+TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class preservation,13 §1–§5,aden-signal.md,SIG-R08;SIG-R09,,,,AT-SIG-09;AT-SIG-10,,specified
 TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,,,,,,,,blueprint
@@ -191,13 +191,13 @@ TR-public-truth-report,90 §4,public Truth Report,11 §5,,,,,,,,blueprint
 TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
 TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,reviewed
 TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint
-TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,,,,,,,,blueprint
+TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,aden-signal.md,SIG-R03;SIG-R06,,,,AT-SIG-03;AT-SIG-07,,specified
 TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,,,,,,,,blueprint
 TR-remembers-pact-public-contracts-treaties-mercena,20 §1,"Remembers ↔ PACT: public contracts, treaties, mercenary deals become high-confidence history (no AI inferring politics from chat)",20 §1,,,,,,,,blueprint
 TR-remembers-ledger-big-campaigns-and-notorious-bou,20 §1,Remembers ↔ Ledger: big campaigns and notorious bounties become history; regional politics shift witness behaviour; never reveal targets,20 §1,,,,,,,,blueprint
 TR-remembers-crown-law-ledger-bounty-endowments-fun,20 §1,Remembers ↔ Crown Law ↔ Ledger: Bounty Endowments fund Writs; Amnesty stops new Writs; Caravan Protection funds escorts,20 §1,,,,,,,,blueprint
-TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,,,,,,,,blueprint
-TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,,,,,,,,blueprint
+TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,aden-signal.md,SIG-R03,,,,AT-SIG-03,,specified
+TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,aden-signal.md,SIG-R10,,,,AT-SIG-11,,specified
 TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md;pact.md,ASSET-R01;ASSET-R03;ASSET-R14;PACT-R02,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00;AT-PACT-02,,reviewed
 TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,,,,,,,,blueprint
 TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07;ACTOR-R09,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07;AT-ACTOR-09,,reviewed

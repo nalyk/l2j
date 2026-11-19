@@ -15,6 +15,7 @@ ahead of it (blueprint 02 §2, 30 §2.1): a change that adds behaviour first cha
 | [codex-ui.md](codex-ui.md) | Codex of Aden: routing, rendering, one-use action tokens, confirmation dialogs, notifications | 04 §5, 02 §3 §12, 13, 14, 15, 16, 17 |
 | [pact.md](pact.md) | PACT and the Notarius: contracts, clauses, settlement, craft for contract, loot charters, mercenary contracts, treaties | 15, 03 §4.2-§4.4, 04 §3 §5, 12 §6.2 §8, 17 |
 | [black-ledger.md](black-ledger.md) | The Black Ledger: Writs, Black Contracts, hunters, aliases, kills and claims, counter-intelligence, reverse investigation, anti-abuse | 16, 03 §4.4-§4.5, 04 §3-§5 §7, 12 §6.2, 17, consensus §6 |
+| [aden-signal.md](aden-signal.md) | Aden Signal: profiles, intents, schedules, matching, mutual interest, latent parties, demand, sessions | 13, 03 §4.4, 04 §4-§5, 10, 12, 14, 20 §1 |
 
 One file per module. Its DDL lives in `sql/migrations/V###__lc_<module>.sql`, numbered in the order modules depend on each
 other; a spec names its tables, the migration defines them, and a test applies every migration to MariaDB.

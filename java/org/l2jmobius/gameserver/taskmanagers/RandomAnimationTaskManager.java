@@ -58,6 +58,13 @@ public class RandomAnimationTaskManager implements Runnable
 			if (currentTime > entry.getValue().longValue())
 			{
 				final Npc npc = entry.getKey();
+				if (!npc.isSpawned() || !npc.isInActiveRegion())
+				{
+					// Left on the list by a race between threads (it decayed, or its region fell asleep, while another thread put it on): dropped, nothing drawn for it.
+					PENDING_ANIMATIONS.remove(npc, entry.getValue());
+					continue;
+				}
+				
 				if (npc.isInActiveRegion() && !npc.isDead() && !npc.isInCombat() && !npc.isMoving() && !npc.isStunned() && !npc.isSleeping() && !npc.isParalyzed())
 				{
 					npc.onRandomAnimation(Rnd.get(2, 3));
@@ -75,7 +82,12 @@ public class RandomAnimationTaskManager implements Runnable
 	{
 		if (npc.hasRandomAnimation())
 		{
-			PENDING_ANIMATIONS.putIfAbsent(npc, System.currentTimeMillis() + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000));
+			final Long due = System.currentTimeMillis() + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000);
+			// Checked after it is on: a caller holding the NPC from before it left the world (a region waking) does not put it back for good.
+			if ((PENDING_ANIMATIONS.putIfAbsent(npc, due) == null) && !npc.isSpawned())
+			{
+				PENDING_ANIMATIONS.remove(npc, due);
+			}
 		}
 	}
 	

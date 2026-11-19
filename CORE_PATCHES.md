@@ -115,12 +115,15 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   turns idly there; one deleted while its region is awake stays on the list for good, and the list keeps drawing for it
   each time it falls due. In a town that never sleeps, every NPC a script or event ever spawned and removed piles up.
 - Change: `Npc` puts itself on the list when it is placed in or walks into an awake region, takes itself off when it walks
-  into a sleeping one or leaves the world, and when it decays. Regions waking and sleeping work as before. The manager
-  reschedules an NPC's next turn only if its entry is still the one it read: on a server's threads, an NPC taken off
-  between the manager reading its entry and rescheduling it would otherwise be put back for good.
-- Invariant: an NPC is on the idle-animation list exactly while it is spawned in an awake region; what it does once there
-  is unchanged.
+  into a sleeping one or leaves the world, and when it decays. Regions waking and sleeping work as before. On a server's
+  threads these can race, so the list heals itself: the manager reschedules an NPC's turn only if its entry is still the
+  one it read; a caller putting on an NPC that has left the world meanwhile takes it off again; and an entry for an NPC no
+  longer standing in an awake region is dropped when it falls due, before anything is drawn for it.
+- Invariant: an NPC is on the idle-animation list exactly while it is spawned in an awake region (a race between threads
+  can leave an entry until it next falls due, never longer, and nothing is drawn for it); what it does once there is
+  unchanged.
 - Proof: `TimerLockTest.anNpcTurnsIdlyExactlyWhileItStandsInAnAwakeRegion` (spawned into the awake arena: on the list;
   walked into a sleeping region: off; walked back: on; deleted: off, where before it stayed on);
   `WorldProofTest.cp0007AnNpcTakenOffMidTurnStaysOff` (an NPC that takes itself off from inside its own turn, the moment
-  another thread could, stays off).
+  another thread could, stays off), `cp0007AGoneNpcPutOnLateDoesNotStay` (a late caller holding a deleted NPC),
+  `cp0007AStaleEntryIsDroppedWhenItFallsDue` (an entry left by any race).

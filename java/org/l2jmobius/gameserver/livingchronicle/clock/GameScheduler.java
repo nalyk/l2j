@@ -195,11 +195,20 @@ public final class GameScheduler
 
 	/**
 	 * As {@link Thread#sleep(long)}. Under control, a thread that is part of the simulation sleeps in game time: it parks until the clock reaches its wake time while other events keep running. Any other thread sleeps for real.
+	 * <p>
+	 * A thread of a simulation that has been released is interrupted, as a pool's threads are when it shuts down now: its sleep, the one it was in or its next, ends at once with an {@link InterruptedException}, so a task that sleeps again after the release ends instead of sleeping for real.
+	 * </p>
 	 * @param millis how long to sleep.
-	 * @throws InterruptedException as {@link Thread#sleep(long)} when sleeping for real.
+	 * @throws InterruptedException as {@link Thread#sleep(long)}; and in a thread of a released simulation.
 	 */
 	public static void sleep(long millis) throws InterruptedException
 	{
+		SimThread self = CONTROLLABLE ? CURRENT.get() : null;
+		if ((self != null) && !inSession(self))
+		{
+			CURRENT.remove();
+			throw new InterruptedException("the simulation this thread was part of has been released");
+		}
 		if (!(CONTROLLABLE && _controlled))
 		{
 			Thread.sleep(millis);
@@ -210,13 +219,6 @@ public final class GameScheduler
 			throw new IllegalArgumentException("timeout value is negative"); // As Thread.sleep.
 		}
 
-		SimThread self = CURRENT.get();
-		if ((self != null) && (self._session != _currentSession))
-		{
-			// A thread of a session that has ended is no longer part of the simulation.
-			CURRENT.remove();
-			self = null;
-		}
 		final boolean holdsBaton = self != null;
 		final boolean joining = self == null;
 		if (joining)
@@ -231,17 +233,19 @@ public final class GameScheduler
 			self = join(thread.getName());
 		}
 
-		// As Thread.sleep with the interrupt status set: the status is cleared and the sleep does not happen.
-		if (self._interrupted)
-		{
-			self._interrupted = false;
-			throw new InterruptedException("sleep interrupted");
-		}
-
 		final Object resumeIn = _taskContext.capture();
-		final Wake wake = new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement());
-		self._wake = wake;
-		QUEUE.add(wake);
+		synchronized (self)
+		{
+			// As Thread.sleep with the interrupt status set: the status is cleared and the sleep does not happen. Checked and the wake published under the thread's lock, which an interrupt takes too, so that an interrupt is never lost between them.
+			if (self._interrupted)
+			{
+				self._interrupted = false;
+				throw new InterruptedException("sleep interrupted");
+			}
+			final Wake wake = new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement());
+			self._wake = wake;
+			QUEUE.add(wake);
+		}
 		if (joining)
 		{
 			// Only now, with its wake queued, does the thread run only when the event loop wakes it.
@@ -255,12 +259,20 @@ public final class GameScheduler
 
 		// Parked until the event loop reaches our wake time, or an interrupt moves it to now, and hands the baton to us.
 		self._resume.acquireUninterruptibly();
-		self._wake = null;
-		_taskContext.restore(resumeIn);
-		if (self._interrupted && (self._session == _currentSession))
+		if (!inSession(self))
 		{
-			self._interrupted = false;
-			throw new InterruptedException("sleep interrupted");
+			CURRENT.remove();
+			throw new InterruptedException("the simulation this thread was part of has been released");
+		}
+		_taskContext.restore(resumeIn);
+		synchronized (self)
+		{
+			self._wake = null;
+			if (self._interrupted)
+			{
+				self._interrupted = false;
+				throw new InterruptedException("sleep interrupted");
+			}
 		}
 	}
 
@@ -418,9 +430,10 @@ public final class GameScheduler
 	}
 
 	/**
-	 * Releases control and discards every task still waiting. Sleeping simulation threads wake at once; new tasks go to the thread pool again.
+	 * Releases control and discards every task still waiting; new tasks go to the thread pool again. The session's threads are interrupted (see {@link #sleep(long)}), and its scheduler threads waited for: nothing of this session acts in the next. Holds the same lock as {@link #takeControl}, so a new session starts only once this one is gone.
+	 * @throws IllegalStateException if a scheduler thread of the session is still running after {@value #RELEASE_WAIT_MILLIS} ms, or the wait for them is interrupted.
 	 */
-	public static void releaseControl()
+	public static synchronized void releaseControl()
 	{
 		_controlled = false;
 		_currentSession++;
@@ -459,7 +472,7 @@ public final class GameScheduler
 			catch (InterruptedException e)
 			{
 				Thread.currentThread().interrupt();
-				return;
+				throw new IllegalStateException("interrupted while waiting for the released session's scheduler threads", e);
 			}
 			if (running.isAlive())
 			{
@@ -615,6 +628,11 @@ public final class GameScheduler
 		while (inSession(self))
 		{
 			final Event event = QUEUE.pollFirst();
+			if ((event instanceof Wake stale) && (stale._sleeper._wake != stale))
+			{
+				// Replaced by an interrupt, possibly while it was out of the queue here: the sleeper wakes by the new one only.
+				continue;
+			}
 			if ((event == null) || (event._dueMillis > _targetMillis) || (_abort != null))
 			{
 				if (event != null)
@@ -721,13 +739,18 @@ public final class GameScheduler
 	 */
 	private static void interrupt(SimThread runner)
 	{
-		runner._interrupted = true;
-		final Wake asleep = runner._wake;
-		if ((asleep != null) && QUEUE.remove(asleep))
+		synchronized (runner)
 		{
-			final Wake now = new Wake(runner, GameClock.millis(), SEQUENCE.getAndIncrement());
-			runner._wake = now;
-			QUEUE.add(now);
+			runner._interrupted = true;
+			final Wake asleep = runner._wake;
+			if (asleep != null)
+			{
+				// The new wake replaces the old one whether or not the old one can be taken out now: the event loop may hold it, and drops it as stale when it sees it.
+				QUEUE.remove(asleep);
+				final Wake now = new Wake(runner, GameClock.millis(), SEQUENCE.getAndIncrement());
+				runner._wake = now;
+				QUEUE.add(now);
+			}
 		}
 	}
 
@@ -865,7 +888,11 @@ public final class GameScheduler
 			}
 			catch (Throwable t)
 			{
-				FAILURES.add(_runnable.getClass().getName() + ": " + t);
+				// A task of a released session ends as it may; that is not a failure of the session controlling now.
+				if (_session == _currentSession)
+				{
+					FAILURES.add(_runnable.getClass().getName() + ": " + t);
+				}
 				LOGGER.log(Level.WARNING, "GameScheduler: task " + _runnable.getClass().getName() + " failed.", t);
 			}
 

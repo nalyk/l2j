@@ -473,6 +473,78 @@ class GameSchedulerTest
 		assertEquals(0, GameScheduler.pendingTasks());
 	}
 
+	/**
+	 * A cancel from a thread outside the simulation, racing the task as it goes to sleep, is never lost: whenever it lands, the task either never runs or its sleep ends at once. A lost interrupt leaves the sleep's wake in the queue, an hour away.
+	 */
+	@Test
+	void anInterruptFromOutsideIsNeverLost() throws InterruptedException
+	{
+		for (int round = 0; round < 200; round++)
+		{
+			_log.clear();
+			final ScheduledFuture<?> sleeper = GameScheduler.schedule(() ->
+			{
+				try
+				{
+					GameScheduler.sleep(3_600_000);
+					_log.add("woke");
+				}
+				catch (InterruptedException e)
+				{
+					_log.add("interrupted");
+				}
+			}, 0);
+			final CountDownLatch go = new CountDownLatch(1);
+			final Thread canceller = new Thread(() ->
+			{
+				try
+				{
+					go.await();
+				}
+				catch (InterruptedException e)
+				{
+					return;
+				}
+				sleeper.cancel(true);
+			});
+			canceller.start();
+			go.countDown();
+			GameScheduler.advance(0);
+			canceller.join();
+			GameScheduler.advance(10);
+			assertEquals(0, GameScheduler.pendingTasks(), "round " + round + ": the interrupt was lost and the sleep still waits");
+			assertTrue(_log.isEmpty() || _log.equals(List.of("interrupted")), "round " + round + ": " + _log);
+		}
+	}
+
+	/**
+	 * A task that sleeps again after its simulation is released does not sleep for real: its sleep ends at once, as a pool's threads are interrupted when it shuts down now, and the release does not wait for it.
+	 */
+	@Test
+	void aReleasedTaskThatSleepsAgainEndsAtOnce()
+	{
+		GameScheduler.schedule(() ->
+		{
+			try
+			{
+				GameScheduler.sleep(50);
+				_log.add("first sleep over");
+				GameScheduler.sleep(60_000);
+				_log.add("second sleep over");
+			}
+			catch (InterruptedException e)
+			{
+				_log.add("ended");
+			}
+		}, 0);
+		GameScheduler.advance(10);
+
+		final long started = System.nanoTime();
+		GameScheduler.releaseControl();
+		assertTrue((System.nanoTime() - started) < TimeUnit.SECONDS.toNanos(5), "the release waited for a real sleep");
+		assertEquals(List.of("ended"), _log);
+	}
+
 	@Test
 	void cancellingWithoutInterruptLetsTheSleepEnd()
 	{

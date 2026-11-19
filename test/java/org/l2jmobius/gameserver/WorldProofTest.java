@@ -9,6 +9,7 @@ import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ import org.l2jmobius.gameserver.entity.actor.templates.NpcTemplate;
 import org.l2jmobius.gameserver.entity.spawns.Spawn;
 import org.l2jmobius.gameserver.entity.zone.form.ZoneNPoly;
 import org.l2jmobius.gameserver.entity.zone.type.NpcSpawnTerritory;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
 import org.l2jmobius.gameserver.taskmanagers.RandomAnimationTaskManager;
@@ -234,10 +236,7 @@ class WorldProofTest
 	@Test
 	void cp0007AnNpcTakenOffMidTurnStaysOff() throws ReflectiveOperationException
 	{
-		final Field field = RandomAnimationTaskManager.class.getDeclaredField("PENDING_ANIMATIONS");
-		field.setAccessible(true);
-		final Map<?, ?> pending = (Map<?, ?>) field.get(null);
-
+		final Map<Npc, Long> pending = pendingAnimations();
 		Arena.wake();
 		final Monster npc = new Monster(_template)
 		{
@@ -258,6 +257,66 @@ class WorldProofTest
 	}
 
 	/**
+	 * CP-0007, under the other race: a thread that held an NPC from before it left the world (a region waking, going through what it holds) puts it on the list after it has gone. It does not stay there.
+	 */
+	@Test
+	void cp0007AGoneNpcPutOnLateDoesNotStay() throws ReflectiveOperationException
+	{
+		final Map<Npc, Long> pending = pendingAnimations();
+		Arena.wake();
+		final Monster npc = Arena.monster(MALUK_WARLORD);
+		npc.deleteMe();
+		RandomAnimationTaskManager.getInstance().add(npc);
+		assertFalse(pending.containsKey(npc), "a deleted NPC was put back on the list by a late caller");
+	}
+
+	/**
+	 * CP-0007, whatever race left it: an entry for an NPC no longer standing in an awake region is dropped when it falls due, not rescheduled.
+	 */
+	@Test
+	void cp0007AStaleEntryIsDroppedWhenItFallsDue() throws ReflectiveOperationException
+	{
+		final Map<Npc, Long> pending = pendingAnimations();
+		Arena.wake();
+		final Monster npc = Arena.monster(MALUK_WARLORD);
+		npc.deleteMe();
+		pending.put(npc, GameClock.millis());
+		GameScheduler.advance(2_000);
+		assertFalse(pending.containsKey(npc), "the manager rescheduled an NPC that has left the world");
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Map<Npc, Long> pendingAnimations() throws ReflectiveOperationException
+	{
+		final Field field = RandomAnimationTaskManager.class.getDeclaredField("PENDING_ANIMATIONS");
+		field.setAccessible(true);
+		return (Map<Npc, Long>) field.get(null);
+	}
+
+	/**
+	 * The harness: an NPC a case kills decays and comes back on the case's stream. The decay manager and the respawn manager serve the whole world, yet where in its territory the NPC comes back and which way it faces are the case's draws, whatever the world has drawn meanwhile.
+	 */
+	@Test
+	void aDeathRespawnsOnTheStreamItWasOn()
+	{
+		final Spawn spawn = spawnIn(new NpcSpawnTerritory("proof_death", square(1000, LOW, HIGH)));
+		spawn.setRespawnDelay(5);
+		spawn.startRespawn();
+		spawn.init();
+
+		final String first = respawnAfter(spawn, "proof.death", npc -> npc.doDie(null));
+		GameScheduler.advance(600_000);
+		for (int draw = 0; draw < 1000; draw++)
+		{
+			Rnd.nextLong();
+		}
+		assertEquals(first, respawnAfter(spawn, "proof.death", npc -> npc.doDie(null)));
+
+		spawn.stopRespawn();
+		spawn.getLastSpawn().deleteMe();
+	}
+
+	/**
 	 * The harness: an NPC a case removes comes back on the case's stream. Its spawn's respawn manager brings it back as part of the world, yet where in its territory it appears and which way it faces are the case's draws, whatever the world has drawn meanwhile.
 	 */
 	@Test
@@ -268,24 +327,27 @@ class WorldProofTest
 		spawn.startRespawn();
 		spawn.init();
 
-		final String first = removeAndRespawn(spawn);
+		final String first = respawnAfter(spawn, "proof.respawn", Npc::deleteMe);
 		GameScheduler.advance(600_000);
 		for (int draw = 0; draw < 1000; draw++)
 		{
 			Rnd.nextLong();
 		}
-		assertEquals(first, removeAndRespawn(spawn));
+		assertEquals(first, respawnAfter(spawn, "proof.respawn", Npc::deleteMe));
 
 		spawn.stopRespawn();
 		spawn.getLastSpawn().deleteMe();
 	}
 
-	private static String removeAndRespawn(Spawn spawn)
+	/**
+	 * Takes the spawn's NPC out on a case's stream, then runs the world until it is back, alive.
+	 */
+	private static String respawnAfter(Spawn spawn, String stream, Consumer<Npc> takeOut)
 	{
 		final Npc npc = spawn.getLastSpawn();
-		_server.withRandom(KeyedRandom.of(SEED, "proof.respawn", 0), npc::deleteMe);
-		Arena.runWhile(() -> !npc.isSpawned(), 30_000);
-		assertTrue(npc.isSpawned(), "the NPC did not come back");
+		_server.withRandom(KeyedRandom.of(SEED, stream, 0), () -> takeOut.accept(npc));
+		Arena.runWhile(() -> npc.isDead() || !npc.isSpawned(), 120_000);
+		assertTrue(npc.isSpawned() && !npc.isDead(), "the NPC did not come back");
 		return npc.getX() + "," + npc.getY() + "," + npc.getZ() + " facing " + npc.getHeading();
 	}
 }

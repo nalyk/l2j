@@ -17,7 +17,7 @@ import org.l2jmobius.testing.agent.MethodRedirector.Target;
  * Mobius reads the clock in several hundred places across roughly 250 files, core and datapack scripts, and hands work to its thread pool in several hundred more. Editing them would make every upstream intake a conflict, so they are not edited. Instead, as each Mobius class is loaded in a test JVM, its calls to the JDK's "what time is it" methods and to {@code ThreadPool} are pointed at the equivalent {@code GameClock} and {@code GameScheduler} methods (see {@link MethodRedirector}). Both pass straight through until a test takes control of them, so loading this agent changes nothing by itself. Production never loads it and runs the classes exactly as compiled.
  * </p>
  * <p>
- * The loops of the server that serve many actors in one task (moving, thinking, respawning) have the calls that are one actor's turn sent through the test's {@code ActorStreams}, so a test can tell whose turn it is (see {@link ActorDispatch}).
+ * The loops of the server that serve many actors in one task (moving, thinking, decaying, respawning) have the calls that are one actor's turn sent through the test's {@code ActorStreams}, so a test can tell whose turn it is (see {@link ActorDispatch}).
  * </p>
  * <p>
  * The agent also keeps the books a test needs to trust it: how many classes it patched, every class it failed on, and every way of asking the time that it saw but cannot redirect. A silent miss here would be a hole in every time-dependent golden.
@@ -81,6 +81,7 @@ public final class TruthAgent implements ClassFileTransformer
 	private static final String CREATURE_AI = "org/l2jmobius/gameserver/ai/CreatureAI";
 	private static final String AI = "L" + CREATURE_AI + ";";
 	private static final String NPC = "Lorg/l2jmobius/gameserver/entity/actor/Npc;";
+	private static final String DECAY = "org/l2jmobius/gameserver/taskmanagers/DecayTaskManager";
 
 	/** The loops of the server that serve many actors in one task, and the calls in them that are one actor's turn. See {@link ActorDispatch}; the test's {@code ActorStreams} receives them. */
 	private static final ActorDispatch DISPATCH = new ActorDispatch(Map.of( //
@@ -95,7 +96,12 @@ public final class TruthAgent implements ClassFileTransformer
 		"org/l2jmobius/gameserver/entity/spawns/Spawn", new ActorDispatch.Site("decreaseCount", List.of( //
 			new ActorDispatch.Call("org/l2jmobius/gameserver/taskmanagers/RespawnTaskManager", "add", "(" + NPC + "J)V"))), //
 		"org/l2jmobius/gameserver/taskmanagers/RespawnTaskManager", new ActorDispatch.Site("run", List.of( //
-			new ActorDispatch.Call("org/l2jmobius/gameserver/entity/spawns/Spawn", "respawnNpc", "(" + NPC + ")V")))), //
+			new ActorDispatch.Call("org/l2jmobius/gameserver/entity/spawns/Spawn", "respawnNpc", "(" + NPC + ")V"))), //
+		// A dead NPC decays, and so comes back, on the stream it died on: the decay manager serves the whole world.
+		"org/l2jmobius/gameserver/entity/actor/Npc", new ActorDispatch.Site("doDie", List.of( //
+			new ActorDispatch.Call(DECAY, "add", "(L" + CREATURE + ";)V"))), //
+		DECAY, new ActorDispatch.Site("run", List.of( //
+			new ActorDispatch.Call(CREATURE, "onDecay", "()V")))), //
 		"org/l2jmobius/testing/ActorStreams");
 
 	private static final AtomicInteger PATCHED_CORE_CLASSES = new AtomicInteger();

@@ -1,6 +1,6 @@
 # SPEC-SIG — Aden Signal
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 13 (Aden Signal); 02 §1 (we do not break the game), §4 (production checks), §9 (tests decide); 03 §4.4
   (`ON_PLAYER_PARTY_JOIN`, `ON_PLAYER_PARTY_LEAVE`); 04 §4 (Intel Service), §5 (Codex), §7 (keyed randomness); 10
   (citizens as candidates); 12 (Aden Remembers consumes demand); 14 (Wayfarer's collaborators); 17 (Gazette); 20 §1
@@ -331,6 +331,8 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: one open, Actor Identity's AT-ACTOR-09 still requiring every candidate list equal.
+  Revision 5: actor-identity.md (its revision 6) states the viewer's own synthetic preference as the one exception.
 - Round 3 (Codex), NO SIGN-OFF: open were invitations invisible to the party seams and no equivalent healer/buffer
   measurement in the control arm, regions without cells in the travel graph, and Signal regions entering the combined
   bound in one order only. Revision 4: an invitation seam and "missing a healer or a buffer" judged from party composition

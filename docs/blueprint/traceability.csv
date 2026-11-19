@@ -159,15 +159,15 @@ TR-geodata,90 §3,geodata,03 §7,,,,,,,,blueprint
 TR-dev-ram-cpu-storage,90 §3,dev RAM/CPU/storage,replaced by measured capacity on build-host: 03 §9–§10,,,,,,,,blueprint
 TR-no-gpu-requirement,90 §3,no GPU requirement,authoritative systems need none; the narrator uses the RTX 5090 (17 §6),,,,,,,,blueprint
 TR-client-on-workstation,90 §3,client on workstation,03 §6 (client package),,,,,,,,blueprint
-TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R03;ACTOR-R04;ACTOR-R05;ACTOR-R06;ACTOR-R09;ACTOR-R10,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-03;AT-ACTOR-04;AT-ACTOR-05;AT-ACTOR-06;AT-ACTOR-09;AT-ACTOR-10,,reviewed
-TR-fake-player-classification,90 §3,fake-player classification,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R07,lc_actor_policy,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-07,,reviewed
+TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R03;ACTOR-R04;ACTOR-R05;ACTOR-R06;ACTOR-R09;ACTOR-R10,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-03;AT-ACTOR-04;AT-ACTOR-05;AT-ACTOR-06;AT-ACTOR-09;AT-ACTOR-10,,specified
+TR-fake-player-classification,90 §3,fake-player classification,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R07,lc_actor_policy,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-07,,specified
 TR-missing-quests,90 §3,missing quests,"H5 content inventory: 03 §5, 11 §1.5",,,,,,,,blueprint
 TR-npc-ai-fidelity,90 §3,NPC AI fidelity,11 §1.4,,,,,,,,blueprint
 TR-formula-trigger-edge-cases,90 §3,formula/trigger edge cases,11 §1.4,,,,,,,,blueprint
 TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,,,,,,,,blueprint
 TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, §6; 10 §5.2",,,,,,,,blueprint
 TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
-TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02;ACTOR-R10,lc_account,,,AT-ACTOR-02;AT-ACTOR-00;AT-ACTOR-10,,reviewed
+TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02;ACTOR-R10,lc_account,,,AT-ACTOR-02;AT-ACTOR-00;AT-ACTOR-10,,specified
 TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10;AT-FACT-06,,reviewed
 TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
 TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,reviewed
@@ -175,7 +175,7 @@ TR-persistence,90 §3,persistence,04 §9,asset-service.md;fact-journal.md,ASSET-
 TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00;AT-ASSET-08;AT-ASSET-26;AT-ASSET-09,AssetSchemaTest,reviewed
 TR-safe-failure-modes,90 §3,safe failure modes,04 §8,asset-service.md;fact-journal.md,ASSET-R15;ASSET-R17;ASSET-R22;FACT-R16,lc_module_state,,,AT-ASSET-15;AT-ASSET-21;AT-ASSET-22;AT-FACT-16,,reviewed
 TR-performance-aggregation,90 §3,performance aggregation,02 §6; 04 §1,asset-service.md;fact-journal.md,ASSET-R12;ASSET-R21;FACT-R03;FACT-R06;FACT-R14,lc_economy_bucket;lc_economy_census;lc_economy_counter;lc_telemetry_bucket,,,AT-ASSET-12;AT-ASSET-30;AT-FACT-03;AT-FACT-06;AT-FACT-14,economy telemetry only; the Fact Journal spec owns the rest,reviewed
-TR-citizens-of-aden-and-the-genesis-epoch,90 §4,Citizens of Aden and the Genesis Epoch,10,actor-identity.md,ACTOR-R08,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-08,,reviewed
+TR-citizens-of-aden-and-the-genesis-epoch,90 §4,Citizens of Aden and the Genesis Epoch,10,actor-identity.md,ACTOR-R08,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-08,,specified
 TR-relationship-ledger,90 §4,relationship ledger,10 §7,,,,,,,,blueprint
 TR-crown-law,90 §4,Crown Law,12 §6.2,asset-service.md,ASSET-R05;ASSET-R13,lc_custody(POOL);castle.treasury,,,AT-ASSET-05;AT-ASSET-13,treasury commitments only; laws themselves are Aden Remembers,reviewed
 TR-caravans,90 §4,caravans,12 §8,asset-service.md,ASSET-R14;ASSET-R25,"lc_custody(MANIFEST);lc_ledger_posting(TOWN_SUPPLY,RAID_SHARE,ROAD_LOSS)",,,AT-ASSET-14;AT-ASSET-27,manifest custody only; routes and escorts are Aden Remembers and PACT,reviewed
@@ -200,5 +200,5 @@ TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer:
 TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,aden-signal.md,SIG-R10,,,,AT-SIG-11,,specified
 TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md;pact.md,ASSET-R01;ASSET-R03;ASSET-R14;PACT-R02,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00;AT-PACT-02,,reviewed
 TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,wayfarers-memory.md,MEM-R06,,,,AT-MEM-06,,specified
-TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07;ACTOR-R09,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07;AT-ACTOR-09,,reviewed
+TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07;ACTOR-R09,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07;AT-ACTOR-09,,specified
 TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,,,,,,,,blueprint

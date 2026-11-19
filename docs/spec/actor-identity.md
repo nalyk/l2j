@@ -1,6 +1,6 @@
 # SPEC-ACTOR — Actor Identity
 
-- Status: reviewed (revision 5; signed off by Codex, a different model family, in round 5; record in §12)
+- Status: draft (revision 6: a Signal clarification to AT-ACTOR-09 after the round-5 sign-off; under review with aden-signal.md; record in §12)
 - Blueprint: 04 §2 (Actor Identity); 02 §3 (game logic never branches on "is this a citizen"), §12 (never trust the client);
   10 (Citizens of Aden); 13 §… (Signal reports human / synthetic / mixed); 17 (history's humans-only filter); consensus §3.
 - DDL: `sql/migrations/V007__lc_actor.sql` (after the Fact Journal, before the Asset Service).
@@ -208,7 +208,7 @@ the account row), `lc policy <module>`.
 | ACTOR-R06 | A snapshot MUST be built without allocation or database access. | AT-ACTOR-06 |
 | ACTOR-R07 | A missing policy row MUST mean not allowed. | AT-ACTOR-07 |
 | ACTOR-R08 | Profile and principal changes MUST be admin-only, for citizens only, with an audit row in their transaction, and MUST reach an online character's later snapshots. | AT-ACTOR-00, AT-ACTOR-08 |
-| ACTOR-R09 | Origin MUST NOT be shown in the world: packets about a character MUST NOT differ by origin. | AT-ACTOR-09 |
+| ACTOR-R09 | Origin MUST NOT be shown in the world: packets about a character MUST NOT differ by origin, except where a viewer's own explicit preference filters candidates (Signal's synthetic preference, aden-signal.md §4.2). | AT-ACTOR-09 |
 | ACTOR-R10 | A character's account binding and a login MUST never change or be reused; identity MUST be initialised on every path that loads a character. | AT-ACTOR-00, AT-ACTOR-10 |
 
 | Test | Kind | What it does |
@@ -222,7 +222,7 @@ the account row), `lc policy <module>`.
 | AT-ACTOR-06 | unit | writing a snapshot into a ring slot allocates nothing (allocation counter) and touches no connection |
 | AT-ACTOR-07 | unit | a rule with no row is not allowed; the exact-activity row wins over `ANY` |
 | AT-ACTOR-08 | integration | profile and principal changes refused for humans and for non-admins; each accepted one writes its audit row and fact; two changes and a load racing: the cache never goes back to an older version; captures after the replacement name the new values |
-| AT-ACTOR-09 | integration | paired runs of one scenario with one character (same id, name, state), once on a human account and once on a citizen account: every packet a third player receives, and every Signal candidate list, byte-for-byte equal; only the aggregate reports and history's humans-only filter differ |
+| AT-ACTOR-09 | integration | paired runs of one scenario with one character (same id, name, state), once on a human account and once on a citizen account: every packet a third player receives, and every Signal candidate list of a third player with Signal's default preference (citizens offered), byte-for-byte equal; only the aggregate reports, history's humans-only filter and the candidate lists of a viewer who chose not to be offered citizens (rate-limited, aden-signal.md §4.2) differ |
 | AT-ACTOR-10 | integration, restart | a new character is bound before it enters the world; the bootstrap binds every existing character; an offline trader restored at startup has its identity; a character whose `account_name` was changed is not loaded; the account tool refuses deleting a bound login; a retired login is refused |
 
 ## 11. Upstream constraints
@@ -242,6 +242,10 @@ the account row), `lc policy <module>`.
 
 ## 12. Review record
 
+- Revision 6 (after the round-5 sign-off): Aden Signal lets a viewer choose not to be offered citizens, which by
+  construction changes that viewer's candidate lists by origin. ACTOR-R09 and AT-ACTOR-09 now state that exception (the
+  viewer's own explicit, rate-limited preference); everything a third player receives otherwise stays equal. Under review
+  with aden-signal.md.
 - Round 5 (Codex), **SIGN-OFF**. Remaining are named implementation obligations: transactional audit, change and fact
   coupling proved by integration tests (the schema test uses separate statements), and the account tool's deletes
   (`tools/AccountManager.java:1080`, `:1469`) patched as §2.2 requires, covered by AT-ACTOR-10.

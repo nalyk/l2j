@@ -13,6 +13,7 @@ ahead of it (blueprint 02 §2, 30 §2.1): a change that adds behaviour first cha
 | [intel-service.md](intel-service.md) | Intel Service: traces, disclosure, budgets, `canWitness`, expiry, publication filtering | 04 §4, 03 §4.5, 16 §3-§4 §8, 13, 14, 17 |
 | [asset-service.md](asset-service.md) | Asset Service: holders, custody, ledger, transactions, recovery, economy monitor; its site table [asset-economy-sites.csv](asset-economy-sites.csv) | 04 §3, 15 §4, 16 §7, 12 §6.2 §8, consensus §4 |
 | [codex-ui.md](codex-ui.md) | Codex of Aden: routing, rendering, one-use action tokens, confirmation dialogs, notifications | 04 §5, 02 §3 §12, 13, 14, 15, 16, 17 |
+| [pact.md](pact.md) | PACT and the Notarius: contracts, clauses, settlement, craft for contract, loot charters, mercenary contracts, treaties | 15, 03 §4.2-§4.4, 04 §3 §5, 12 §6.2 §8, 17 |
 
 One file per module. Its DDL lives in `sql/migrations/V###__lc_<module>.sql`, numbered in the order modules depend on each
 other; a spec names its tables, the migration defines them, and a test applies every migration to MariaDB.

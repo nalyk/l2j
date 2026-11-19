@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 7; signed off by Codex, a different model family, in round 7; record in §12)
+- Status: draft (revision 8: PACT's posting codes and operations added after the round-7 sign-off; under review; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -151,9 +151,16 @@ change.
 | `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again through the classified site `lc_raid_drop` (§2.7) when it is dropped |
 | `ROAD_LOSS` | SINK | caravan | the rest of a raided manifest |
 | `ADMIN_CORRECTION` | SOURCE / SINK | audit fact | a corrective admin operation (§4.5) |
+| `CRAFT_INPUT` | SINK | contract | a contractual craft's materials, consumed from the contract's custody exactly as retail consumes them from an inventory (pact.md §4.3) |
+| `CRAFT_OUTPUT` | SOURCE | contract | a contractual craft's product, created into the contract's custody exactly as retail creates it in an inventory |
+| `LOOT_DROP` | SOURCE | charter | a kill's drops routed by a Loot Charter (pact.md §4.5): created into the charter's custody instead of on the ground or in an inventory, the same items and counts the kill made |
+| `PACT_PARCHMENT` | SOURCE | contract | the non-tradable Notarized Contract item of a signed contract (pact.md §4.8) |
 
 Living Chronicle mints nothing for players: a `TOWN_SUPPLY` source is matched by the supply budget it draws down (owned
-by Aden Remembers), and every other source is an audited correction.
+by Aden Remembers); `CRAFT_OUTPUT` and `LOOT_DROP` create exactly what the retail craft or kill would have created at
+that moment, by the same retail code through the crafting and loot seams (03 §4.2-§4.3), only into a custody instead of
+an inventory or the ground; `PACT_PARCHMENT` is a non-tradable representation with no value; every other source is an
+audited correction. Each is a classified site (§2.7).
 
 ### 2.6 The economy monitor
 
@@ -348,6 +355,9 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `supply(manifest, town, assets)` | `TOWN_SUPPLY` source (origin) → manifest, within the town's budget | `Asset.SupplyEntered` |
 | `arrive(manifest, town)` | manifest → `TOWN_SUPPLY` sink (destination) | `Asset.SupplyArrived` |
 | `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
+| `craft(custody, output, materials, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → output custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
+| `route(custody, drops)` | `LOOT_DROP` source → the charter's custody, then (in the same operation) releases by service mail as the charter chose (pact.md §4.5) | `Asset.LootRouted` |
+| `issue(character, parchment)` | `PACT_PARCHMENT` source → system mail | `Asset.ParchmentIssued` |
 | `close(custody)` | `OPEN` → `CLOSED`, empty only | `Asset.CustodyClosed` |
 | `correct(...)`, `unfreeze(module)` | admin (§4.5) | `Asset.AdminCorrection` |
 | `recover()` | startup, before any login (§7) | `Asset.RecoveryCompleted` |
@@ -599,6 +609,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
 
 ## 12. Review record
+
+- Revision 8 (after the round-7 sign-off): PACT (pact.md) needs four posting codes and three operations: a contractual
+  craft consuming materials from a custody and creating its product into one, a Loot Charter's drops created into a
+  charter custody, and the parchment. They are added here, with their sites in the site table, and go to review with
+  PACT's first round.
 
 - After sign-off, aligned with the Fact Journal (revision 3): facts are staged in `lc_fact_outbox` in the operation's
   transaction and relayed into the log by the journal's writer; a deadlock victim or lock-wait timeout is retried in the

@@ -550,6 +550,43 @@ class GameSchedulerTest
 	}
 
 	/**
+	 * An advance that gives up on a task blocked in real time leaves that task running where nothing can stop it, so no new session may start until the cause is gone: the next would share the world with it.
+	 */
+	@Test
+	void aFailedAdvanceStopsNewSessions() throws InterruptedException
+	{
+		final CountDownLatch unblock = new CountDownLatch(1);
+		final CountDownLatch ended = new CountDownLatch(1);
+		GameScheduler.schedule(() ->
+		{
+			try
+			{
+				unblock.await();
+			}
+			catch (InterruptedException e)
+			{
+				// Ends the task.
+			}
+			ended.countDown();
+		}, 0);
+		GameScheduler.stuckAfterMillis(300);
+		try
+		{
+			assertThrows(IllegalStateException.class, () -> GameScheduler.advance(10));
+			GameScheduler.releaseControl();
+			assertThrows(IllegalStateException.class, GameScheduler::takeControl, "a session started while a task of the last one was still running");
+		}
+		finally
+		{
+			GameScheduler.stuckAfterMillis(TimeUnit.MINUTES.toMillis(10));
+			unblock.countDown();
+			assertTrue(ended.await(10, TimeUnit.SECONDS));
+			GameScheduler.forgetFailure();
+			GameScheduler.takeControl();
+		}
+	}
+
+	/**
 	 * Releasing control from inside the simulation is refused: it would wait for the advance it runs in.
 	 */
 	@Test

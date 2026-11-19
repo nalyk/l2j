@@ -52,6 +52,8 @@ public final class GameScheduler
 
 	/** How long, in real time, an advance may take before it is declared stuck. */
 	private static final long STUCK_AFTER_SECONDS = Long.getLong("lc.scheduler.stuckAfterSeconds", 600);
+	/** How long an advance waits in real time for the baton back; {@link #STUCK_AFTER_SECONDS} unless a test of this class shortens it. */
+	private static volatile long _stuckAfterMillis = TimeUnit.SECONDS.toMillis(STUCK_AFTER_SECONDS);
 
 	private static final ConcurrentSkipListSet<Event> QUEUE = new ConcurrentSkipListSet<>(GameScheduler::compare);
 	private static final AtomicLong SEQUENCE = new AtomicLong();
@@ -235,6 +237,7 @@ public final class GameScheduler
 		}
 
 		final Object resumeIn = _taskContext.capture();
+		boolean released = false;
 		synchronized (self)
 		{
 			// As Thread.sleep with the interrupt status set: the status is cleared and the sleep does not happen. Checked and the wake published under the thread's lock, which an interrupt takes too, so that an interrupt is never lost between them.
@@ -243,9 +246,21 @@ public final class GameScheduler
 				self._interrupted = false;
 				throw new InterruptedException("sleep interrupted");
 			}
-			final Wake wake = new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement());
-			self._wake = wake;
-			QUEUE.add(wake);
+			// A thread that joined just as its session was released (a cooperative thread between joining and its first wake) publishes nothing. A wake that gets in after the release cleared the queue is dropped by the event loop of the next.
+			if (!inSession(self))
+			{
+				released = true;
+			}
+			else
+			{
+				final Wake wake = new Wake(self, Math.addExact(GameClock.millis(), clamp(millis)), SEQUENCE.getAndIncrement());
+				self._wake = wake;
+				QUEUE.add(wake);
+			}
+		}
+		if (released)
+		{
+			parkForGood();
 		}
 		if (joining)
 		{
@@ -381,15 +396,18 @@ public final class GameScheduler
 
 		try
 		{
-			if (!CONTROLLER_GATE.tryAcquire(STUCK_AFTER_SECONDS, TimeUnit.SECONDS))
+			if (!CONTROLLER_GATE.tryAcquire(_stuckAfterMillis, TimeUnit.MILLISECONDS))
 			{
-				throw new IllegalStateException("advance(" + millis + ") did not finish within " + STUCK_AFTER_SECONDS + " s of real time; a task is blocked on something that is not game time:\n" + describeSimThreads());
+				// A task is still running, somewhere this scheduler cannot see or stop: nothing can vouch for a later session.
+				_broken = "advance(" + millis + ") did not finish within " + _stuckAfterMillis + " ms of real time";
+				throw new IllegalStateException(_broken + "; a task is blocked on something that is not game time:\n" + describeSimThreads());
 			}
 		}
 		catch (InterruptedException e)
 		{
 			Thread.currentThread().interrupt();
-			throw new IllegalStateException("interrupted while the simulation was running", e);
+			_broken = "interrupted while the simulation was running";
+			throw new IllegalStateException(_broken, e);
 		}
 		finally
 		{
@@ -658,10 +676,10 @@ public final class GameScheduler
 			boolean requeued = false;
 			if (event instanceof Wake wake)
 			{
-				// Decided under the sleeper's lock, which an interrupt takes too: a wake an interrupt replaced is dropped; one not yet due goes back; one due is claimed, and an interrupt from then on finds the thread awake.
+				// Decided under the sleeper's lock, which an interrupt takes too: a wake an interrupt replaced, or one of another session, is dropped; one not yet due goes back; one due is claimed and the clock moved to it, so an interrupt from then on is made at the instant the sleeper wakes, and finds it awake.
 				synchronized (wake._sleeper)
 				{
-					if (wake._sleeper._wake != wake)
+					if ((wake._sleeper._wake != wake) || (wake._sleeper._session != _currentSession))
 					{
 						continue;
 					}
@@ -673,6 +691,11 @@ public final class GameScheduler
 					else
 					{
 						wake._sleeper._wake = null;
+						if (wake._dueMillis > GameClock.millis())
+						{
+							GameClock.set(wake._dueMillis);
+							runsAtThisInstant = 0;
+						}
 					}
 				}
 			}
@@ -770,7 +793,7 @@ public final class GameScheduler
 	}
 
 	/**
-	 * Where a thread of a released simulation goes when it would sleep: nowhere, for good. It is a daemon thread of a test JVM.
+	 * Where a thread of a released simulation goes when it would sleep: nowhere, for good. It keeps its stack and any monitor it holds, and its finally blocks never run: releasing is for tests, which never use the world they released again, and the thread is a daemon, so the JVM still exits.
 	 */
 	private static void parkForGood()
 	{
@@ -779,6 +802,22 @@ public final class GameScheduler
 		{
 			never.acquireUninterruptibly();
 		}
+	}
+
+	/**
+	 * For this class's own tests: how long an advance waits in real time before it gives up.
+	 */
+	static void stuckAfterMillis(long millis)
+	{
+		_stuckAfterMillis = millis;
+	}
+
+	/**
+	 * For this class's own tests, once they have ended what made a release or an advance fail: lets a new session start again.
+	 */
+	static void forgetFailure()
+	{
+		_broken = null;
 	}
 
 	/**

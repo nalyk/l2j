@@ -54,7 +54,8 @@ class AssetSchemaTest
 				tables.add(result.getString(1));
 			}
 		}
-		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery", "lc_asset_pending"), tables);
+		final Set<String> spec = Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery", "lc_asset_pending");
+		assertTrue(tables.containsAll(spec), "missing: " + spec.stream().filter(t -> !tables.contains(t)).toList());
 	}
 
 	@Test

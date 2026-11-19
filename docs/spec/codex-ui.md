@@ -1,6 +1,6 @@
 # SPEC-UI — Codex of Aden (UI framework)
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 04 §5 (Codex of Aden); 02 §3 (one mechanism per concern), §12 (nothing the client sends is trusted); 13 §4
   (Signal's pages), 14 (Wayfarer's journal), 15 (PACT's ceremonies), 16 (Ledger pages), 17 (Chronicle, Gazette); 30 §2.4
   (localisation EN/RO/RU); 20 (client patch at N6).
@@ -30,7 +30,7 @@ All in memory, per online player, except the locale; nothing else survives a log
 ```text
 PageContext   { id: 64-bit random, module, page, locale, handles: Map<short, Ref> (≤ 64), npc: NpcRef or none, issued_at }
 Ref           { kind, id }                    -- an identifier of a server object (a contract id, an intel id, a page number)
-NpcRef        { objectId, instanceId, spawn: identity of the Npc's Spawn, npc: weak reference to the Npc }
+NpcRef        { objectId, instanceId, incarnation: int, npc: weak reference to the Npc }
 ActionToken   { id: 128-bit random, char_id, module, action, terms_hash: 32 bytes, subject_ref, subject_version,
                 deadline, npc: NpcRef or none, presence_range, state {ISSUED|DIALOG|USED|DEAD} }
 DialogSlot    { token_id, nonce: negative int, deadline }  -- at most one per player
@@ -41,8 +41,13 @@ DialogSlot    { token_id, nonce: negative int, deadline }  -- at most one per pl
   authorisation (intel-service.md §4.1): an expired item, a revoked grant or a contract the player left yields nothing.
   A link carries handles, never ids, amounts or names, so a player can only point at what a page offered them.
 - A **terms hash** is SHA-256 of the canonical text of what the player is agreeing to (the module renders it; §4.3).
-- An **NpcRef** names one NPC in one life: the object, its instance and its spawn. An object id reused after a despawn
-  (`managers/IdManager.java:158`) or the same coordinates in another instance does not match it.
+- An **NpcRef** names one NPC in one life: the object, its instance and its **incarnation**. Mobius reuses object ids
+  (`managers/IdManager.java:158`) and respawns a dead NPC as the same object with the same `Spawn`
+  (`entity/spawns/Spawn.java:658-664`, `initializeNpc` at :399, linking the same `Spawn` at :508), and its spawn event is asynchronous
+  (`entity/actor/Npc.java:1331-1334`), so no upstream value tells one life from the next. A one-line core patch (ledgered
+  in `CORE_PATCHES.md` when implemented) adds an `int` incarnation to `Npc`, incremented synchronously at the start of
+  `Npc.onSpawn` (`entity/actor/Npc.java:1313`); the same coordinates in another instance, another object or the same
+  object after a death and respawn do not match.
 - The **locale** is the player variable `LC_LOCALE` (`EN`, `RO`, `RU`; Mobius's `PlayerVariables`), chosen in the book's
   settings, `EN` until chosen. It is independent of Mobius's multilingual support, which ships disabled and with other
   languages (`dist/game/config/Custom/MultilingualSupport.ini:7`).
@@ -114,8 +119,8 @@ not counted by it; one the Codex rejects is counted (`Ui.BypassRejected`).
 At the click and again at "yes", on the player's Codex queue: the token is the player's own, in the right state, before
 its deadline; the subject's current version equals `subject_version` (a contract amended since the page was shown kills
 the token); the module recomputes the terms hash from current state and it equals the token's; where presence is
-required, the NPC of the `NpcRef` is the same live object (`World` still maps its id to the very object the weak reference
-holds, with the same spawn), in the player's instance, within `presence_range`, and `Npc.canInteract(player)` holds
+required, the NPC of the `NpcRef` is the same live object in the same life (`World` still maps its id to the very object the weak
+reference holds, and its incarnation is the token's), not dead, in the player's instance, within `presence_range`, and `Npc.canInteract(player)` holds
 (`entity/actor/Npc.java:525`, which also refuses casting, dead or sitting players and another instance); and the player can
 act (not dead, not trading, not in an olympiad match, not teleporting).
 
@@ -172,8 +177,10 @@ Templates live in `dist/game/data/html/LivingChronicle/<module>/`, with text as 
 to English, key by key; a missing English key fails the build. Values are escaped when inserted.
 
 Every view-model field has a declared maximum length after escaping (module specs declare them); a longer text value is
-cut at the maximum with an ellipsis at render, and a terms text over `MaxTermsChars` cannot be offered as an action at all
-(the module must split the agreement). From the declared maxima a build-time test computes each template's largest
+cut at the maximum with an ellipsis at render, **except agreement terms**: a terms field is never cut. An action is
+offered only on a page that shows its whole terms text, the same canonical text whose hash the token holds; terms over
+`MaxTermsChars`, or that do not fit on the page with its fixed part, are never offered (the module must split the
+agreement). The build-time test checks that every page carrying an action fits its terms at `MaxTermsChars`. From the declared maxima a build-time test computes each template's largest
 possible page and each list item's largest size; a template whose fixed part plus one largest item does not fit fails the
 build, so no runtime item is indivisible and too large.
 
@@ -256,9 +263,9 @@ id, expected version and terms hash), registered per module. To players: §4.1's
 | Test | Kind | What it does |
 |---|---|---|
 | AT-UI-01 | integration | forged bypasses (never sent: no effect; another player's context or token, an id instead of a handle, an unparseable command: dropped and counted); input with markup and control characters arrives stripped, input over the bound cut; a page's own links work; the 17th page context drops the oldest |
-| AT-UI-02 | integration | a token used twice (sequentially, and by two answers racing), after its deadline, after the contract was amended, with terms changed between page and "yes", **and with an amendment committed between "yes" and the operation's commit** (the operation refuses); away from the NPC, after the NPC despawned and its object id was reused, from the same coordinates in another instance; from a dead character; after a newer page of the module: refused. Faults injected before the operation, inside its commit and after it: nothing / all-or-nothing / applied once and shown on the next page |
+| AT-UI-02 | integration | a token used twice (sequentially, and by two answers racing), after its deadline, after the contract was amended, with terms changed between page and "yes", **and with an amendment committed between "yes" and the operation's commit** (the operation refuses); away from the NPC, after the NPC despawned and its object id was reused, from the same coordinates in another instance; after the NPC died and respawned as the same object; from a dead character; after a newer page of the module: refused. Faults injected before the operation, inside its commit and after it: nothing / all-or-nothing / applied once and shown on the next page |
 | AT-UI-03 | integration | a Codex dialog and a pending offline-trade dialog in either order: each answer reaches only its own handler; a stale, forged or late (after the slot's deadline) negative answer is claimed and ignored, and a pending offline-trade action stays pending; the listener with a fault injected after claiming still terminates the event; a new Codex dialog kills the previous token; the dialog packet carries `DialogSeconds × 1000` |
-| AT-UI-04 | unit, integration | every template in every locale renders within limits for view models at their declared maxima; pages of 48 749 and 48 750 characters: the first sent in three parts, the second paginated by the Codex before Mobius sees it; NPC pages of 17 200 and 17 201 likewise; no action cached from a page that was not sent; a character choosing RO and RU receives those texts, a key missing in RO falls back to English; a missing English key fails the build; an over-long terms text is not offered |
+| AT-UI-04 | unit, integration | every template in every locale renders within limits for view models at their declared maxima; pages of 48 749 and 48 750 characters: the first sent in three parts, the second paginated by the Codex before Mobius sees it; NPC pages of 17 200 and 17 201 likewise; no action cached from a page that was not sent; a character choosing RO and RU receives those texts, a key missing in RO falls back to English; a missing English key fails the build; an over-long terms text is not offered; terms that fit `MaxTermsChars` but would exceed a text field's maximum are shown whole, never cut, and the hash is of exactly what is shown |
 | AT-UI-05 | integration | the packets emitted: a system message of the right id carrying the localised text; a screen message, rate-limited; the recap as `TutorialShowHtml`, once per login and only when there is something to recap |
 | AT-UI-06 | unit, integration | the static scan: page handlers read Intel, Ledger and Director data only through their services' views and keep no view in a field, a handle or a cache; a planted read of a trace, a pressure value or a plan, or a planted cached view, fails it; through Codex navigation, an intel page reopened after expiry, opt-out, block or leaving the clan shows nothing |
 | AT-UI-07 | integration | with `BBSDefault = _lcb home`, Alt+B opens the Codex and the Board tab opens Mobius's home board and its pages; with the board disabled, an NPC page's `_lc` action works and the book is refused |
@@ -277,13 +284,18 @@ id, expected version and terms hash), registered per module. To players: §4.1's
 4. **One shared dialog message**: `ConfirmDlg(String)` uses `S1_3`, shared with Mobius's dialogs (`DlgAnswer.java:75`),
    whose requester id is 0; a listener exception does not stop the dispatch (`EventDispatcher.java:327-330`). → negative
    nonces, every negative answer claimed by a listener that cannot throw (§4.4), until the N6 client patch.
-5. **Object ids are reused** (`managers/IdManager.java:158`) and Mobius's bypass range check ignores instances
-   (`util/LocationUtil.java:192`). → `NpcRef` and `Npc.canInteract` (§4.3).
+5. **Object ids are reused** (`managers/IdManager.java:158`), a respawn reuses the very object
+   (`entity/spawns/Spawn.java:658-664`), the spawn event is asynchronous (`entity/actor/Npc.java:1331-1334`), and Mobius's
+   bypass range check ignores instances (`util/LocationUtil.java:192`). → `NpcRef` with a synchronous incarnation (a
+   one-line core patch) and `Npc.canInteract` (§4.3).
 6. **Packets run on a worker pool** (`commons/network/packet/PacketExecutor.java:52`) without a per-player lock. → the
    Codex queue (§3.1).
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: thirteen of fifteen fixed, one accepted as a stated limit; open were an NPC respawned as
+  the same object matching its old token, and truncated fields able to hide agreement terms. Revision 3: a synchronous
+  incarnation counter in `Npc.onSpawn` (a one-line core patch); terms never cut, offered only where shown whole.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 15 findings: stale or zero-requester answers falling through
   to Mobius's `S1_3` handlers; a Mobius dialog replacing a Codex one; listener exceptions failing open; no atomicity for
   tokens and slots; a race between the checks and the operation's commit; NPC presence by object id only; handles able to

@@ -285,6 +285,37 @@ class WorldProofTest
 		assertFalse(pending.containsKey(npc), "the manager rescheduled an NPC that has left the world");
 	}
 
+	/**
+	 * CP-0007, the other way round: the manager judges an entry stale, and before it drops it the NPC's region wakes and, finding it still on, leaves it. It is not left off for good. The NPC here reports a sleeping region the first time the manager asks only, which is that very moment.
+	 */
+	@Test
+	void cp0007AnNpcWhoseRegionWokeMeanwhileStaysOn() throws ReflectiveOperationException
+	{
+		final Map<Npc, Long> pending = pendingAnimations();
+		Arena.wake();
+		final Monster npc = new Monster(_template)
+		{
+			private boolean _asked;
+
+			@Override
+			public boolean isInActiveRegion()
+			{
+				if (!_asked && (StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE).getCallerClass() == RandomAnimationTaskManager.class))
+				{
+					_asked = true;
+					return false;
+				}
+				return super.isInActiveRegion();
+			}
+		};
+		npc.setHeading(0);
+		npc.spawnMe(Arena.X, Arena.Y, Arena.Z);
+		pending.put(npc, GameClock.millis());
+		GameScheduler.advance(2_000);
+		assertTrue(pending.containsKey(npc), "an NPC standing in an awake region was left off the list");
+		npc.deleteMe();
+	}
+
 	@SuppressWarnings("unchecked")
 	private static Map<Npc, Long> pendingAnimations() throws ReflectiveOperationException
 	{

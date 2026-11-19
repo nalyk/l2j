@@ -118,7 +118,8 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   into a sleeping one or leaves the world, and when it decays. Regions waking and sleeping work as before. On a server's
   threads these can race, so the list heals itself: the manager reschedules an NPC's turn only if its entry is still the
   one it read; a caller putting on an NPC that has left the world meanwhile takes it off again; and an entry for an NPC no
-  longer standing in an awake region is dropped when it falls due, before anything is drawn for it.
+  longer standing in an awake region is dropped when it falls due, before anything is drawn for it, and put back as it was
+  if the NPC's region woke meanwhile.
 - Invariant: an NPC is on the idle-animation list exactly while it is spawned in an awake region (a race between threads
   can leave an entry until it next falls due, never longer, and nothing is drawn for it); what it does once there is
   unchanged.
@@ -126,4 +127,5 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   walked into a sleeping region: off; walked back: on; deleted: off, where before it stayed on);
   `WorldProofTest.cp0007AnNpcTakenOffMidTurnStaysOff` (an NPC that takes itself off from inside its own turn, the moment
   another thread could, stays off), `cp0007AGoneNpcPutOnLateDoesNotStay` (a late caller holding a deleted NPC),
-  `cp0007AStaleEntryIsDroppedWhenItFallsDue` (an entry left by any race).
+  `cp0007AStaleEntryIsDroppedWhenItFallsDue` (an entry left by any race), `cp0007AnNpcWhoseRegionWokeMeanwhileStaysOn`
+  (the region waking while the manager drops the entry).

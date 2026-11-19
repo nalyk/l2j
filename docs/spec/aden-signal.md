@@ -1,71 +1,80 @@
 # SPEC-SIG — Aden Signal
 
-- Status: draft (revision 1)
-- Blueprint: 13 (Aden Signal); 02 §1 (we do not break the game); 03 §4.4 (`ON_PLAYER_PARTY_JOIN`, `ON_PLAYER_PARTY_LEAVE`);
-  04 §4 (Intel Service), §5 (Codex); 10 (citizens as candidates); 12 (Aden Remembers consumes demand); 14 (Wayfarer's
-  collaborators); 17 (Gazette); 20 §1 (Signal introduces, PACT commits); consensus §3 (actor classes reported apart).
-- Depends on: intel-service.md (Signal location purpose, §4.4; `lc_signal_presence`), actor-identity.md (snapshots,
-  activity, policy domains), codex-ui.md (pages, tokens, dialogs), fact-journal.md (facts, telemetry, projectors).
-- DDL: `sql/migrations/V013__lc_signal.sql` (after the Ledger's V012).
+- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Blueprint: 13 (Aden Signal); 02 §1 (we do not break the game), §4 (production checks), §9 (tests decide); 03 §4.4
+  (`ON_PLAYER_PARTY_JOIN`, `ON_PLAYER_PARTY_LEAVE`); 04 §4 (Intel Service), §5 (Codex), §7 (keyed randomness); 10
+  (citizens as candidates); 12 (Aden Remembers consumes demand); 14 (Wayfarer's collaborators); 17 (Gazette); 20 §1
+  (Signal introduces, PACT commits); consensus §3 (actor classes reported apart).
+- Depends on: intel-service.md (Signal presence and location, §4.4 and §4.9 of its revision 7), actor-identity.md
+  (snapshots, activity, policy domains, packet equality), codex-ui.md (pages, tokens, dialogs, queue), fact-journal.md
+  (facts, telemetry), pact.md (drafts).
+- DDL: `sql/migrations/V013__lc_signal.sql` (after the Ledger's V012). Reference data: `docs/spec/signal-class-roles.csv`.
 - Upstream facts cited as `file:line` are at the fork's current upstream snapshot (`upstream` c9ca4c31); paths are under
   `java/org/l2jmobius/gameserver/` unless they start with `dist/`.
 
 ## 1. Scope
 
-Party Finder asks who advertised; Signal asks which people currently want compatible things, and introduces them. It
-owns: profiles (opt-in and visibility), **intents** (now) and **schedules** (later), **matching**, **mutual interest** and
-the reveal, **latent party detection**, **future-session alignment**, **demand aggregates**, and the record of the
-**sessions** that followed an introduction.
+Party Finder asks who advertised; Signal asks which people currently want compatible things, and introduces them. It owns
+profiles (opt-in, visibility), **intents** (now) and **schedules** (later), **matching**, **interest** and the
+**reveal**, **latent party** prompts, **future-session** alignment, **demand** aggregates and **sessions**.
 
-It does not own: parties (Mobius: Signal never creates, joins or moves anyone; people invite each other through retail),
-location (the Intel Service: Signal sees a candidate's region only through its Signal purpose, intel-service.md §4.4),
-retail party matching (`entity/groups/matching/PartyMatchRoomList.java`, `PartyMatchWaitingList.java`, unchanged and the
-baseline Signal is measured against), contracts (PACT commits what Signal introduces, 20 §1).
+It does not own: parties (Mobius: Signal never creates, joins or moves anyone), location (the Intel Service: Signal learns
+a candidate's actual region only through it, and only after mutual interest), retail party matching
+(`entity/groups/matching/PartyMatchRoomList.java`, `PartyMatchWaitingList.java`, unchanged, the baseline), contracts
+(PACT commits what Signal introduces).
 
 ### 1.1 Zero balance effect
 
-Signal grants 0 XP, 0 Adena, 0 items, 0 buffs, 0 teleportation, 0 combat modifiers, and never rewards its own use (13 §3).
-It changes only the probability that compatible people meet. Living Chronicle code calls no mechanics API
-(actor-identity.md §3); AT-SIG-09 checks Signal's. Support classes are never replaced: Signal never fills a missing role
-with an NPC (13 §2); it makes support players discoverable.
+Signal grants 0 XP, 0 Adena, 0 items, 0 buffs, 0 teleportation, 0 combat modifiers, never rewards its own use, and never
+fills a missing role with an NPC (13 §2-§3). Living Chronicle code calls no mechanics API (actor-identity.md §3).
+
+### 1.2 What Signal protects, and what it does not
+
+- **Location** is protected: before mutual interest nothing Signal shows depends on where a candidate actually is. An
+  intent's places are the regions its owner **declares** (where they want to play); travel is computed from the viewer to
+  those declared regions. A candidate's actual region comes only from the Intel Service, at `REGION`, after mutual
+  interest. The latent prompt (§4.6) is the one exception, and it concerns only consenting characters in the viewer's own
+  region.
+- **Identity** before mutual interest is protected **only as far as an advertisement can be**: the anonymised fields
+  (§4.4) are what a player chose to publish, as on retail's party matching board, which shows names. A determined
+  observer of a sparse population may guess who is behind them; Signal coarsens the fields and rate-limits views, but
+  does not promise unlinkability. Visibility `NOBODY` is the protection for a player who wants none.
+- **Harassment** is bounded: per-pair cooldowns, per-recipient caps and anonymous blocking (§4.5).
 
 ## 2. Data
 
 ### 2.1 Tables and memory
 
 ```text
-lc_signal_profile(char_id PK, opted_in BOOLEAN, visibility {EVERYONE|ALLIANCE|CLAN|NOBODY}, latent BOOLEAN, languages SET,
-                  pace {RELAXED|STEADY|FAST}, allow_synthetic BOOLEAN, standing_objectives SET, updated_at)
-lc_signal_schedule(schedule_id PK auto, char_id, objective, role_sought SET, region_pref JSON, start_at, end_at,
-                   languages SET, expires_at = end_at)
-lc_signal_block(char_id, blocked_char, at, PRIMARY KEY(char_id, blocked_char))
-lc_signal_session(session_id PK auto, formed_at, members JSON, cohort {HUMAN|SYNTHETIC|MIXED}, objective, introduced_by
-                  {INTENT|LATENT|SCHEDULE}, continued_after_first BOOLEAN NULL, ended_at NULL, expires_at)
-lc_signal_demand(window_start, territory_id, objective, role_sought, intents INT, cohort {HUMAN|SYNTHETIC|MIXED},
-                 PRIMARY KEY(window_start, territory_id, objective, role_sought, cohort))
-lc_signal_audit_sample(sample_id PK auto, at, intent_a_class, intent_b_class, score, components JSON, expires_at)
+lc_signal_profile(char_id PK, opted_in, visibility {EVERYONE|ALLIANCE|CLAN|NOBODY}, latent, languages SET, pace,
+                  allow_synthetic, synthetic_changed_at, standing_objectives SET, updated_at)
+lc_signal_schedule(schedule_id PK, char_id, objective, role_sought SET, region_pref JSON, languages SET, start_at, end_at,
+                   expires_at = end_at)
+lc_signal_block(char_id, blocked_char, anonymous BOOLEAN, at, PRIMARY KEY(char_id, blocked_char))
+lc_signal_session(session_id PK, introduction_id UNIQUE, formed_at, cohort {HUMAN|SYNTHETIC|MIXED}, objective,
+                  introduced_by {INTENT|LATENT|SCHEDULE}, continued_after_first BOOLEAN NULL, ended_at NULL, expires_at)
+lc_signal_session_member(session_id, char_id, origin, PRIMARY KEY(session_id, char_id))
+lc_signal_demand(day DATE, territory_id, objective, intents_band {5-9|10-19|20+}, PRIMARY KEY(day, territory_id, objective))
+lc_signal_audit_sample(sample_id PK, at, class_a, class_b, score, components JSON, expires_at)
 ```
 
-In memory, per online character (13 §6: current intents are memory-first): the **intent** (objective, role, level
-range, preferred regions, `until`, travel tolerance, languages, pace, join-existing, willing-to-lead, now or later, notes),
-its **candidates** (other intents with their scores, recomputed every `MatchSeconds`), and **interest** marks
-(who expressed interest in whom). They vanish at logout, at `until`, or at opt-out; nothing is lost that a player did
-not choose to drop.
+In memory, per online character, on the character's Codex queue (codex-ui.md §3.1): the **intent** with its **version**
+(any edit, and any change of its owner's visibility, clan, alliance or synthetic preference, makes a new version); its
+**candidates** (recomputed every `MatchSeconds`); **introductions** (§3.2), each with an id and the two intent versions it
+binds; **latent groups** (§4.6); and the **interest ledger** of cooldowns and caps (§4.5). In-memory state is published
+by the queue that changes it: an operation either publishes its new state or leaves the old one, and durable parts
+(profile, schedule, block) are committed **before** the memory publication, so a failure never leaves memory ahead of the
+database.
 
-- `members` of a session are character ids with their origin class (for cohorts) and nothing else; sessions, schedules
-  and audit samples expire (`expires_at`, registered in `lc_expiring_table`, intel-service.md §4.5), so the record of who
-  played with whom lives `SessionRetentionDays` (Wayfarer keeps its own opted-in memory, 14).
-- `notes` are free text a player typed: bounded by `MaxNotesChars`, stripped (codex-ui.md §4.2), shown only after mutual
-  interest, never stored.
-- `lc_signal_demand` is an aggregate (telemetry-like): counts only, by territory, never a character.
+### 2.2 Reference data
 
-### 2.2 Reference tables
-
-Configuration tables, reviewed like the spec (`config/Custom/LivingChronicle/Signal.ini` and its data files): the **class
-roles** (each `PlayerClass`, `entity/actor/enums/player/PlayerClass.java`, mapped to the roles it can fill: tank, healer,
-buffer, nuker, archer, dagger, summoner, spoiler, crafter, support; a class may fill several), the **region travel table**
-(estimated minutes between map regions, by gatekeeper and on foot, from the journal's region index, fact-journal.md §2.3),
-and the **score weights** (§4.3).
+- **Class roles**: `docs/spec/signal-class-roles.csv` maps every `PlayerClass` (`entity/actor/enums/player/PlayerClass.java`,
+  all 103 classes) to the roles it fills: `TANK`, `HEALER`, `BUFFER`, `NUKER`, `ARCHER`, `DAGGER`, `SUMMONER`, `SPOILER`,
+  `CRAFTER`, `SUPPORT`, `DAMAGE` (a class may fill several). Reviewed like the spec; a test fails on a class missing from it.
+- **Travel minutes** between map regions (the journal's region index, fact-journal.md §2.3) are computed at startup, the
+  same way on every server: the least of walking (region-centre distance at 120 units per second) and the gatekeeper
+  network (one minute per hop between regions with a gatekeeper of `dist/game/data/teleporters/` connecting them, plus
+  walking at both ends), rounded up to whole minutes.
 
 ## 3. State machines
 
@@ -73,129 +82,168 @@ and the **score weights** (§4.3).
 
 | From | Event | To |
 |---|---|---|
-| — | set (Codex form or `.signal`) by an opted-in character | `ACTIVE` |
-| `ACTIVE` | edit | `ACTIVE` (candidates recomputed) |
-| `ACTIVE` | `until` passes, logout, opt-out, the character becomes non-`INTERACTIVE` (actor-identity.md §2.3) | gone |
-| `ACTIVE` | cancel | gone |
-| `ACTIVE` | the character joins a party | `ACTIVE`, now speaking for the party: others are offered to it only while it has room and its leader allows joining |
+| — | set (Codex form or `.signal`) by an opted-in character | `ACTIVE` version 1 |
+| `ACTIVE` vN | edit; or a change of the owner's visibility, clan, alliance or synthetic preference | `ACTIVE` vN+1; every introduction binding vN is dropped |
+| `ACTIVE` | cancel, `until`, logout, opt-out, the owner no longer `INTERACTIVE` | gone; its introductions dropped |
+| `ACTIVE` | the owner joins a party | `ACTIVE`, now speaking for the party: others are offered to it only while it has room and its leader allows joining |
 
-### 3.2 Introduction between two intents A and B
+### 3.2 Introduction (id, intent A vX, intent B vY)
 
 | From | Event | To | Effect |
 |---|---|---|---|
-| — | B is among A's top `ShowCandidates` and A may see B (§4.2) | `SHOWN` | A sees B **anonymised**: role, level band, objective, time overlap, travel minutes, languages, pace |
-| `SHOWN` | A expresses interest (a Codex action, codex-ui.md §4.4) | `A_INTERESTED` | B is told someone compatible is interested, anonymised |
-| `A_INTERESTED` | B expresses interest in A | `MUTUAL` | both see each other's name, notes and region (the region through the Intel Service's Signal purpose) |
-| any | either intent gone, a block, `InterestMinutes` pass | gone | nothing kept |
-| `MUTUAL` | they are in one party within `SessionWindowMinutes` (`ON_PLAYER_PARTY_JOIN`) | session | `lc_signal_session` |
+| — | B is among A's top `ShowCandidates` and visible to A (§4.2) | `SHOWN` | A sees B anonymised (§4.4); the view's fields are the token's terms (codex-ui.md §4.3) |
+| `SHOWN` | A expresses interest, on the Codex queue, with the token of that view | `A_INTERESTED` | B is told someone compatible is interested, anonymised; the interest ledger is charged (§4.5) |
+| `A_INTERESTED` | B expresses interest in A (B's view of A, its own token) | `MUTUAL` | both see names, notes and, through the Intel Service, regions (§4.4); Intel is told the introduction is mutual until `MutualMinutes` |
+| any | a bound version changes, either intent is gone, a block either way, `InterestMinutes` pass | `DROPPED` | the pair's cooldown starts (§4.5) |
+| `MUTUAL` | the two are in one party within `SessionWindowMinutes`, having **not** been in one party at `MUTUAL` | session | `lc_signal_session` keyed by the introduction id |
+
+Every transition re-checks §4.2 on the queue; one that fails drops the introduction.
 
 ## 4. Operations
 
-### 4.1 Opt-in and visibility
+### 4.1 Opt-in, opt-out and visibility
 
-Nothing about a character enters Signal until they opt in (`lc_signal_profile.opted_in`). Visibility says who may see them
-as a candidate: everyone, their alliance, their clan, or nobody (a character can then still look, and be told of mutual
-interest only by people they themselves showed interest in). Opting out removes the intent, the candidates and the Intel
-Service's Signal presence (`lc_signal_presence`) within one match cycle (`MatchSeconds`). Hiding costs nothing: there is no
-penalty for visibility `NOBODY`, and a character who is a mark (a public Writ, or holding a Torn Black Seal) is offered
-"hide from Signal" on their Ledger page (13 §4).
+Nothing about a character enters Signal before opt-in. **Opt-out takes effect in its own operation**: the intent,
+introductions and latent memberships are dropped, and the Intel Service's Signal presence for the character is deleted
+(`intel.signalPresence(subject, none)`, intel-service.md §4.9), before the operation returns; no page is rendered from a
+dropped intent, because pages re-check opt-in when they render. Match cycles are not needed for it, so an overloaded cycle
+never delays an opt-out.
 
-### 4.2 Who may be a candidate for whom
+Visibility says who may be shown the character as a candidate: everyone, their alliance, their clan, or nobody. A
+character with `NOBODY` may still look and express interest; **the recipient of that interest is then included in their
+visibility for that introduction only**, so the recipient can answer and, at mutual interest, both see each other (this is
+Signal's definition of "visibility includes the requester", which the Intel Service checks, intel-service.md §4.4). No
+penalty attaches to `NOBODY`; a character who is a public Writ mark or holds a Torn Black Seal is offered "hide from
+Signal" on their Ledger page (13 §4).
 
-B is a candidate for A only if all hold: both opted in, both `INTERACTIVE` (no offline traders or offline play, and never
-an `NPC_FAKE`: actor-identity.md §2.1, §3, a `PARTICIPATION` policy rule); B's visibility includes A; neither has blocked
-the other in Mobius (`entity/actor/holders/player/BlockList.java:151`, `isBlocked`, both directions) or in Signal
-(`lc_signal_block`); B is a citizen only if A allows synthetic candidates (`allow_synthetic`, default yes); their level
-ranges, objectives and time windows intersect; the travel minutes between their regions are within both tolerances;
-and B's party (if any) has room (a party holds 9, `network/clientpackets/RequestJoinParty.java:217`) and B said
-join-existing. Citizens and humans are shown alike: nothing in a candidate view says which is which (13 §2).
+### 4.2 Candidates
+
+B is a candidate for A only if all hold, checked at every transition: both opted in and `INTERACTIVE` (never an offline
+trader, offline play, or an `NPC_FAKE`: a `PARTICIPATION` policy rule, actor-identity.md §3); B's visibility includes A;
+neither blocked the other in Mobius (`entity/actor/holders/player/BlockList.java:151`, both directions) or in Signal; no
+active cooldown for the pair (§4.5); B is a citizen only if A allows synthetic candidates; level ranges, objectives and time
+windows intersect; the travel minutes from A's region to B's **declared** regions are within A's tolerance, and from B's to
+A's declared within B's; and B's party has room (9, `network/clientpackets/RequestJoinParty.java:217`) and allows joining.
+
+**The synthetic preference** changes at most once per `SyntheticToggleDays` (a new intent version), and is a viewer's own
+filter: packets about a character never depend on its origin (actor-identity.md AT-ACTOR-09, whose candidate-list
+comparison is between viewers with the default preference). A viewer who disallows citizens sees lists without them by
+construction; the rate limit keeps comparisons of the two settings days apart, with different intents.
 
 ### 4.3 Score
 
-`score = w_obj·objective + w_lvl·level + w_role·complement − w_travel·travel + w_time·overlap + w_lang·languages +
-w_pace·pace + w_known·collaborated`, each term in [0, 1] from the two intents (role complementarity: how many of the roles
-the party-to-be lacks the candidate's class can fill, by the class roles table; never a meta composition, 13 §5;
-`collaborated`: 1 when both opted into Wayfarer's memory and played a session together before, 14). Ties broken by the keyed
-RNG (`rng("signal.tie", a, b, cycle)`, 04 §7), so no one is always first. A party-to-be is filled greedily up to its
-capacity. The score has **no other input**: no Director or Aden Remembers goal, no hidden ranking, no engagement target (20
-§1: Remembers reads Signal's demand, never steers its matches). The `collaborated` term is never hidden: after mutual
-interest the page says "you have played together before" when it applied, and only both players' Wayfarer opt-in turns
-it on. AT-SIG-03 checks the formula against hand-computed cases.
+All terms in [0, 1], from the two intents and nothing else (no Director or Aden Remembers goal, no hidden ranking, 20 §1):
+
+| Term | Definition |
+|---|---|
+| `objective` | 1 same objective; 0.5 a compatible pair (XP–SPOIL, RAID–SUPPORT_FOR_HIRE, CRAFTING–MATERIALS, CARAVAN_ESCORT–TW_MERCENARY); else 0 |
+| `level` | max(0, 1 − |mid_A − mid_B| / 10), mid = the middle of the level range |
+| `complement` | if A seeks roles: |roles A seeks ∩ roles B's class fills| / |roles A seeks|; else 0.5 |
+| `travel` | 1 − min(1, travel minutes A→B's declared regions / A's tolerance) |
+| `overlap` | min(overlap minutes, 60) / 60 |
+| `languages` | 1 if they share one, else 0 |
+| `pace` | 1 equal, 0.5 adjacent, 0 opposite |
+| `collaborated` | 1 if both opted into Wayfarer's memory and played a session together before (14); shown as "you have played together before" after mutual interest, never hidden |
+
+`score = Σ w_term × term`. A's candidates are ordered by score, ties by `rng("signal.tie", A, B, cycle)` (04 §7); a
+party-to-be is built greedily: start from A, add the best remaining candidate whose score against A is at least
+`MinScore`, until 9 or none. AT-SIG-03 checks this against a table of hand-computed cases.
 
 ### 4.4 What is disclosed when
 
 | Stage | A learns about B |
 |---|---|
-| shown | role, level band (5 levels), objective, time overlap in minutes, travel minutes from A's region (one number), languages, pace |
-| interested | that someone compatible is interested (B's view of A, anonymised as above) |
-| mutual | name, notes, region (Intel Service, `REGION`, `SignalLocationTtlMinutes`, only while the Intel Service's Signal rules hold, intel-service.md §4.4) |
+| shown | objective; roles B's class fills (not the class); level band of 10 levels; time overlap in 30-minute steps; travel minutes to B's **declared** regions in `TravelBucketMinutes` steps; languages |
+| interested | that someone compatible is interested (B sees A as above) |
+| mutual | name, notes, the "played together before" marker, and B's actual region from the Intel Service (`intel.signalRegion(A, B, introduction)`, `REGION`, `SignalLocationTtlMinutes`, only while the introduction is mutual and the Intel Service's Signal rules hold) |
 
-Before mutual interest Signal discloses no name and no region; travel minutes are rounded to `TravelBucketMinutes`, so a
-shown candidate cannot be located. No coordinate ever leaves the Intel Service.
+Pace is used in the score but never shown before mutual interest. A viewer sees at most `ShowCandidates` and may refresh
+their view at most once per `MatchSeconds`.
 
-### 4.5 Latent party detection
+### 4.5 Interest limits and anonymous blocking
 
-For opted-in characters with `latent` enabled and no active intent, Signal forms an implicit intent from their standing
-objectives and their current activity class (hunting, idle in town; from their own session, never another's) and looks
-for a viable party-to-be: at least `LatentMinParty` compatible characters within `LatentTravelMinutes`. When one exists,
-each member receives the Codex dialog (codex-ui.md §4.4): "A viable party may be formed nearby. *n* compatible players.
-Estimated rendezvous: *m* minutes. Common intent: *objectives*." At most once per `LatentPromptMinutes` per character.
-Those who answer yes see each other as `MUTUAL` once at least two said yes; names are revealed only among them.
+The interest ledger (memory, per character pair and per recipient) enforces: after an introduction between A and B is
+dropped or refused, A cannot express interest in B again for `PairCooldownMinutes` (keyed by the characters, so a new
+intent does not reset it); a recipient receives at most `IncomingPerHour` interest notices, the rest silently not sent;
+and an interest notice carries a **"block this sender"** action that writes `lc_signal_block` with `anonymous = true`: the
+recipient never learns who it was, and the pair is excluded both ways from then on.
 
-### 4.6 Future sessions
+### 4.6 Latent party prompts
 
-A schedule ("tomorrow 20:30–22:00, Cruma, XP/spoil") is persisted. At login, and `SchedulePromptMinutes` before its start,
-its owner is told how many other schedules align with it (overlap ≥ `ScheduleMinOverlap`, compatible as §4.2): "5 players
-aligned with your planned Cruma session" — a count only. At the start, the aligned schedules become intents for those online,
-and they meet as in §3.2. Schedules expire at their end.
+Only characters who enabled `latent` are counted, and only in the viewer's own region (actual, as each one's own Signal
+presence). When at least `LatentMinParty` latent-enabled, compatible characters are in one region, Signal freezes a
+**latent group** (an id, its member set, `LatentGroupMinutes` of life) and sends each member the Codex dialog: "A viable
+party may be formed in your region. *k* compatible players. Common intent: *objectives*." where *k* is a band (3-5, 6+).
+A member's "yes" is bound to the group id. Once at least two members said yes and are still eligible (§4.2, re-checked),
+those who said yes become mutual among themselves (one introduction per pair, §3.2); a member's later block or opt-out
+removes them from the group. At most one prompt per member per `LatentPromptMinutes`. What a prompt discloses is that a
+band of consenting characters is in the region the recipient is in: what walking around would show.
 
-### 4.7 Demand
+### 4.7 Future sessions
 
-Every `DemandWindowMinutes` the active intents are counted by (territory, objective, role sought, cohort). A cell is
-published (to Aden Remembers as a fact, and to the Gazette's `signal_demand` publication type, intel-service.md §4.7) only
-when it counts at least `DemandMinIntents` distinct characters, and only at territory precision, after
-`PublicationTacticalDelayMinutes` for the Gazette: "many are seeking spoilers around Oren".
+A schedule persists until its end. At login and `SchedulePromptMinutes` before its start, its owner is told how many other
+schedules align with it as a band (none, 1-4, 5+): compatible under §4.2 with declared regions and times, overlap ≥
+`ScheduleMinOverlap`. At the start, aligned schedules become intents for those online, and they meet through §3.2
+(mutual interest is still required).
 
-### 4.8 Sessions and outcomes
+### 4.8 Demand
 
-A session is recorded when characters who reached `MUTUAL` (or answered a latent prompt, or aligned schedules) are in one
-party within `SessionWindowMinutes`, observed through the `ON_PLAYER_PARTY_JOIN` and `ON_PLAYER_PARTY_LEAVE` seams (03 §4.4;
-Mobius dispatches no party events today, `entity/groups/Party.java:301`, `:422`, `:551`). `continued_after_first` is set
-when the party still holds two of them `ContinueMinutes` later. Cohorts are `HUMAN`, `SYNTHETIC` or `MIXED` by the members'
-origins (a `METRICS` policy rule, actor-identity.md §3), and every metric is reported per cohort (consensus §3).
+Once a day, the day's intents are counted by (territory of their declared regions, objective) in **distinct principals**
+(actor-identity.md §2.2, so several characters of one account count once). A cell is kept only at 5 principals or more,
+as a band (5-9, 10-19, 20+), without role, cohort or time of day. Aden Remembers reads these daily cells (never finer), and
+the Gazette publishes them as `signal_demand` (intel-service.md §4.7) after `PublicationTacticalDelayMinutes`: "many are
+seeking spoilers around Oren". What a cell discloses is that at least five principals wanted something in a territory on a
+day; controlled contributors can learn that at least one other did.
 
-### 4.9 Signal introduces, PACT commits
+### 4.9 Sessions
 
-After mutual interest, the page offers the matching PACT draft for the intent (20 §1): a crafter and a client → a Crafting
-Pact draft; a mercenary intent → a Mercenary Contract draft; a supplier and a buyer → a Purchase Order draft, each
-pre-filled only with what both declared (objective, item if named, time). Signal does nothing more: the draft is PACT's,
-signed or not by PACT's rules (pact.md §3.1), and no Signal state depends on it.
+A session is recorded when a `MUTUAL` introduction's two characters are in one party within `SessionWindowMinutes` and were
+not in one party when it became mutual, observed through the `ON_PLAYER_PARTY_JOIN` and `ON_PLAYER_PARTY_LEAVE` seams (03
+§4.4; Mobius dispatches no party events, `entity/groups/Party.java:301`, `:422`, `:551`). One session per introduction
+(its id is unique). Members are rows with their origin; the cohort is `HUMAN`, `SYNTHETIC` or `MIXED` (a `METRICS` rule).
+The session ends when fewer than two of its members remain in one party; `continued_after_first` is set when two still are
+after `ContinueMinutes`. A restart before that leaves it `NULL` (unknown), and unknown sessions are excluded from
+conversion metrics.
+
+### 4.10 Signal introduces, PACT commits
+
+After mutual interest the page offers the matching PACT draft (20 §1): crafter and client → Crafting Pact; mercenary and
+employer → Mercenary Contract; supplier and buyer → Purchase Order; pre-filled only with what both declared. The draft is
+PACT's (pact.md §3.1); no Signal state depends on it.
+
+### 4.11 Production checks
+
+Every `MatchSeconds` a verifier re-checks a sample of `VerifySample` shown candidates against §4.2 and every opted-out
+character's absence from intents and Intel presence; a violation is an alarm and freezes Signal (`lc_module_state`,
+asset-service.md §2.2): pages show Signal unavailable, nothing is shown or disclosed until an admin unfreezes it.
 
 ## 5. Facts
 
-Telemetry (fact-journal.md §2.6): `Signal.IntentSet` (objective, role, territory, cohort), `Signal.Shown`,
+Telemetry (fact-journal.md §2.6): `Signal.IntentSet` (objective, territory of declared regions, cohort), `Signal.Shown`,
 `Signal.Interest`, `Signal.Mutual`, `Signal.LatentPrompt` (answer). Outbox: `Signal.SessionFormed` (session, cohort,
-objective, introduced by), `Signal.SessionEnded` (continued), `Signal.OptOut`, `Signal.Demand` (the published cells).
-No fact names a character's region or a candidate before mutual interest.
+objective, introduced by), `Signal.SessionEnded` (continued), `Signal.OptOut`, `Signal.Demand` (the day's kept cells),
+`Signal.Frozen`. No fact names an actual region, or a candidate before mutual interest.
 
 ## 6. Invariants
 
 | Id | Invariant | Checked |
 |---|---|---|
 | SIG-INV01 | Signal grants nothing and calls no mechanics API | static scan; AT-SIG-09 |
-| SIG-INV02 | no name or region of a candidate is disclosed before mutual interest; no coordinate ever | the disclosure table; AT-SIG-04 |
-| SIG-INV03 | no candidate violates §4.2 | the filter; AT-SIG-02 |
-| SIG-INV04 | an opt-out leaves no intent, candidate or presence after one cycle | AT-SIG-05 |
-| SIG-INV05 | no published demand cell counts fewer than `DemandMinIntents` characters | AT-SIG-07 |
+| SIG-INV02 | no actual region before mutual interest except §4.6's same-region band; no name before mutual interest; never a coordinate | the disclosure table; the verifier (§4.11); AT-SIG-04 |
+| SIG-INV03 | no shown candidate violates §4.2 | the verifier, sampling each cycle; AT-SIG-02 |
+| SIG-INV04 | an opt-out leaves nothing when its operation returns | the operation; the verifier; AT-SIG-05 |
+| SIG-INV05 | no demand cell below 5 principals | the schema; AT-SIG-07 |
 
 ## 7. Failure model
 
 | Fault | End state |
 |---|---|
-| restart | intents and interests are gone (memory-first); schedules and sessions remain; players set intents again |
-| Intel Service down | no region at mutual interest ("region unavailable"); matching by declared regions only |
+| restart | intents, introductions, groups and the interest ledger are gone (memory-first); profiles, schedules, blocks and sessions remain; pending continuation checks become unknown |
+| an operation fails after its durable part | memory not published; the durable part is the truth, and the next render reads it |
+| Intel Service down | no region at mutual interest ("region unavailable"); matching continues on declared regions |
 | the party seams unavailable | no sessions recorded; introductions still work |
-| matching overload | the cycle is skipped and counted; never a partial candidate list |
+| matching overload | the cycle is skipped and counted; opt-outs are unaffected (§4.1) |
+| a verifier violation | Signal frozen until an admin unfreezes it |
 
 ## 8. Configuration
 
@@ -204,61 +252,81 @@ No fact names a character's region or a candidate before mutual interest.
 | Key | Range | Default | truth / dev / sim / hobby / live | Test |
 |---|---|---|---|---|
 | `MatchSeconds` | 5–120 | 20 | 20 / 20 / 5 / 20 / 20 | AT-SIG-05 |
-| `ShowCandidates` | 1–50 | 10 | 10 everywhere | AT-SIG-03 |
-| `InterestMinutes` | 1–60 | 10 | 10 everywhere | AT-SIG-04 |
+| `ShowCandidates`, `MinScore` | 1–50, 0–20 | 10, 4 | as default everywhere | AT-SIG-03 |
+| `InterestMinutes`, `MutualMinutes` | 1–60, 5–240 | 10, 60 | as default everywhere | AT-SIG-04 |
 | `TravelBucketMinutes` | 1–30 | 5 | 5 everywhere | AT-SIG-04 |
-| `LatentMinParty`, `LatentTravelMinutes`, `LatentPromptMinutes` | 2–9, 1–60, 10–1440 | 3, 10, 60 | as default everywhere | AT-SIG-06 |
+| `PairCooldownMinutes`, `IncomingPerHour` | 10–10080, 1–100 | 1440, 10 | as default everywhere | AT-SIG-12 |
+| `SyntheticToggleDays` | 1–90 | 7 | 7 everywhere | AT-SIG-02 |
+| `LatentMinParty`, `LatentGroupMinutes`, `LatentPromptMinutes` | 3–9, 1–30, 10–1440 | 3, 5, 60 | as default everywhere | AT-SIG-06 |
 | `SchedulePromptMinutes`, `ScheduleMinOverlap` | 5–240, 10–240 | 30, 30 | as default everywhere | AT-SIG-06 |
-| `DemandWindowMinutes`, `DemandMinIntents` | 10–1440, 3–100 | 60, 5 | as default everywhere | AT-SIG-07 |
 | `SessionWindowMinutes`, `ContinueMinutes`, `SessionRetentionDays` | 5–120, 10–240, 1–90 | 30, 60, 30 | as default everywhere | AT-SIG-08 |
 | `MaxNotesChars` | 0–200 | 120 | 120 everywhere | AT-SIG-04 |
-| score weights `w_*` | 0–10 | 3, 2, 3, 2, 2, 2, 1, 1 | as default everywhere | AT-SIG-03 |
+| `VerifySample` | 1–1000 | 50 | 50 everywhere | AT-SIG-13 |
+| weights `w_objective` … `w_collaborated` | 0–10 | 3, 2, 3, 2, 2, 2, 1, 1 | as default everywhere | AT-SIG-03 |
 
 ## 9. Interface
 
-Codex → Signal tab, and the voiced command `.signal`, which opens it (Mobius dispatches `.`-prefixed chat to voiced command
+Codex → Signal tab, and the voiced command `.signal`, which opens it (Mobius dispatches `.`-prefixed chat to voiced
 handlers, `dist/game/data/scripts/handlers/chat/channels/ChatGeneral.java:48-64`; a client `/signal` is never sent): set
-intent, view aligned people (anonymised), express interest, reveal on mutual, schedule a future session, manage visibility,
-block. Notifications as system messages; the latent prompt as the Codex dialog. Admin: `lc why signal <char>`.
+intent, view aligned people, express interest, reveal on mutual, schedule, visibility, block (including an anonymous
+sender). Notifications as system messages; the latent prompt as the Codex dialog. Admin: `lc why signal <char>`,
+`lc signal unfreeze`.
 
 ## 10. Requirements
 
 | Id | Requirement | Proven by |
 |---|---|---|
-| SIG-R01 | Nothing about a character MUST enter Signal before opt-in, and opt-out MUST remove it within one cycle. | AT-SIG-05 |
-| SIG-R02 | Candidates MUST satisfy §4.2: opted in, interactive, never an NPC fake, visible, unblocked both ways, synthetic only if allowed, compatible, within travel and capacity. | AT-SIG-02 |
-| SIG-R03 | Scores MUST follow §4.3 with configured weights and keyed tie-breaking, without meta optimisation. | AT-SIG-03 |
-| SIG-R04 | Names, notes and regions MUST be disclosed only on mutual interest, regions only through the Intel Service; nothing before but §4.4's anonymised fields. | AT-SIG-04 |
-| SIG-R05 | Latent prompts and future-session alignment MUST disclose only counts, travel and common intent until mutual interest. | AT-SIG-06 |
-| SIG-R06 | Demand MUST be published only in cells of at least `DemandMinIntents` characters, at territory precision, after the tactical delay. | AT-SIG-07 |
-| SIG-R07 | Sessions MUST be recorded from party seams and reported per cohort, and expire. | AT-SIG-08 |
+| SIG-R01 | Nothing about a character MUST enter Signal before opt-in, and opt-out MUST remove it within its own operation. | AT-SIG-05 |
+| SIG-R02 | Candidates MUST satisfy §4.2 at every transition, and the synthetic preference MUST be a rate-limited viewer filter. | AT-SIG-02 |
+| SIG-R03 | Scores MUST follow §4.3 exactly, with no other input. | AT-SIG-03 |
+| SIG-R04 | Before mutual interest only §4.4's fields MUST be shown, travel only to declared regions; names, notes and actual regions MUST come only at mutual interest, regions only through the Intel Service. | AT-SIG-04 |
+| SIG-R05 | Latent prompts MUST count only consenting characters in the viewer's region, in bands, bound to a frozen group; schedule alignment MUST disclose only bands. | AT-SIG-06 |
+| SIG-R06 | Demand MUST be daily cells of at least five principals, banded, by territory and objective only, published after the tactical delay. | AT-SIG-07 |
+| SIG-R07 | Sessions MUST be one per introduction, from party seams, excluding parties already shared, reported per cohort, with unknown continuations excluded. | AT-SIG-08 |
 | SIG-R08 | Signal MUST grant nothing, reward nothing, and never fill a role with an NPC. | AT-SIG-09 |
-| SIG-R10 | After mutual interest Signal MUST offer only the matching PACT draft, pre-filled with what both declared, and take no part in it. | AT-SIG-11 |
-| SIG-R09 | Introductions through Signal MUST improve time-to-first-contact and party conversion over retail party matching alone, measured per cohort, with support classes found faster. | AT-SIG-10 |
+| SIG-R09 | Signal MUST meet the acceptance band of AT-SIG-10 over retail party matching alone, per cohort. | AT-SIG-10 |
+| SIG-R10 | After mutual interest Signal MUST offer only the matching PACT draft, pre-filled with what both declared. | AT-SIG-11 |
+| SIG-R11 | Interest MUST be bound to intent versions, limited per pair and per recipient, and blockable anonymously. | AT-SIG-12 |
+| SIG-R12 | A verifier MUST re-check shown candidates and opt-outs every cycle and freeze Signal on a violation. | AT-SIG-13 |
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-SIG-00 | integration | the migration applies; keys and checks refuse what this spec forbids (a schedule ending before it starts; a demand cell below the threshold; expiring rows registered) |
+| AT-SIG-00 | integration | the migration applies; keys and checks refuse latent without opt-in, a schedule ending before it starts or expiring elsewhere, a self block, a session member twice, a second session for an introduction, a demand cell below five |
 | AT-SIG-01 | integration | profile, intent and schedule flows through the Codex; `.signal` opens the tab |
-| AT-SIG-02 | integration | each exclusion of §4.2 at its boundary: not opted in, offline trader, offline play, NPC fake, visibility clan/alliance/nobody, Mobius block either way, Signal block, synthetic disallowed, level ranges just apart, travel over tolerance, a full party |
-| AT-SIG-03 | unit | hand-computed scores for a table of intent pairs; ties broken by the keyed RNG; a party-to-be filled greedily to 9; no class composition favoured beyond the formula; the static scan finds no input to the score outside §4.3 (no Director or Remembers read) |
-| AT-SIG-04 | integration | before mutual interest no name, note or region in any page or packet; travel rounded; at mutual interest the region from the Intel Service at `REGION`, refused when its Signal rules fail |
-| AT-SIG-05 | integration | opt-out: after one cycle no intent, candidate or `lc_signal_presence` row |
-| AT-SIG-06 | integration | latent prompts at most once per window, with counts only; names only among those who said yes; schedule alignment counts at login and before start |
-| AT-SIG-07 | integration | demand cells below the threshold never published; published ones at territory precision after the delay |
-| AT-SIG-08 | integration | sessions from party joins within the window, continued flag at `ContinueMinutes`, cohorts by origin, gone after retention |
-| AT-SIG-09 | unit | the static scan: no Signal code calls a mechanics API, grants an item, Adena, XP or buff, or spawns an NPC |
-| AT-SIG-11 | integration | a crafter and a client, a mercenary and an employer, a supplier and a buyer at mutual interest: the offered draft of the right PACT type, pre-filled only with declared fields; Signal unchanged whether it is signed or not |
-| AT-SIG-10 | sim, human | A/B runs with citizen populations and tester sessions: Signal plus retail matching against retail matching alone; time-to-first-contact and party conversion per cohort, and time for parties missing a healer or buffer to find one |
+| AT-SIG-02 | integration | each exclusion of §4.2 at its boundary; a synthetic toggle refused within `SyntheticToggleDays`; with the default preference, candidate lists equal for paired human and citizen runs |
+| AT-SIG-03 | unit | the table of hand-computed scores (each term at 0, between and 1) and greedy parties; keyed ties; every `PlayerClass` in the role table; the static scan finds no other score input |
+| AT-SIG-04 | integration | before mutual interest no name, note, pace or actual region in any page or packet; moving the candidate without changing their declared regions changes nothing shown; at mutual interest the region from the Intel Service, refused after `MutualMinutes` or when its rules fail |
+| AT-SIG-05 | integration, fault | opt-out under an overloaded cycle: nothing left when the operation returns; a fault after the durable part leaves memory unpublished |
+| AT-SIG-06 | integration | latent groups only of latent-enabled characters in the region, banded counts, yes bound to the group, a member who blocks removed before reveal; schedule bands at login and before start |
+| AT-SIG-07 | integration | four controlled principals and none other: no cell; alts of one account counted once; cells banded, daily, after the delay |
+| AT-SIG-08 | integration, restart | sessions once per introduction; a party already shared at mutual interest is no session; continued at `ContinueMinutes`; a restart before it gives unknown, excluded from metrics |
+| AT-SIG-09 | unit | the static scan: no mechanics API, grant, reward or NPC spawn in Signal code |
+| AT-SIG-10 | sim, human | characters assigned by `rng("signal.ab", char)` to treatment (Signal and retail matching) or control (retail matching only), at least 2 000 intents per cohort and arm; time to first contact (intent set → first mutual interest or party invite between the two) censored at the intent's end; conversion (intents leading to a session within 60 minutes); acceptance: treatment's median time to first contact at least 20 % lower and conversion at least 10 points higher, each with a 95 % bootstrap interval excluding no effect, in the human and the mixed cohorts; and parties seeking a healer or a buffer reach mutual interest with one faster under treatment, same bound |
+| AT-SIG-11 | integration | the offered draft per pairing, pre-filled only with declared fields; Signal unchanged by its fate |
+| AT-SIG-12 | integration | an edit, a visibility, clan or synthetic change between interest and answer drops the introduction; re-interest within the pair cooldown refused across new intents; the per-recipient cap; an anonymous block excludes the pair both ways without naming the sender |
+| AT-SIG-13 | integration | a planted ineligible candidate and a planted stale presence: the verifier alarms and freezes Signal; nothing shown until unfreeze |
 
 ## 11. Upstream constraints
 
 1. **Mobius dispatches no party join or leave event** (`Party.java:301`, `:422`, `:551`). → the party seams (03 §4.4).
-2. **Retail party matching exists** (`PartyMatchRoomList`, `PartyMatchWaitingList`). → left unchanged; Signal's baseline.
+2. **Retail party matching exists** (`PartyMatchRoomList`, `PartyMatchWaitingList`). → unchanged; the control arm.
 3. **A party holds 9** (`RequestJoinParty.java:217`). → the capacity constraint.
 4. **Blocks are per character, either way** (`BlockList.java:151`). → checked both ways.
 5. **Slash commands are client-side; `.`-commands reach the server** (`ChatGeneral.java:48-64`). → `.signal`.
+6. **Classes carry no roles** (`PlayerClass.java` has ids, races, mage flags and parents). → `signal-class-roles.csv`.
 
 ## 12. Review record
 
-- Revision 1: draft, not yet reviewed.
+- Round 1 (Codex, a different model family), NO SIGN-OFF, 16 findings: travel buckets and tolerance filters as a location
+  oracle; anonymous fields and exact counts identifying people; the synthetic filter distinguishing citizens; demand cells
+  open to controlled contributors; consent not bound to intent versions or latent groups; recyclable interest for
+  harassment; `NOBODY` unable to complete mutual interest; no Intel lifecycle for presence and region; memory-first
+  atomicity; sessions without identity or recovery; no falsifiable metric; scores without defined functions or tables;
+  weak schema checks; no production checks. Revision 2: travel only to declared regions and latent prompts limited to
+  consenting characters in the viewer's own region; identity protection stated as an advertisement's, with coarser
+  fields; the synthetic preference rate-limited as a viewer filter; demand as daily banded cells of five principals; intent
+  versions, frozen latent groups and per-pair cooldowns with anonymous blocking; `NOBODY` defined to include its own
+  recipients; Intel presence and region operations (intel-service.md revision 7); durable-before-memory publication and
+  opt-out in its own operation; sessions keyed by introduction, members as rows, unknown continuations excluded; an A/B
+  acceptance band; defined score terms, a class-role table and a travel computation; schema checks for members and keys;
+  a verifier that freezes Signal.

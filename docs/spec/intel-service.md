@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: reviewed (revision 6; signed off by Codex with the Black Ledger, in its round 6; record in §12)
+- Status: draft (revision 7: Signal's presence and region operations added after the revision-6 sign-off; under review with aden-signal.md; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -140,6 +140,9 @@ Optional<IntelView> intel.read(long intelId, Requester reader);
 void        intel.suppress(Connection tx, WitnessRef witness, int subjectChar, Instant until, long bribeFactId);
 long        intel.plantRumor(Connection tx, int subjectChar, int territoryId, Duration life, long payerFactId);
 long        intel.recordIdentity(Connection tx, int subjectChar, IdentityKind kind, WitnessRef witness, IdentityPayload payload, Duration life);
+void        intel.signalPresence(int subjectChar, Optional<Integer> regionId);
+void        intel.signalMutual(long introductionId, int charA, int charB, Instant until);
+Optional<RegionView> intel.signalRegion(Requester requester, int subjectChar, long introductionId);
 void        intel.registerCopies(Connection tx, String module, String table, String rowKey, long... intelIds);
 PublicationDecision intel.publishable(PubRow row);
 ```
@@ -270,6 +273,22 @@ can read nothing else (04 §4).
   owner, at a Broker in person, each disclosure paid) and `LEDGER_REVERSE` (`PATRON_*`, only to the current holder of the
   bound seal, at a Magistrate in person, in the reverse case's step order). No contract need be live.
 
+### 4.9 Signal's presence and region
+
+Signal location is not trace-based: it is the character's own current region, kept only while they take part in Signal.
+
+- **Presence** (`signalPresence`): Signal reports, each match cycle and at once on any change, an opted-in `INTERACTIVE`
+  character's current region or none; the service computes the region itself from the character's position
+  (`MapRegionData`), whatever a caller passes, and none deletes the `lc_signal_presence` row. A row lives
+  `SignalLocationTtlMinutes` unless refreshed, so a character who stops taking part disappears by expiry even if a report
+  is lost.
+- **Mutual introductions** (`signalMutual`): Signal registers, in memory, that two characters reached mutual interest in an
+  introduction, until a time (aden-signal.md §3.2). Only Signal calls it.
+- **Region** (`signalRegion`): returns the subject's region only if the introduction is registered as mutual between the
+  requester and the subject and not past its time, the subject's presence row exists and is unexpired, and §4.4's Signal
+  rules hold (opt-in, `INTERACTIVE`, no block either way, Signal's visibility including the requester). The view holds the
+  region and nothing else; it is not an intel item, has no grant, and is not kept.
+
 ## 5. Facts
 
 | Fact | Delivery | Fields |
@@ -350,6 +369,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | INTEL-R13 | Signal locations MUST be at most `REGION`, live `SignalLocationTtlMinutes`, and cover only opted-in, interactive, non-blocking characters whose visibility includes the requester, checked at every read. | AT-INTEL-13 |
 | INTEL-R14 | Every evidence-driven change of an answer (appearance, age band, expiry) MUST happen on the quantum grid. | AT-INTEL-11 |
 | INTEL-R15 | Suppression MUST apply only to bribable witness kinds within their maximum, on the quantum grid; rumors MUST be their own traces (heard or planted, identical to a reader), disclosed only under `LEDGER_RUMOR`, always at `RUMOR` confidence, budgeted and bounded at territory size, never changing a real trace's items. | AT-INTEL-15 |
+| INTEL-R17 | A Signal region MUST be returned only for a registered mutual introduction, from an unexpired presence the service computed itself, under §4.4's Signal rules; presence MUST vanish by expiry. | AT-INTEL-17 |
 | INTEL-R16 | Identity evidence MUST be recorded only by the Black Ledger at its certified events, stored with its kind, payload and binding, expire with its trace, carry precision `NONE`, and be disclosed only under `LEDGER_IDENTITY` and `LEDGER_REVERSE` by their own rules. | AT-INTEL-16 |
 
 | Test | Kind | What it does |
@@ -370,6 +390,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | AT-INTEL-13 | integration | Signal: a non-opted-in, offline, detached, blocking or not-visible-to-the-requester character is never located; an opted-in one only at `REGION`, for the TTL; an opt-out or block after a grant hides it at the next read |
 | AT-INTEL-14 | integration | a disclosure asked remotely, for another contract, with a forged budget or audience, or by a non-party: refused; a reader who left the clan or contract of a grant reads nothing |
 | AT-INTEL-15 | integration | a bribe at a guard refused, at a gatekeeper beyond the kind's maximum capped; suppression starting and ending on the grid; a real trace disclosed as `WITNESS` before and after its heard rumor, in both orders, unchanged; heard and planted rumors indistinguishable in fields, never above `RUMOR`, never under another purpose; rumors in the combined bound at territory size |
+| AT-INTEL-17 | integration | `signalRegion` refused without a mutual introduction, after its time, for a third character, after the presence expired or was deleted, under a block or outside visibility; returned at `REGION` otherwise; a lost presence report expires the row |
 | AT-INTEL-16 | integration, unit | identity evidence recorded by another module refused (static scan and a database grant); an `ALIAS_LINK` never to its owner, only at a Broker in person; `PATRON_*` only to the bound seal's holder, in step order, after its contract ended; no identity item carries an area; identity evidence gone with its trace |
 
 ## 11. Upstream constraints
@@ -384,6 +405,8 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Revision 7 (after the revision-6 sign-off): Aden Signal needs a presence lifecycle and a region read bound to mutual
+  introductions (§4.9). Under review with aden-signal.md.
 - Revision 6 signed off with black-ledger.md in the Ledger's round 6.
 - Revision 6 (after the round-5 sign-off): the Black Ledger (black-ledger.md) needs suppression, rumors and identity
   evidence as Intel operations, two trace kinds, four purposes and publication field rules; they go to review with the

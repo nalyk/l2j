@@ -1,0 +1,204 @@
+id,source,sub_feature,blueprint,spec,requirements,tables,flow,hooks,tests,evidence,status
+TR-allowed-player-races,90 §1,Allowed Player Races,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-auto-potions,90 §1,Auto Potions,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-banking,90 §1,Banking,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-boss-announcements,90 §1,Boss Announcements,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-cancel-return,90 §1,Cancel Return,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-captcha,90 §1,Captcha,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-champion-monsters,90 §1,Champion Monsters,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-chat-moderation,90 §1,Chat Moderation,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-per-class-balance,90 §1,Per-Class Balance,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-custom-community-board,90 §1,Custom Community Board,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-custom-mail-manager,90 §1,Custom Mail Manager,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-delevel-manager,90 §1,Delevel Manager,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-dualbox-control,90 §1,Dualbox Control,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-faction-system,90 §1,Faction System,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-fake-players,90 §1,Fake Players,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-find-pvp,90 §1,Find PvP,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-free-mounts,90 §1,Free Mounts,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-merchant-zero-sell-price,90 §1,Merchant Zero Sell Price,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-multilingual,90 §1,Multilingual,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-nobless-master,90 §1,Nobless Master,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-npc-stat-multipliers,90 §1,NPC Stat Multipliers,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-offline-auto-play,90 §1,Offline Auto Play,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-offline-trade-craft,90 §1,Offline Trade/Craft,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-online-info,90 §1,Online Info,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-password-change,90 §1,Password Change,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-premium,90 §1,Premium,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-private-store-distance,90 §1,Private Store Distance,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-pvp-pk-announcements,90 §1,PvP/PK Announcements,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-pvp-pk-rewards,90 §1,PvP/PK Rewards,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-pvp-titles-colors,90 §1,PvP Titles/Colors,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-randomized-spawns,90 §1,Randomized Spawns,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-scheme-buffer,90 §1,Scheme Buffer,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-welcome-message,90 §1,Welcome Message,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-sell-buffs,90 §1,Sell Buffs,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-server-time,90 §1,Server Time,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-starting-location,90 §1,Starting Location,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-starting-title,90 §1,Starting Title,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-transmog,90 §1,Transmog,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-walker-bot-protection,90 §1,Walker/Bot Protection,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-wedding,90 §1,Wedding,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-pc-cafe-pc-bang,90 §1,PC Cafe / PC Bang,"H5 has `PcCafePointsManager`, configured in `PremiumSystem.ini`; OFF — 03 §8 (PremiumSystem row)",,,,,,,,blueprint
+TR-vip-tier-system,90 §1,VIP Tier System,not present in H5 (Kamael-only configs),,,,,,,,blueprint
+TR-sayune-for-everyone,90 §1,Sayune for Everyone,not present in H5 (Kamael-only configs),,,,,,,,blueprint
+TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (Kamael-only configs),,,,,,,,blueprint
+TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",,,,,,,,blueprint
+TR-aden-remembers,90 §2,Aden Remembers,12; 04 §1 (Fact Journal),,,,,,,,blueprint
+TR-living-world-director,90 §2,Living World Director,12; 04 §1 (Fact Journal),,,,,,,,blueprint
+TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),,,,,,,,blueprint
+TR-regional-state-engine,90 §2,regional state engine,"12 §1, §6",,,,,,,,blueprint
+TR-political-economic-graph,90 §2,political/economic graph,"12 §1, §6",,,,,,,,blueprint
+TR-resource-pressure,90 §2,resource pressure,"12 §4, §5.1",,,,,,,,blueprint
+TR-dynamic-regional-opportunity,90 §2,dynamic regional opportunity,"12 §4, §5.1",,,,,,,,blueprint
+TR-economic-warfare,90 §2,economic warfare,12 §5.3,,,,,,,,blueprint
+TR-npc-societal-reaction,90 §2,NPC societal reaction,"12 §4, §5",,,,,,,,blueprint
+TR-boss-ecology-context,90 §2,boss ecology/context (incl. Sea of Spores / Orfen),12 §5.5,,,,,,,,blueprint
+TR-anti-zerg-complexity-cost,90 §2,anti-zerg complexity cost,"12 §6.1, §6.3",,,,,,,,blueprint
+TR-dominance-benefits-and-obligations,90 §2,dominance benefits and obligations (App. E.1–E.2),"12 §6.1, §6.3",,,,,,,,blueprint
+TR-newcomer-catch-in,90 §2,newcomer catch-in,12 §5.2; 10 §8,,,,,,,,blueprint
+TR-imperfect-information,90 §2,imperfect information,12 §7; 01 §2.5,,,,,,,,blueprint
+TR-npc-rumors,90 §2,NPC rumors,12 §7; 01 §2.5,,,,,,,,blueprint
+TR-public-living-chronicle,90 §2,public Living Chronicle,17; 12 §9,,,,,,,,blueprint
+TR-persistent-historical-graph,90 §2,persistent historical graph,17; 12 §9,,,,,,,,blueprint
+TR-item-crafter-provenance,90 §2,"item/crafter provenance (item biography, App. E.5)",17 §4,asset-service.md,ASSET-R07,lc_item_lifecycle,,,AT-ASSET-07,,specified
+TR-historical-monument,90 §2,historical monument,17 §2,,,,,,,,blueprint
+TR-npc-historical-reference,90 §2,NPC historical reference (App. E.5),17 §2,,,,,,,,blueprint
+TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,,,,,,,,blueprint
+TR-deterministic-engine-optional-llm-narration,90 §2,deterministic engine + optional LLM narration,01 §2.6; 17 §6,,,,,,,,blueprint
+TR-npc-reactions-smuggling,90 §2,NPC reactions: smuggling,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-npc-reactions-corruption,90 §2,NPC reactions: corruption,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-npc-reactions-rebellion,90 §2,NPC reactions: rebellion,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-npc-reactions-banditry,90 §2,NPC reactions: banditry,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-npc-reactions-shortages,90 §2,NPC reactions: shortages,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-npc-reactions-migration,90 §2,NPC reactions: migration,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-npc-reactions-opportunity,90 §2,NPC reactions: opportunity (App. E.3),"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
+TR-aden-signal-intent-broadcasting,90 §2,Aden Signal: intent broadcasting,13 §1–§5,,,,,,,,blueprint
+TR-aden-signal-objective-role-time-language-travel,90 §2,Aden Signal: objective/role/time/language/travel/pace matching,13 §1–§5,,,,,,,,blueprint
+TR-aden-signal-latent-party,90 §2,Aden Signal: latent party,13 §1–§5,,,,,,,,blueprint
+TR-aden-signal-future-sessions,90 §2,Aden Signal: future sessions,13 §1–§5,,,,,,,,blueprint
+TR-aden-signal-no-rewards,90 §2,Aden Signal: no rewards,13 §1–§5,,,,,,,,blueprint
+TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class preservation,13 §1–§5,,,,,,,,blueprint
+TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-projects-notes,90 §2,Wayfarer's Memory: projects/notes,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observations,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-personal-history,90 §2,Wayfarer's Memory: personal history,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-no-global-wiki,90 §2,Wayfarer's Memory: no global wiki,14 §1–§9,,,,,,,,blueprint
+TR-pact-voluntary-contracts,90 §2,PACT: voluntary contracts,15 §1–§7,,,,,,,,blueprint
+TR-pact-machine-verifiable-clauses,90 §2,PACT: machine-verifiable clauses,15 §1–§7,,,,,,,,blueprint
+TR-pact-crafting-pact,90 §2,PACT: crafting pact,15 §1–§7,,,,,,,,blueprint
+TR-pact-loot-charter,90 §2,PACT: loot charter,15 §1–§7,,,,,,,,blueprint
+TR-pact-purchase,90 §2,PACT: purchase,15 §1–§7,,,,,,,,blueprint
+TR-pact-craft-order,90 §2,PACT: craft order,15 §1–§7,,,,,,,,blueprint
+TR-pact-delivery,90 §2,PACT: delivery,15 §1–§7,,,,,,,,blueprint
+TR-pact-loans,90 §2,PACT: loans,15 §1–§7,,,,,,,,blueprint
+TR-pact-mercenary,90 §2,PACT: mercenary,15 §1–§7,,,,,,,,blueprint
+TR-pact-public-sealed,90 §2,PACT: public/sealed,15 §1–§7,,,,,,,,blueprint
+TR-pact-objective-history,90 §2,PACT: objective history,15 §1–§7,,,,,,,,blueprint
+TR-pact-default-freedom,90 §2,PACT: default freedom,15 §1–§7,,,,,,,,blueprint
+TR-notarius-town-royal-castle,90 §2,Notarius: Town / Royal / Castle,"15 §3, §4, §8",,,,,,,,blueprint
+TR-notarius-parchment-item,90 §2,Notarius: parchment item,"15 §3, §4, §8",,,,,,,,blueprint
+TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote drafting + physical high-value signing,"15 §3, §4, §8",,,,,,,,blueprint
+TR-notarius-public-registration,90 §2,Notarius: public registration,"15 §3, §4, §8",,,,,,,,blueprint
+TR-notarius-escrow,90 §2,Notarius: escrow,"15 §3, §4, §8",asset-service.md,ASSET-R01;ASSET-R02;ASSET-R03;ASSET-R04;ASSET-R07;ASSET-R08;ASSET-R09;ASSET-R10;ASSET-R11;ASSET-R20;ASSET-R22;ASSET-R16;ASSET-R27,"lc_custody;lc_asset_op;lc_ledger_posting;lc_settlement_key;lc_mail_delivery;items(ESCROW,MAIL)",service mail claim (asset-service.md §9),ItemLocation.ESCROW;retired items;MailManager adoption,AT-ASSET-00;AT-ASSET-01;AT-ASSET-02;AT-ASSET-03;AT-ASSET-04;AT-ASSET-07;AT-ASSET-08;AT-ASSET-09;AT-ASSET-10;AT-ASSET-11;AT-ASSET-22;AT-ASSET-16;AT-ASSET-29,,specified
+TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",,,,,,,,blueprint
+TR-black-ledger-writ,90 §2,Black Ledger: Writ,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard Captain,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-broker-shadow-broker,90 §2,Black Ledger: Broker/Shadow Broker,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-dossiers,90 §2,Black Ledger: dossiers,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-clan-hall-constraints,90 §2,Black Ledger: clan-hall constraints,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-tavern-rumors,90 §2,Black Ledger: tavern rumors,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-no-offline-gps,90 §2,Black Ledger: no offline GPS,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-informants,90 §2,Black Ledger: informants,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-counter-intelligence,90 §2,Black Ledger: counter-intelligence,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-you-feel-watched,90 §2,"Black Ledger: ""you feel watched""",16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-trail-manipulation,90 §2,Black Ledger: trail manipulation,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-hunter-ranks,90 §2,Black Ledger: hunter ranks,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-information-only-progression,90 §2,Black Ledger: information-only progression,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-conditional-contracts,90 §2,Black Ledger: conditional contracts,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-public-execution,90 §2,Black Ledger: public execution,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-target-victory,90 §2,Black Ledger: target victory,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-torn-black-seal,90 §2,Black Ledger: Torn Black Seal,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-reverse-hunt,90 §2,Black Ledger: reverse hunt,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-calling-cards,90 §2,Black Ledger: calling cards,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-nom-de-guerre,90 §2,Black Ledger: nom de guerre,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-alias-intel-market,90 §2,Black Ledger: alias intel market,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-public-bounties,90 §2,Black Ledger: public bounties,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-zero-minting,90 §2,Black Ledger: zero minting,16 §1–§14,asset-service.md,ASSET-R14,lc_ledger_posting,,,AT-ASSET-14,,specified
+TR-black-ledger-sinks,90 §2,Black Ledger: sinks,16 §1–§14,asset-service.md,ASSET-R14,lc_ledger_posting(SINK codes),,,AT-ASSET-14;AT-ASSET-01,,specified
+TR-black-ledger-anti-farm,90 §2,Black Ledger: anti-farm,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-anti-harassment,90 §2,Black Ledger: anti-harassment,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-legendary-hunts,90 §2,Black Ledger: legendary hunts,16 §1–§14,,,,,,,,blueprint
+TR-murder-market-price,90 §2,murder market price,16 §6,,,,,,,,blueprint
+TR-hunter-mythology,90 §2,hunter mythology,16 §6,,,,,,,,blueprint
+TR-profession-definition,90 §2,profession definition (App. F),16 §6,,,,,,,,blueprint
+TR-retail-truth-statuses,90 §2,Retail Truth: statuses,11,,,,,,,,blueprint
+TR-retail-truth-evidence-cases,90 §2,Retail Truth: evidence cases,11,,,,,,,,blueprint
+TR-retail-truth-clean-profile,90 §2,Retail Truth: clean profile,11,,,,,,,,blueprint
+TR-retail-truth-regression-gates,90 §2,Retail Truth: regression gates,11,,,,,,,,blueprint
+TR-retail-truth-automated-tests,90 §2,Retail Truth: automated tests,11,,,,,,,,blueprint
+TR-retail-truth-ai-combat-economy-world-validation,90 §2,Retail Truth: AI/combat/economy/world validation,11,,,,,,,,blueprint
+TR-kamael-scope-clarification,90 §3,Kamael scope clarification,replaced by H5 baseline: 03 §1,,,,,,,,blueprint
+TR-java-25,90 §3,Java 25,Java 27 (upstream requirement): 03 §1–§2,,,,,,,,blueprint
+TR-ant,90 §3,Ant,"03 §2, §9",,,,,,,,blueprint
+TR-mariadb,90 §3,MariaDB,"03 §2, §9",,,,,,,,blueprint
+TR-loginserver-gameserver,90 §3,LoginServer/GameServer,"03 §2, §9",,,,,,,,blueprint
+TR-geodata,90 §3,geodata,03 §7,,,,,,,,blueprint
+TR-dev-ram-cpu-storage,90 §3,dev RAM/CPU/storage,replaced by measured capacity on build-host: 03 §9–§10,,,,,,,,blueprint
+TR-no-gpu-requirement,90 §3,no GPU requirement,authoritative systems need none; the narrator uses the RTX 5090 (17 §6),,,,,,,,blueprint
+TR-client-on-workstation,90 §3,client on workstation,03 §6 (client package),,,,,,,,blueprint
+TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,,,,,,,,blueprint
+TR-fake-player-classification,90 §3,fake-player classification,10; 04 §2,,,,,,,,blueprint
+TR-missing-quests,90 §3,missing quests,"H5 content inventory: 03 §5, 11 §1.5",,,,,,,,blueprint
+TR-npc-ai-fidelity,90 §3,NPC AI fidelity,11 §1.4,,,,,,,,blueprint
+TR-formula-trigger-edge-cases,90 §3,formula/trigger edge cases,11 §1.4,,,,,,,,blueprint
+TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,,,,,,,,blueprint
+TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, §6; 10 §5.2",,,,,,,,blueprint
+TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
+TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,,,,,,,,blueprint
+TR-observability,90 §3,observability,02 §11; 04 §6,,,,,,,,blueprint
+TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
+TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,specified
+TR-persistence,90 §3,persistence,04 §9,asset-service.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28,,specified
+TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00,AssetSchemaTest,specified
+TR-safe-failure-modes,90 §3,safe failure modes,04 §8,asset-service.md,ASSET-R15;ASSET-R17;ASSET-R22,lc_module_state,,,AT-ASSET-15;AT-ASSET-21;AT-ASSET-22,,specified
+TR-performance-aggregation,90 §3,performance aggregation,02 §6; 04 §1,asset-service.md,ASSET-R12;ASSET-R21,lc_economy_bucket;lc_economy_census;lc_economy_counter,,,AT-ASSET-12;AT-ASSET-30,economy telemetry only; the Fact Journal spec owns the rest,specified
+TR-citizens-of-aden-and-the-genesis-epoch,90 §4,Citizens of Aden and the Genesis Epoch,10,,,,,,,,blueprint
+TR-relationship-ledger,90 §4,relationship ledger,10 §7,,,,,,,,blueprint
+TR-crown-law,90 §4,Crown Law,12 §6.2,asset-service.md,ASSET-R05;ASSET-R13,lc_custody(POOL);castle.treasury,,,AT-ASSET-05;AT-ASSET-13,treasury commitments only; laws themselves are Aden Remembers,specified
+TR-caravans,90 §4,caravans,12 §8,asset-service.md,ASSET-R14;ASSET-R25,"lc_custody(MANIFEST);lc_ledger_posting(TOWN_SUPPLY,RAID_SHARE,ROAD_LOSS)",,,AT-ASSET-14;AT-ASSET-27,manifest custody only; routes and escorts are Aden Remembers and PACT,specified
+TR-caravan-escort-and-treaty-contracts,90 §4,Caravan Escort and Treaty contracts,15 §2,,,,,,,,blueprint
+TR-cursed-weapon-writs,90 §4,cursed-weapon writs,16 §2,,,,,,,,blueprint
+TR-citizen-bounties,90 §4,citizen bounties,16 §2,,,,,,,,blueprint
+TR-wanted-boards,90 §4,wanted boards,16 §2,,,,,,,,blueprint
+TR-aden-gazette,90 §4,Aden Gazette,17 §2–§3,,,,,,,,blueprint
+TR-bards,90 §4,bards,17 §2–§3,,,,,,,,blueprint
+TR-town-criers,90 §4,town criers,17 §2–§3,,,,,,,,blueprint
+TR-saga-replays,90 §4,saga replays,17 §5,,,,,,,,blueprint
+TR-public-truth-report,90 §4,public Truth Report,11 §5,,,,,,,,blueprint
+TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
+TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,,,,,,,,blueprint
+TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint
+TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,,,,,,,,blueprint
+TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,,,,,,,,blueprint
+TR-remembers-pact-public-contracts-treaties-mercena,20 §1,"Remembers ↔ PACT: public contracts, treaties, mercenary deals become high-confidence history (no AI inferring politics from chat)",20 §1,,,,,,,,blueprint
+TR-remembers-ledger-big-campaigns-and-notorious-bou,20 §1,Remembers ↔ Ledger: big campaigns and notorious bounties become history; regional politics shift witness behaviour; never reveal targets,20 §1,,,,,,,,blueprint
+TR-remembers-crown-law-ledger-bounty-endowments-fun,20 §1,Remembers ↔ Crown Law ↔ Ledger: Bounty Endowments fund Writs; Amnesty stops new Writs; Caravan Protection funds escorts,20 §1,,,,,,,,blueprint
+TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,,,,,,,,blueprint
+TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,,,,,,,,blueprint
+TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md,ASSET-R01;ASSET-R03;ASSET-R14,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14,,specified
+TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,,,,,,,,blueprint
+TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,,,,,,,,blueprint
+TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,,,,,,,,blueprint

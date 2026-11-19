@@ -75,6 +75,14 @@ public final class TestDatabase
 	}
 
 	/**
+	 * Connects as another user of the test database, to test what a restricted role can read.
+	 */
+	public Connection connectAs(String user, String password) throws SQLException
+	{
+		return DriverManager.getConnection("jdbc:mysql://" + _host + ":" + _port + "/" + SCHEMA + "?useSSL=false&allowPublicKeyRetrieval=true", user, password);
+	}
+
+	/**
 	 * Starts the database and installs the schema. Returns only when every upstream SQL file has been applied.
 	 */
 	public static TestDatabase start() throws IOException, SQLException

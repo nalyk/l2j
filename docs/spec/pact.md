@@ -1,6 +1,6 @@
 # SPEC-PACT — PACT and the Notarius
 
-- Status: reviewed (revision 5; signed off with one fix by Codex, a different model family, in round 4; record in §12)
+- Status: draft (revision 6: §4.10's completion type split for chronicle.md, under review with it; revision 5 was signed off; record in §12)
 - Blueprint: 15 (PACT and the Notarius); 03 §4.2-§4.4 (loot routing, crafting boundary, new events); 04 §3 (Asset
   Service), §5 (Codex), §7 (keyed randomness); 12 §6.2 (Crown Law Market Charters), §8 (Caravan Escort); 17
   (publication); consensus §4.
@@ -320,13 +320,14 @@ judges, buffers, teleporters or shops, and refuse Black Contracts.
 ### 4.10 Visibility and publication
 
 `PRIVATE` (only parties see it; never registered), `PARTIES` (parties public, terms sealed), `PUBLIC` (terms public);
-`publishable` lets history show it after completion. Both are part of the terms, frozen at signing. PACT registers two
+`publishable` lets history show it after completion. Both are part of the terms, frozen at signing. PACT registers three
 publication types (intel-service.md §4.7):
 
 | Type | Fields (rule) | When |
 |---|---|---|
 | `pact_registered` | contract type (`TEXT_FROM_FACT`), public names of parties (`PUBLIC_ENTITY`), day (`DAY`) | a `PARTIES` or `PUBLIC` contract signed |
-| `pact_completed` | contract type, public names of parties, outcome, day; for a `PUBLIC` and `publishable` contract also the clause kinds and the item and Adena totals (`COUNT`) | a terminal state of a `PARTIES` or `PUBLIC` contract; never for `PRIVATE` |
+| `pact_completed` | contract type, public names of parties, outcome, day | a terminal state of a `PARTIES` or `PUBLIC` contract; never for `PRIVATE` |
+| `pact_completed_terms` | as `pact_completed`, plus the clause kinds (`TEXT_FROM_FACT`) and the item and Adena totals (`COUNT`) | a terminal state of a `PUBLIC` and `publishable` contract, instead of `pact_completed` |
 
 No field holds free text; clauses are typed, so there is no text in which a sealed term could hide. The rows are written
 by PACT's projector from the contract's frozen visibility.
@@ -433,6 +434,10 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
    uses only service mail, which never expires (asset-service.md §2.1).
 
 ## 12. Review record
+
+- Revision 6 (after the round-4 sign-off): `pact_completed` split into `pact_completed` and `pact_completed_terms`, so
+  the publication registry itself refuses clause kinds and totals on any row but a `PUBLIC` and `publishable`
+  contract's (found by Chronicle's first review); under review with chronicle.md.
 
 - Round 4 (Codex), **SIGN-OFF WITH FIXES**: one fix, made in revision 5: the damage seam also covers damage transferred
   to a caster's CP (`PlayerStatus.java:198-208`, `SummonStatus.java:76-115`), which bypasses the CP and HP points, with a

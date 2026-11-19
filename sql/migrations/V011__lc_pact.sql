@@ -238,7 +238,8 @@ CREATE TRIGGER lc_pact_contract_transition BEFORE UPDATE ON lc_pact_contract FOR
 
 CREATE TRIGGER lc_pact_contract_kept BEFORE DELETE ON lc_pact_contract FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pact_contract: contracts are never deleted';
 
--- PACT's publication types (spec §4.10; intel-service.md §4.7).
-INSERT INTO lc_pub_type (pub_type, min_delay_minutes, location_related) VALUES ('pact_registered', 0, FALSE), ('pact_completed', 0, FALSE);
+-- PACT's publication types (spec §4.10; intel-service.md §4.7): terms appear only in pact_completed_terms, written for
+-- PUBLIC and publishable contracts alone, so the registry itself refuses them on any other row.
+INSERT INTO lc_pub_type (pub_type, min_delay_minutes, location_related) VALUES ('pact_registered', 0, FALSE), ('pact_completed', 0, FALSE), ('pact_completed_terms', 0, FALSE);
 
-INSERT INTO lc_pub_field_rule (pub_type, field, rule) VALUES ('pact_registered', 'contract_type', 'TEXT_FROM_FACT'), ('pact_registered', 'parties', 'PUBLIC_ENTITY'), ('pact_registered', 'day', 'DAY'), ('pact_completed', 'contract_type', 'TEXT_FROM_FACT'), ('pact_completed', 'parties', 'PUBLIC_ENTITY'), ('pact_completed', 'outcome', 'TEXT_FROM_FACT'), ('pact_completed', 'day', 'DAY'), ('pact_completed', 'clause_kinds', 'TEXT_FROM_FACT'), ('pact_completed', 'totals', 'COUNT');
+INSERT INTO lc_pub_field_rule (pub_type, field, rule) VALUES ('pact_registered', 'contract_type', 'TEXT_FROM_FACT'), ('pact_registered', 'parties', 'PUBLIC_ENTITY'), ('pact_registered', 'day', 'DAY'), ('pact_completed', 'contract_type', 'TEXT_FROM_FACT'), ('pact_completed', 'parties', 'PUBLIC_ENTITY'), ('pact_completed', 'outcome', 'TEXT_FROM_FACT'), ('pact_completed', 'day', 'DAY'), ('pact_completed_terms', 'contract_type', 'TEXT_FROM_FACT'), ('pact_completed_terms', 'parties', 'PUBLIC_ENTITY'), ('pact_completed_terms', 'outcome', 'TEXT_FROM_FACT'), ('pact_completed_terms', 'day', 'DAY'), ('pact_completed_terms', 'clause_kinds', 'TEXT_FROM_FACT'), ('pact_completed_terms', 'totals', 'COUNT');

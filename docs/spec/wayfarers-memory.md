@@ -1,6 +1,6 @@
 # SPEC-MEM — Wayfarer's Memory
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
 - Blueprint: 14 (Wayfarer's Memory); 01 §2.5 (shared content is just content); 02 §1, §4, §6 (capture ≤ 2 µs p99); 03 §4.4
   (party seams); 04 §4 (Intel Service: registered copies), §5 (Codex: the login recap); 12 (Aden Remembers moves the
   world); 13 (Signal reads "played together before"); 15 (PACT contracts in projects); 16 §8 / 14 §8 (the Ledger boundary);
@@ -52,7 +52,10 @@ lc_mem_companion(char_id, other_char, party_key VARCHAR(48), overlap_minutes INT
   the character's own rows (a project's missing items); `HISTORICAL` kept only as history.
 - **Coalescing**: a row's key is (char, relation, subject, object, region, provenance, teller, origin, `value_key`); the
   origin is part of it, so two forwarded reports first observed by different characters stay two rows. `value_key` is the
-  part of the value that identifies a distinct observation: price and enchant for `SOLD_BY`, `BUYS`, `BOUGHT_FROM`; the
+  part of the value that identifies a distinct observation: price and enchant for `SOLD_BY` and `BOUGHT_FROM`; the price
+  alone for `BUYS`, because the enchant level a buy-store view shows is the **viewer's** own item's, substituted by
+  `adjustAvailableItem` (`entity/itemcontainer/PlayerInventory.java:343-376`, via `network/holders/TradeList.java:122-130`),
+  not the store's, so it is recorded in the value for the viewer's information but is no part of the offer; the
   merchant's buy-list id and the price for `PRICED_AT_NPC` (a merchant has several lists, `network/serverpackets/
   BuyList.java:34-42`, e.g. `dist/game/data/html/merchant/30001-1.htm:3-4` opens lists 3000100 and 3000101); the recipe
   id and the fee for `CRAFTS` (`network/serverpackets/RecipeShopSellList.java:57-59`);
@@ -338,7 +341,7 @@ the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 | AT-MEM-00 | integration | the migration applies; keys and checks refuse an import without teller or origin, an import as `KNOWN`, intel content on a row, intel on a durable or summary row, a second row for an intel item, a second row for one coalescing key, a durable row with an expiry, a shared fact without origin, a changed shared fact, a note over its bound; expiring tables registered |
 | AT-MEM-01 | integration | each seam: the captured values equal the bytes submitted to the client's connection (store lists, buy list) or the change made (trade, loot, quest); a store list whose write is refused (channel closed) leaves no observation; a party pickup distributed to another member records the acquisition for the recipient only, with the monster only if the recipient saw the drop (picker and recipient with differing drop visibility); a store changed between the interaction and the write captures what was written; a ground pickup with its monster from the drop map, party Adena without one, herbs not obtained; a quest advanced by a kill records no NPC; an abort is `QUEST_ABANDONED`, a repeatable script cancellation `QUEST_ENDED`, a non-repeatable completion `QUEST_DONE`; a failed trade records nothing; a boss sent to the player recorded, one hidden from them not; a packet whose serialisation throws leaves no observation; ground loot picked up by a character who saw the drop knows its monster, one who arrived later does not |
 | AT-MEM-02 | integration | the same item known, told by two tellers and rumored: four rows, three groups; a page forwarded twice keeps the original origin; one page carrying the same report first observed by two characters imports as two rows |
-| AT-MEM-03 | integration | a complete view without an earlier offer makes it `CONTRADICTED`; two swords of one enchant at two prices and two enchant levels in one store stay `CURRENT` together through any number of views; a truncated view contradicts nothing; an emptied store contradicts all its offers; a two-offer view whose record is refused by a full ring, or dropped from the backlog, contradicts nothing and leaves both offers as they were; switching between a merchant's two lists (3000100, 3000101) contradicts neither; a manufacture list with a changed fee contradicts the old fee and a return to it makes it `CURRENT` again; an offer seen again is `CURRENT` again; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
+| AT-MEM-03 | integration | a complete view without an earlier offer makes it `CONTRADICTED`; two swords of one enchant at two prices and two enchant levels in one store stay `CURRENT` together through any number of views; a truncated view contradicts nothing; an emptied store contradicts all its offers; a two-offer view whose record is refused by a full ring, or dropped from the backlog, contradicts nothing and leaves both offers as they were; switching between a merchant's two lists (3000100, 3000101) contradicts neither; two intact views of an unchanged buy store between which only the viewer's own sword went from +3 to +4 contradict nothing; a manufacture list with a changed fee contradicts the old fee and a return to it makes it `CURRENT` again; an offer seen again is `CURRENT` again; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
 | AT-MEM-04 | unit, integration | the query set is exactly §4.1's; two characters with disjoint rows see only their own through every query; a forged page id or query id refused; nothing sorts across characters |
 | AT-MEM-05 | integration | 400 kills one row; raw rows summarised and deleted after retention, the summary still naming each source monster and seller and keeping each price and enchant apart, pinned ones kept; companion rows expired and capped; each bound refused at its limit; a deleted character leaves no `lc_mem_*` row |
 | AT-MEM-06 | integration, restart | a lead and an Intel rumor read through the Intel Service; after expiry both rows gone and the lead history alone shown; no summary, session, milestone or page holds their content; a rebuild and a replay after expiry show nothing more |
@@ -372,6 +375,8 @@ the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 
 ## 12. Review record
 
+- Round 5 (Codex), NO SIGN-OFF: one finding, a buy store's offer keyed by an enchant level the packet takes from the
+  viewer's inventory. Revision 6: `BUYS` is keyed by price alone; the test changes only the viewer's item.
 - Round 4 (Codex), NO SIGN-OFF: open were absences decided from a view partly lost in the ring or backlog, merchants'
   several buy lists, and manufacture fees without a value key. Revision 5: a list view is one capture unit, accepted,
   applied and dropped whole, and only an intact view decides absences (an empty one included); the buy-list id and the

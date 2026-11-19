@@ -1,5 +1,6 @@
--- SPEC-AR (docs/spec/aden-remembers.md §2): regions, derived state, resource families, actuators, situations, Crown Law,
--- the Merchant Guild and its caravans, influence, rumors and history.
+-- SPEC-AR (docs/spec/aden-remembers.md §2): regions and towns, derived state, resource families, actuator decisions and
+-- applied history, situations, Crown Law, influence spends and the PK record, the Merchant Guild and its caravans,
+-- rumors and history.
 --
 -- One statement per ';' at the end of a line; the test that applies migrations relies on it.
 
@@ -19,6 +20,15 @@ CREATE TABLE lc_region_atom (
 	territory_id SMALLINT NOT NULL,
 	PRIMARY KEY (atom),
 	CONSTRAINT fk_atom_territory FOREIGN KEY (territory_id) REFERENCES lc_region (region_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE lc_world_town (
+	town_id INT NOT NULL,
+	territory_id SMALLINT NOT NULL,
+	neighbour_ids JSON NOT NULL,
+	PRIMARY KEY (town_id),
+	CONSTRAINT chk_world_town_neighbours CHECK (JSON_VALID(neighbour_ids) AND JSON_TYPE(neighbour_ids) = 'ARRAY'),
+	CONSTRAINT fk_world_town_territory FOREIGN KEY (territory_id) REFERENCES lc_region (region_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_subregion_spawn (
@@ -42,11 +52,11 @@ CREATE TABLE lc_resource_family (
 	family_id SMALLINT NOT NULL,
 	name_key VARCHAR(64) NOT NULL,
 	catch_in BOOLEAN NOT NULL DEFAULT FALSE,
-	max_variation_permille SMALLINT NOT NULL,
+	max_relocate_permille SMALLINT NOT NULL,
 	max_rate_permille_day SMALLINT NOT NULL,
 	recovery_days SMALLINT NOT NULL,
 	PRIMARY KEY (family_id),
-	CONSTRAINT chk_family_bounds CHECK (max_variation_permille BETWEEN 0 AND 100 AND max_rate_permille_day BETWEEN 1 AND 50 AND recovery_days BETWEEN 1 AND 60)
+	CONSTRAINT chk_family_bounds CHECK (max_relocate_permille BETWEEN 0 AND 100 AND max_rate_permille_day BETWEEN 1 AND 50 AND recovery_days BETWEEN 1 AND 60)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_resource_item (
@@ -58,7 +68,7 @@ CREATE TABLE lc_resource_item (
 
 CREATE TABLE lc_resource_protected (
 	item_id INT NOT NULL,
-	reason ENUM('ADENA', 'SEAL_STONE', 'HERB', 'QUEST', 'EVENT', 'BOSS_DROP', 'HIGH_CHANCE') NOT NULL,
+	reason ENUM('ADENA', 'SEAL_STONE', 'HERB', 'QUEST', 'EVENT', 'BOSS_DROP') NOT NULL,
 	PRIMARY KEY (item_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
@@ -68,10 +78,22 @@ CREATE TRIGGER lc_resource_item_unprotected_update BEFORE UPDATE ON lc_resource_
 
 CREATE TRIGGER lc_resource_protected_exclusive BEFORE INSERT ON lc_resource_protected FOR EACH ROW IF EXISTS (SELECT 1 FROM lc_resource_item WHERE item_id = NEW.item_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_resource_protected: the item is in a family'; END IF;
 
--- Append-only history of actuator values; the newest row of (kind, region, target) is in force (spec §2.2).
+CREATE TRIGGER lc_resource_protected_exclusive_update BEFORE UPDATE ON lc_resource_protected FOR EACH ROW IF EXISTS (SELECT 1 FROM lc_resource_item WHERE item_id = NEW.item_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_resource_protected: the item is in a family'; END IF;
+
+-- Decisions (derived, rebuilt by replay) and the applied, append-only history (spec §2.2). RELOCATE is a share with
+-- neutral 0; the other kinds are factors with neutral 1000.
+CREATE TABLE lc_actuator_target (
+	kind ENUM('RELOCATE', 'STOCK', 'GUILD_BUY', 'GUILD_SELL') NOT NULL,
+	region_id SMALLINT NOT NULL,
+	target INT NOT NULL,
+	value_permille SMALLINT NOT NULL,
+	decided_fact_id BIGINT NOT NULL,
+	PRIMARY KEY (kind, region_id, target)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
 CREATE TABLE lc_actuator (
 	application_id BINARY(16) NOT NULL,
-	kind ENUM('YIELD', 'TEMPO', 'STOCK', 'GUILD_BUY', 'GUILD_SELL') NOT NULL,
+	kind ENUM('RELOCATE', 'STOCK', 'GUILD_BUY', 'GUILD_SELL') NOT NULL,
 	region_id SMALLINT NOT NULL,
 	target INT NOT NULL,
 	value_permille SMALLINT NOT NULL,
@@ -81,11 +103,10 @@ CREATE TABLE lc_actuator (
 	situation_id BIGINT NULL,
 	fact_id BIGINT NOT NULL,
 	applied_at TIMESTAMP(3) NOT NULL,
-	valid_until TIMESTAMP(3) NULL,
 	PRIMARY KEY (application_id),
 	KEY idx_actuator_current (kind, region_id, target, applied_at),
-	CONSTRAINT chk_actuator_bounds CHECK (min_permille <= 1000 AND max_permille >= 1000 AND value_permille BETWEEN min_permille AND max_permille),
-	CONSTRAINT chk_actuator_kind_bounds CHECK (CASE kind WHEN 'YIELD' THEN min_permille >= 900 AND max_permille <= 1100 WHEN 'TEMPO' THEN min_permille >= 800 AND max_permille <= 1250 WHEN 'STOCK' THEN min_permille >= 700 AND max_permille <= 1500 WHEN 'GUILD_BUY' THEN min_permille >= 1000 AND max_permille <= 2000 ELSE min_permille >= 500 AND max_permille <= 1500 END)
+	CONSTRAINT chk_actuator_bounds CHECK (value_permille BETWEEN min_permille AND max_permille),
+	CONSTRAINT chk_actuator_kind_bounds CHECK (CASE kind WHEN 'RELOCATE' THEN min_permille = 0 AND max_permille <= 100 WHEN 'STOCK' THEN min_permille >= 700 AND max_permille <= 1500 AND min_permille <= 1000 AND max_permille >= 1000 WHEN 'GUILD_BUY' THEN min_permille >= 1000 AND max_permille <= 2000 ELSE min_permille >= 500 AND max_permille <= 1500 AND min_permille <= 1000 AND max_permille >= 1000 END)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TRIGGER lc_actuator_frozen BEFORE UPDATE ON lc_actuator FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_actuator: history is never changed';
@@ -93,7 +114,7 @@ CREATE TRIGGER lc_actuator_frozen BEFORE UPDATE ON lc_actuator FOR EACH ROW SIGN
 CREATE TRIGGER lc_actuator_kept BEFORE DELETE ON lc_actuator FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_actuator: history is never deleted';
 
 CREATE TABLE lc_actuator_switch (
-	kind ENUM('YIELD', 'TEMPO', 'STOCK', 'GUILD_BUY', 'GUILD_SELL', 'CARAVAN', 'RUMOR') NOT NULL,
+	kind ENUM('RELOCATE', 'STOCK', 'GUILD', 'CARAVAN', 'RUMOR') NOT NULL,
 	enabled BOOLEAN NOT NULL,
 	changed_by VARCHAR(64) NOT NULL,
 	changed_at TIMESTAMP(3) NOT NULL,
@@ -118,7 +139,7 @@ CREATE TABLE lc_situation (
 	CONSTRAINT chk_situation_json CHECK (JSON_VALID(cause) AND JSON_VALID(params))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-CREATE TRIGGER lc_situation_reopen BEFORE UPDATE ON lc_situation FOR EACH ROW IF OLD.state = 'CLOSED' OR NEW.kind <> OLD.kind OR NEW.region_id <> OLD.region_id OR NOT ((OLD.state, NEW.state) IN (('EMERGING', 'EMERGING'), ('EMERGING', 'ACTIVE'), ('EMERGING', 'CLOSED'), ('ACTIVE', 'ACTIVE'), ('ACTIVE', 'RECEDING'), ('ACTIVE', 'CLOSED'), ('RECEDING', 'RECEDING'), ('RECEDING', 'ACTIVE'), ('RECEDING', 'CLOSED'))) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_situation: not a transition of the situation machine'; END IF;
+CREATE TRIGGER lc_situation_born BEFORE INSERT ON lc_situation FOR EACH ROW IF NEW.state <> 'EMERGING' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_situation: a situation starts emerging'; END IF;
 
 CREATE TABLE lc_situation_transition (
 	situation_id BIGINT NOT NULL,
@@ -134,6 +155,10 @@ CREATE TABLE lc_situation_transition (
 	CONSTRAINT fk_transition_situation FOREIGN KEY (situation_id) REFERENCES lc_situation (situation_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+CREATE TRIGGER lc_situation_transition_machine BEFORE INSERT ON lc_situation_transition FOR EACH ROW IF NOT ((NEW.seq = 1 AND NEW.from_state IS NULL AND NEW.to_state = 'EMERGING') OR (NEW.seq > 1 AND NEW.seq = (SELECT IFNULL(MAX(seq), 0) + 1 FROM lc_situation_transition WHERE situation_id = NEW.situation_id) AND NEW.from_state = (SELECT to_state FROM lc_situation_transition WHERE situation_id = NEW.situation_id AND seq = NEW.seq - 1) AND ((NEW.from_state, NEW.to_state) IN (('EMERGING', 'ACTIVE'), ('EMERGING', 'CLOSED'), ('ACTIVE', 'RECEDING'), ('RECEDING', 'ACTIVE'), ('RECEDING', 'CLOSED')) OR (NEW.from_state = 'ACTIVE' AND NEW.to_state = 'CLOSED' AND NEW.reason_code IN ('FROZEN', 'DISABLED'))))) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_situation_transition: not a transition of the situation machine'; END IF;
+
+CREATE TRIGGER lc_situation_moved BEFORE UPDATE ON lc_situation FOR EACH ROW IF OLD.state = 'CLOSED' OR NEW.kind <> OLD.kind OR NEW.region_id <> OLD.region_id OR (NEW.state <> OLD.state AND NOT EXISTS (SELECT 1 FROM lc_situation_transition t WHERE t.situation_id = OLD.situation_id AND t.from_state = OLD.state AND t.to_state = NEW.state AND t.seq = (SELECT MAX(seq) FROM lc_situation_transition WHERE situation_id = OLD.situation_id))) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_situation: a state changes only with its newest transition row'; END IF;
+
 CREATE TRIGGER lc_situation_transition_frozen BEFORE UPDATE ON lc_situation_transition FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_situation_transition: transitions are never changed';
 
 CREATE TRIGGER lc_situation_transition_kept BEFORE DELETE ON lc_situation_transition FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_situation_transition: transitions are never deleted';
@@ -147,17 +172,47 @@ CREATE TABLE lc_law (
 	reign_key VARCHAR(48) NOT NULL,
 	enacted_by INT NOT NULL,
 	enacted_at TIMESTAMP(3) NOT NULL,
-	proclaimed_at TIMESTAMP(3) NULL,
+	proclaimed_fact_id BIGINT NULL,
 	params JSON NOT NULL,
 	custody_id INT NULL,
 	ended_at TIMESTAMP(3) NULL,
 	end_reason VARCHAR(48) NULL,
 	active_key VARCHAR(40) AS (IF(state = 'ENACTED', CONCAT(castle_id, '/', kind), NULL)) PERSISTENT,
+	amnesty_key VARCHAR(64) AS (IF(kind = 'AMNESTY', reign_key, NULL)) PERSISTENT,
 	PRIMARY KEY (law_id),
 	UNIQUE KEY uk_law_active (active_key),
+	UNIQUE KEY uk_law_amnesty (amnesty_key),
 	KEY idx_law_castle (castle_id, state),
 	CONSTRAINT chk_law_end CHECK ((state = 'ENACTED') = (ended_at IS NULL AND end_reason IS NULL)),
 	CONSTRAINT chk_law_funding CHECK ((kind = 'AMNESTY' OR kind = 'GATEKEEPER_LEVY') = (custody_id IS NULL))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TRIGGER lc_law_kept BEFORE DELETE ON lc_law FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_law: laws are never deleted';
+
+CREATE TABLE lc_influence_spend (
+	spend_id BIGINT NOT NULL AUTO_INCREMENT,
+	territory_id SMALLINT NOT NULL,
+	clan_id INT NOT NULL,
+	reign_key VARCHAR(48) NOT NULL,
+	amount INT NOT NULL,
+	law_id BIGINT NOT NULL,
+	fact_id BIGINT NOT NULL,
+	PRIMARY KEY (spend_id),
+	UNIQUE KEY uk_influence_spend_law (law_id),
+	CONSTRAINT chk_influence_spend CHECK (amount > 0),
+	CONSTRAINT fk_influence_spend_law FOREIGN KEY (law_id) REFERENCES lc_law (law_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TRIGGER lc_influence_spend_frozen BEFORE UPDATE ON lc_influence_spend FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_influence_spend: spends are never changed';
+
+CREATE TRIGGER lc_influence_spend_kept BEFORE DELETE ON lc_influence_spend FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_influence_spend: spends are never deleted';
+
+-- Derived: each character's last innocent kill, for Amnesty (spec §2.4).
+CREATE TABLE lc_world_pk (
+	char_id INT NOT NULL,
+	last_pk_fact_id BIGINT NOT NULL,
+	last_pk_at TIMESTAMP(3) NOT NULL,
+	PRIMARY KEY (char_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TRIGGER lc_law_final BEFORE UPDATE ON lc_law FOR EACH ROW IF OLD.state <> 'ENACTED' OR NEW.castle_id <> OLD.castle_id OR NEW.kind <> OLD.kind OR NEW.reign_key <> OLD.reign_key OR NOT (NEW.custody_id <=> OLD.custody_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_law: an ended law never changes, a law never changes castle, kind, reign or custody'; END IF;
@@ -185,10 +240,6 @@ CREATE TABLE lc_guild_price (
 	CONSTRAINT fk_guild_price_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-CREATE TRIGGER lc_guild_price_no_loop BEFORE INSERT ON lc_guild_price FOR EACH ROW IF NEW.buy_price >= (SELECT IFNULL(MIN(sell_price), NEW.buy_price + 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) OR NEW.sell_price <= (SELECT IFNULL(MAX(buy_price), NEW.sell_price - 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: a buy price must stay below every sell price'; END IF;
-
-CREATE TRIGGER lc_guild_price_no_loop_update BEFORE UPDATE ON lc_guild_price FOR EACH ROW IF NEW.buy_price >= (SELECT IFNULL(MIN(sell_price), NEW.buy_price + 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) OR NEW.sell_price <= (SELECT IFNULL(MAX(buy_price), NEW.sell_price - 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: a buy price must stay below every sell price'; END IF;
-
 CREATE TABLE lc_guild_order (
 	order_id BIGINT NOT NULL AUTO_INCREMENT,
 	town_id INT NOT NULL,
@@ -201,7 +252,28 @@ CREATE TABLE lc_guild_order (
 	PRIMARY KEY (order_id),
 	UNIQUE KEY uk_guild_order_contract (contract_id),
 	CONSTRAINT chk_guild_order CHECK (qty > 0 AND unit_price > 0),
-	CONSTRAINT fk_guild_order_town FOREIGN KEY (town_id) REFERENCES lc_guild_town (town_id)
+	CONSTRAINT fk_guild_order_town FOREIGN KEY (town_id) REFERENCES lc_guild_town (town_id),
+	CONSTRAINT fk_guild_order_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- No loop gains Adena: for an item, every buy price and open order price is below every sell price. Each check first
+-- locks the item's family row, so concurrent writers of one item serialise (spec §2.5).
+CREATE TRIGGER lc_guild_price_no_loop BEFORE INSERT ON lc_guild_price FOR EACH ROW BEGIN DECLARE f SMALLINT; SELECT family_id INTO f FROM lc_resource_item WHERE item_id = NEW.item_id FOR UPDATE; IF NEW.buy_price >= (SELECT IFNULL(MIN(sell_price), NEW.buy_price + 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) OR NEW.sell_price <= (SELECT IFNULL(MAX(buy_price), NEW.sell_price - 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) OR NEW.sell_price <= (SELECT IFNULL(MAX(unit_price), NEW.sell_price - 1) FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED') THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: a buy or order price must stay below every sell price'; END IF; END;
+
+CREATE TRIGGER lc_guild_price_no_loop_update BEFORE UPDATE ON lc_guild_price FOR EACH ROW BEGIN DECLARE f SMALLINT; SELECT family_id INTO f FROM lc_resource_item WHERE item_id = NEW.item_id FOR UPDATE; IF NEW.buy_price >= (SELECT IFNULL(MIN(sell_price), NEW.buy_price + 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) OR NEW.sell_price <= (SELECT IFNULL(MAX(buy_price), NEW.sell_price - 1) FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id) OR NEW.sell_price <= (SELECT IFNULL(MAX(unit_price), NEW.sell_price - 1) FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED') THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: a buy or order price must stay below every sell price'; END IF; END;
+
+CREATE TRIGGER lc_guild_order_no_loop BEFORE INSERT ON lc_guild_order FOR EACH ROW BEGIN DECLARE f SMALLINT; SELECT family_id INTO f FROM lc_resource_item WHERE item_id = NEW.item_id FOR UPDATE; IF NEW.state = 'POSTED' AND NEW.unit_price >= (SELECT IFNULL(MIN(sell_price), NEW.unit_price + 1) FROM lc_guild_price WHERE item_id = NEW.item_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_order: an order price must stay below every sell price'; END IF; END;
+
+CREATE TRIGGER lc_guild_order_state BEFORE UPDATE ON lc_guild_order FOR EACH ROW IF OLD.state <> 'POSTED' OR NEW.unit_price <> OLD.unit_price OR NEW.item_id <> OLD.item_id OR NEW.qty <> OLD.qty OR NEW.contract_id <> OLD.contract_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_order: an order only moves from posted to filled or expired'; END IF;
+
+-- Derived: the projector's view of each warehouse (spec §2.5).
+CREATE TABLE lc_guild_stock (
+	town_id INT NOT NULL,
+	item_id INT NOT NULL,
+	qty BIGINT NOT NULL,
+	fact_id BIGINT NOT NULL,
+	PRIMARY KEY (town_id, item_id),
+	CONSTRAINT chk_guild_stock CHECK (qty >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE lc_caravan_route (
@@ -281,8 +353,10 @@ CREATE TABLE lc_history_event (
 	significance INT NOT NULL,
 	facts JSON NOT NULL,
 	publishable BOOLEAN NOT NULL DEFAULT FALSE,
+	humans INT NOT NULL DEFAULT 0,
+	synthetic INT NOT NULL DEFAULT 0,
 	PRIMARY KEY (event_id),
-	CONSTRAINT chk_history_span CHECK (ended_at IS NULL OR ended_at >= started_at),
+	CONSTRAINT chk_history_span CHECK ((ended_at IS NULL OR ended_at >= started_at) AND humans >= 0 AND synthetic >= 0),
 	CONSTRAINT chk_history_facts CHECK (JSON_VALID(facts))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 

@@ -43,7 +43,7 @@ lc_pact_party(contract_id, party_no TINYINT, role {CLIENT|CONTRACTOR|LENDER|BORR
               PRIMARY KEY(contract_id, party_no))
 lc_pact_clause(contract_id, clause_no SMALLINT, kind {DELIVER_ITEMS|PAY_ADENA|CRAFT_ATTEMPT|DEADLINE|PARTICIPATION|
                REGISTRATION|LOOT_POLICY|COLLATERAL|REPAY|FORFEIT|CANCEL_CONDITION}, params JSON, PRIMARY KEY(contract_id, clause_no))
-lc_pact_custody(contract_id, purpose {FUNDING|COLLATERAL|OUTPUT|CHARTER|FORFEIT|FEE_SUBSIDY}, party_no TINYINT NULL, custody_id INT → lc_custody)
+lc_pact_custody(contract_id, purpose {FUNDING|COLLATERAL|OUTPUT|CHARTER|FORFEIT}, party_no TINYINT NULL, custody_id INT → lc_custody)
 lc_pact_unit(contract_id, clause_no, unit INT, parent_unit INT NULL, state {OPEN|PAID|RETURNED|FORFEITED|NONE|SPLIT}, owed JSON,
              skey VARCHAR(96) NULL
              → lc_settlement_key, op_id BINARY(16) NULL, at TIMESTAMP(3) NULL, PRIMARY KEY(contract_id, clause_no, unit))
@@ -92,13 +92,12 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
   disabled, aden-remembers.md §3.3), + `SealingFeeAdena` if `visibility = PARTIES` (sealed terms).
   It is part of the terms, so every signer saw it. The **fee payer** is the party the terms name (the drafter by
   default); it is charged as a `FEE_NOTARIUS` sink (asset-service.md §2.5) in the operation of the last signature, which
-  fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`). **Market Charter**: the factor is fixed when the
-  terms are proposed, and only if the charter's custody can **reserve** the subsidy (the unreduced fee minus the reduced
-  one) at that moment: the subsidy is moved (Asset `move`) into the contract's `FEE_SUBSIDY` custody in the `propose`
-  operation, otherwise the factor is 1 in those terms. At the last signature the payer pays the reduced fee and the
-  subsidy custody the rest, both into `FEE_NOTARIUS`, so the sink receives the full fee; a later suspension or exhaustion
-  of the charter cannot change signed or proposed terms. A counter-proposal, withdrawal or expiry returns the reserved
-  subsidy to the charter's custody (and a counter-proposal reserves anew for its terms) (aden-remembers.md §4.5).
+  fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`). **Market Charter**: the fee in the terms is
+  always the unreduced one, and the payer pays it whole into `FEE_NOTARIUS` at the last signature, exactly as without a
+  charter, so no charter state can change a quoted fee. After that signature commits, if a Market Charter is enacted in
+  the territory and not suspended, its custody pays the payer a **rebate** of (1 − factor) × fee by service mail (Asset
+  `release`), once, under the settlement key `CHARTER/<law>/<contract>`; if the custody cannot pay, no rebate is paid
+  (the Codex shows the rebate as expected, never as part of the terms) (aden-remembers.md §4.5).
 - A contract with `value_adena` ≥ `RoyalThresholdAdena`, a clan or alliance party, or of type Treaty needs a Royal
   Notarius; Mercenary contracts the Castle Notarius of the castle concerned; Caravan Escorts the Caravan Guild (15 §8);
   Guild Orders the Guild Master (tier `TOWN` of the Guild's town).
@@ -181,11 +180,12 @@ Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (T
 ### 4.1a Institutional parties
 
 An `INSTITUTION` party (the Merchant Guild or the Caravan Guild of a town, aden-remembers.md §4.6) is a party whose
-owner module acts for it. Its **signature** is the owner module's issuing operation (one transaction: the contract
-inserted already `PROPOSED`, the institution's signature on the current terms version recorded, and, when the institution
-is the only funding party, its funding moved from `institution_custody`'s pool by Asset `move` at the `SIGNED` → `FUNDED`
-step of §3.1, so funding still follows every signature: for a Guild Order the institution is the only party until a fill,
-and a fill is the seller's acceptance, not a signature of the terms). An institution never signs through the Codex, never
+owner module acts for it. **Issuing** is one operation that runs §3.1's ordinary transitions in order, in one
+transaction: `draft` (inserted `DRAFT`), `propose`, `sign` (the institution's signature on the current terms version,
+which is the last signature when it is the only party, so the contract is `SIGNED`), `fund` (its funding moved from the
+pool in `institution_custody` into the contract's funding custody by Asset `move`, writing the funding key), and
+activation. So funding still follows every signature and the trigger sees only permitted transitions; for a Guild Order
+the institution is the only party, and a fill is the seller's acceptance, not a signature of the terms. An institution never signs through the Codex, never
 counter-proposes, and its contracts are `PUBLIC`. Received items go into `institution_custody`, never to service mail.
 
 ### 4.2 Contract types
@@ -454,6 +454,9 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Amendment round 2 (Codex), NO SIGN-OFF: issuance inserted a contract `PROPOSED`, which the machine forbids; the charter
+  reservation had no units or keys. Fixed: issuing runs the ordinary transitions in one transaction; the charter is a
+  rebate after signing under its own settlement key, the fee in the terms always unreduced.
 - Amendment round 1 (Codex) on revision 6, NO SIGN-OFF: the Guild Order fit none of the enums or the machine, the
   charter fallback could change a fee after signing, and AT-PACT-08 tested two types. Fixed: the `INSTITUTION` party kind
   (§4.1a), the Guild Order as an institutional Purchase Order, the Caravan Escort's employer an institution; the charter

@@ -323,7 +323,9 @@ window only when its `WindowWritten` fact is at or below every consuming project
 snapshot of each, and no replay lease of the family has read below it; the same exclusive lock on the family's
 `lc_journal_retention` row serialises the deletion with admission (below), and a replay re-reads the watermark of the
 buckets it needs at each batch. A projector's declared bucket retention (aden-remembers.md §4.12) is a minimum on top of
-this, never a replacement.
+this, never a replacement. **A projector reads a window once**, at the step its marker precedes; whatever it needs of that
+window later (a running mean, the daily values behind a 28-day median) it keeps in its own derived state, which its
+snapshots carry, so a window it has passed is never needed again by it or by its replay.
 
 Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot. **Admission** is one transaction
 that reads the `lc_journal_retention` rows of the projector's families with a shared lock, chooses the newest snapshot
@@ -504,6 +506,8 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Amendment round 2 (Codex), NO SIGN-OFF: a replay could pass a window's marker yet need the window later for a baseline.
+  Fixed: a projector reads a window once and keeps what it needs later in its derived state and snapshots.
 - Amendment round 1 (Codex) on revision 9, NO SIGN-OFF: the window marker could be lost in a crash after the rows
   committed, and telemetry buckets had no retention protection. Fixed: rows and marker in one transaction (the marker an
   outbox fact); buckets protected like partitions by checkpoints, snapshots and leases.

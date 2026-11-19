@@ -356,7 +356,7 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `release(custody, character, assets)` | custody → system mail to the character | `Asset.EscrowReleased` |
 | `charge(holder, amount, sinkCode)` | holder → sink | `Asset.FeeCharged` |
 | `commit(treasury, custody, amount)` / `return(custody, treasury, amount)` | castle treasury ↔ custody (Crown Law, 12 §6.2) | `Asset.TreasuryCommitted`, `Asset.TreasuryReturned` |
-| `move(from, to, assets)` | custody → custody, both owned by one module (a warehouse → a caravan manifest and back, a manifest → a destination warehouse; aden-remembers.md §3.4), under the caller's settlement key | `Asset.CustodyMoved` |
+| `move(from, to, assets)` | custody → custody, of the same or of two owner modules (a warehouse → a caravan manifest and back, a manifest → a destination warehouse, aden-remembers.md §3.4; a Guild pool → a PACT contract's funding custody, pact.md §4.1a), under the caller's settlement key; both owners' holding predicates are checked and it is refused if either owner module is frozen (§4.2 rules 5, 7) | `Asset.CustodyMoved` |
 | `exchange(character, gives, into, pays, from)` | one operation: the character's `gives` (items or Adena, debited in memory, §3.3) → custody `into`; custody `from`'s `pays` → service mail to the character; refused whole if either side cannot be met (the Guild's buying and selling, aden-remembers.md §4.6) | `Asset.Exchanged` |
 | `relocate(drops)` | `RELOCATED_DROP` source → for each selected item its own destination warehouse custody (a kill's families may go to different towns), exactly the kill's selected items; one operation per kill, whole or nothing, under the kill key, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
 | `recycle(pool, amount, day)` | `SINK_RECYCLE` source → the pool, once per (pool, day), refused above the recorded share | `Asset.SinkRecycled` |
@@ -629,6 +629,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Amendment round 2 (Codex), NO SIGN-OFF: `move` restricted to one owner, though its callers cross modules. Fixed: two
+  owners allowed, both predicates checked, refused if either is frozen.
 - Amendment round 1 (Codex) on revision 10, NO SIGN-OFF: `relocate` allowed one destination; the new facts had no
   fields and `TRACKED` no column; `CROWN_UPKEEP` had no site; the withdrawn supply facts and budget mention remained.
   Fixed: per-item destinations, the five fact schemas, `began_kind`, the site row, the remnants removed.

@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 9; signed off by Codex with the Black Ledger, in its round 6; record in §12)
+- Status: draft (revision 10: amendments for aden-remembers.md, reviewed, and chronicle.md, under review; revision 9 was signed off; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -146,8 +146,10 @@ change.
 | Code | Kind | Reference | Meaning |
 |---|---|---|---|
 | `FEE_NOTARIUS`, `FEE_BROKER`, `FEE_QUESTIONING`, `FEE_ALIAS`, `FEE_GAZETTE` | SINK | — | institutional fees (15 §6, 16 §7, 17 §2) |
-| `TOWN_SUPPLY` | SOURCE | origin town | goods leaving a town's supply budget into a caravan manifest (12 §8) |
-| `TOWN_SUPPLY` | SINK | destination town | a manifest's goods arriving into a town's supply budget |
+| `TOWN_SUPPLY` | — | — | **withdrawn** (revision 10): caravans move a Guild warehouse's real goods custody to custody (`move`), so no supply budget is minted or sunk (aden-remembers.md §4.6) |
+| `RELOCATED_DROP` | SOURCE | kill key | a kill's retail-rolled family items that Aden Remembers relocates into a Guild warehouse instead of the ground or an inventory, exactly the items and counts the retail roll made (aden-remembers.md §4.3.1); like `LOOT_DROP`, one operation per kill |
+| `SINK_RECYCLE` | SOURCE | Guild pool | Adena credited to a Guild pool once a day, at most `RecyclePermille` of the Adena its territory's retail teleport fees destroyed the previous day as the journal recorded it (aden-remembers.md §4.6): a source bounded by a recorded sink |
+| `CROWN_UPKEEP` | SINK | law | road wardens' wages paid from an Open Roads law's custody (aden-remembers.md §4.5) |
 | `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again through the classified site `lc_raid_drop` (§2.7) when it is dropped |
 | `ROAD_LOSS` | SINK | caravan | the rest of a raided manifest |
 | `ADMIN_CORRECTION` | SOURCE / SINK | audit fact | a corrective admin operation (§4.5) |
@@ -158,8 +160,8 @@ change.
 | `LEDGER_SEAL` | SOURCE | Ledger contract | the non-tradable, valueless Torn Black Seal given by system mail to a mark who killed a hunter of a Black Contract on them (black-ledger.md §4.9) |
 | `FEE_BRIBE` | SINK | — | a bribe paid to a witness NPC (black-ledger.md §4.7) |
 
-Living Chronicle mints nothing for players: a `TOWN_SUPPLY` source is matched by the supply budget it draws down (owned
-by Aden Remembers); `CRAFT_OUTPUT` and `LOOT_DROP` create exactly what the retail craft or kill would have created at
+Living Chronicle mints nothing for players: `RELOCATED_DROP` is exactly what a retail roll made, sent elsewhere; a
+`SINK_RECYCLE` credit never exceeds a share of what retail sinks destroyed the day before, as recorded; `CRAFT_OUTPUT` and `LOOT_DROP` create exactly what the retail craft or kill would have created at
 that moment, by the same retail code through the crafting and loot seams (03 §4.2-§4.3), only into system mail or a
 custody instead of an inventory or the ground; `PACT_PARCHMENT` and `LEDGER_SEAL` are non-tradable representations with no value; every other source is an
 audited correction. Each is a classified site (§2.7).
@@ -354,8 +356,11 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `release(custody, character, assets)` | custody → system mail to the character | `Asset.EscrowReleased` |
 | `charge(holder, amount, sinkCode)` | holder → sink | `Asset.FeeCharged` |
 | `commit(treasury, custody, amount)` / `return(custody, treasury, amount)` | castle treasury ↔ custody (Crown Law, 12 §6.2) | `Asset.TreasuryCommitted`, `Asset.TreasuryReturned` |
-| `supply(manifest, town, assets)` | `TOWN_SUPPLY` source (origin) → manifest, within the town's budget | `Asset.SupplyEntered` |
-| `arrive(manifest, town)` | manifest → `TOWN_SUPPLY` sink (destination) | `Asset.SupplyArrived` |
+| `move(from, to, assets)` | custody → custody, both owned by one module (a warehouse → a caravan manifest and back, a manifest → a destination warehouse; aden-remembers.md §3.4), under the caller's settlement key | `Asset.CustodyMoved` |
+| `exchange(character, gives, into, pays, from)` | one operation: the character's `gives` (items or Adena, debited in memory, §3.3) → custody `into`; custody `from`'s `pays` → service mail to the character; refused whole if either side cannot be met (the Guild's buying and selling, aden-remembers.md §4.6) | `Asset.Exchanged` |
+| `relocate(custody, drops)` | `RELOCATED_DROP` source → the destination warehouse custody, exactly the kill's selected items; one operation per kill, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
+| `recycle(pool, amount, day)` | `SINK_RECYCLE` source → the pool, once per (pool, day), refused above the recorded share | `Asset.SinkRecycled` |
+| `track(objectId)` | no legs: if the live object has no live lifecycle, one is begun (`began_op` null, kind `TRACKED`), under the object's stack lock like any operation that reads it (§3.3); idempotent; ended by the existing end sites (chronicle.md §4.6, under review) | `Asset.LifecycleTracked` |
 | `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
@@ -493,7 +498,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R11 | Service mail MUST be built as §2.1 says (not rejectable, not cash on delivery, never expiring) and MUST keep its attachments until claimed; the claim itself is retail and has retail's guarantees, no more. | AT-ASSET-11 |
 | ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
-| ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget, audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT` and `LOOT_DROP` exactly as the retail craft or kill computed them at the seam, and the valueless `PACT_PARCHMENT` and `LEDGER_SEAL`. | AT-ASSET-14 |
+| ASSET-R14 | Living Chronicle MUST NOT create an asset except audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` exactly as the retail craft or kill computed them at the seam, `SINK_RECYCLE` within its recorded share, and the valueless `PACT_PARCHMENT` and `LEDGER_SEAL`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and the custody, write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
 | ASSET-R16 | Nothing credited MUST be visible to anyone before the operation committed. | AT-ASSET-16 |
 | ASSET-R17 | An ambiguous commit MUST be resolved by a locking `OpId` read, and MUST NOT be aborted on a timeout. | AT-ASSET-21 |
@@ -525,7 +530,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-11 | integration | service mail as written: rejecting it, deleting it with attachments, waiting past every expiry run, an offline receiver, a full inventory and a full inbox: its attachments survive until claimed; startup cleanup keeps it (DatabaseIdManager.java:68) |
 | AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row and a stale row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
-| AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except `TOWN_SUPPLY` within budget, audited corrections, `CRAFT_OUTPUT` and `LOOT_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), and `PACT_PARCHMENT` and `LEDGER_SEAL` of their items only |
+| AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except audited corrections, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), `SINK_RECYCLE` at most its share of the previous day's recorded teleport-fee sink and once per pool and day, and `PACT_PARCHMENT` and `LEDGER_SEAL` of their items only; an `exchange` refused whole when either side fails |
 | AT-ASSET-15 | integration | a forged `ESCROW` row under a closed custody: module and custody frozen, evidence written, rows untouched; only a correction commits |
 | AT-ASSET-16 | integration | no mail, client packet or cache update shows a credit before `COMMITTED` |
 | AT-ASSET-17 | unit | startup with `LazyItemsUpdate = True` refused |
@@ -618,6 +623,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
 
 ## 12. Review record
+
+- Revision 10 (after the revision-9 sign-off): `TOWN_SUPPLY` withdrawn (caravans move custody to custody); the `move`,
+  `exchange`, `relocate`, `recycle` and `track` operations; the `RELOCATED_DROP` and `SINK_RECYCLE` sources and the
+  `CROWN_UPKEEP` sink; ASSET-R14 and AT-ASSET-14 follow. Amendments accepted in aden-remembers.md's review (`track` in
+  chronicle.md's, still under review); this revision is to be reviewed on its own.
 
 - Revision 9 signed off with black-ledger.md in the Ledger's round 6.
 - Revision 9 (after the revision-8 sign-off): the Black Ledger needs the `LEDGER_SEAL` source and the `FEE_BRIBE` sink;

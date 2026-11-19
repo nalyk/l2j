@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: reviewed (revision 8; signed off by Codex, a different model family, in round 8; record in §12)
+- Status: draft (revision 9: telemetry amendments for aden-remembers.md, reviewed; revision 8 was signed off; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -136,6 +136,11 @@ A family (kills, yield, travel, presence, deaths, teleports, …) has fixed coun
 class): `events`, two family-defined sums and a distinct-actor sketch (HyperLogLog registers, a fixed byte array per
 cell). The current window is a buffer of preallocated arrays indexed by (region index, family, actor class).
 
+- Each family is registered with its **region dimension**: `ATOM` (the region index of §2.3, the default) or a module's
+  own dense index declared with the family (Aden Remembers' subregions, aden-remembers.md §2.1), sized at startup; the
+  `region_id` of its buckets is then that index. A module may register a contiguous **range** of family ids (one per
+  resource family, for instance), each a family in every other respect.
+
 ## 3. Capture
 
 ### 3.1 Outbox facts
@@ -246,7 +251,10 @@ needs a fact exactly once makes it an outbox fact in its own transaction.
 (§3.3), the producer adds into its cell of the current window's buffer: `events`, the two sums and the distinct-actor
 sketch register (an atomic max). At a window's end the writer swaps in a fresh buffer, and once the phases that could
 still add to the old one have drained, writes one row per non-empty cell; a buffer whose phase stalled is written with
-`stalled` set. An add is therefore counted in exactly one window, whole.
+`stalled` set. An add is therefore counted in exactly one window, whole. Once a window's rows have committed, the
+writer writes a captured fact `Journal.WindowWritten` (window start, length, stalled) in the next batch, so a projector
+that reads telemetry binds each step to the log: at fact *F* it reads exactly the windows whose `WindowWritten` precedes
+*F*, the same live and on replay (aden-remembers.md §4.12).
 
 ### 3.5 Where capture happens
 
@@ -486,6 +494,10 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
    recorded (§2.3).
 
 ## 12. Review record
+
+- Revision 9 (after the revision-8 sign-off): telemetry families declare their region dimension and may be registered as
+  a module's id range; the writer records `Journal.WindowWritten` after a window's rows commit. Accepted in
+  aden-remembers.md's review; this revision is to be reviewed on its own.
 
 - Round 8 (Codex), **SIGN-OFF**. Remaining are named implementation obligations: allocation behaviour, memory ordering,
   slot retirement, actuator reconstruction, supervisor recovery and measured latency, each with its acceptance test.

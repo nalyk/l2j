@@ -1,6 +1,6 @@
 # SPEC-BL — The Black Ledger
 
-- Status: reviewed (revision 6; signed off by Codex, a different model family, in round 6; record in §12)
+- Status: draft (revision 7: the Amnesty predicate for aden-remembers.md, reviewed; revision 6 was signed off; record in §12)
 - Blueprint: 16 (the Black Ledger); 03 §4.4 (`ON_CURSED_WEAPON_ACQUIRE`), §4.5 (`canWitness`); 04 §3 (Asset Service), §4
   (Intel Service), §5 (Codex), §7 (keyed randomness); 10 §7 (citizen houses); 12 §6.2 (Crown Law Bounty Endowments);
   17 (publication); consensus §6.
@@ -216,6 +216,11 @@ Decisions are made in log order (fact-journal.md §4.2), so of two deaths the ea
 | `KARMA` | the mark's karma > 0 | the death snapshot shows karma > 0 |
 | `CURSED_WEAPON` | the mark holds one (`managers/CursedWeaponsManager.java:349`) | the snapshot shows the mark holding it |
 | `CLAN_WAR` | `issuer_clan`, `target_clan` (the mark's), mutual war: each `isAtWarWith` the other (`entity/clan/Clan.java:1643`) | the snapshot shows the killer in `issuer_clan`, the mark in `target_clan`, both directions at war, neither in the academy |
+
+**Amnesty** (aden-remembers.md §4.5): at a `KARMA` opening in a territory whose castle has an enacted Amnesty, the
+Magistrate asks Aden Remembers' predicate, which compares the occurrence time of the mark's latest PK with the
+proclamation's once the journal's frontier has passed the opening time, and fails closed ("no amnesty") on lag, a gap or a
+stopped projector; "amnesty" refuses the opening with that reason. No other cause is affected.
 
 A Writ is opened by anyone at a Magistrate (`KARMA`), by a clan leader of the issuing clan (`CLAN_WAR`), or **automatically**
 when a cursed weapon is acquired, through the `ON_CURSED_WEAPON_ACQUIRE` seam at `CursedWeapon.activate`
@@ -523,6 +528,9 @@ granted intel with confidence and age band, offers, payments under review, the r
    victim saw.
 
 ## 12. Review record
+
+- Revision 7 (after the revision-6 sign-off): the Amnesty predicate at a `KARMA` opening (§4.3), accepted in
+  aden-remembers.md's review; to be reviewed on its own.
 
 - Round 6 (Codex), **SIGN-OFF**. The bounded subsidy and the operator-audit limit are stated limits. Remaining are named
   implementation obligations: the weapon-life identity and atomic cap accounting, the death and cursed-weapon seams,

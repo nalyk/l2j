@@ -1,6 +1,6 @@
 # SPEC-PACT — PACT and the Notarius
 
-- Status: draft (revision 6: §4.10's completion type split for chronicle.md, under review with it; revision 5 was signed off; record in §12)
+- Status: draft (revision 6: amendments for aden-remembers.md, reviewed, and chronicle.md, under review; revision 5 was signed off; record in §12)
 - Blueprint: 15 (PACT and the Notarius); 03 §4.2-§4.4 (loot routing, crafting boundary, new events); 04 §3 (Asset
   Service), §5 (Codex), §7 (keyed randomness); 12 §6.2 (Crown Law Market Charters), §8 (Caravan Escort); 17
   (publication); consensus §4.
@@ -88,12 +88,16 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
 - `value_adena` = Adena to be escrowed + Σ item quantities × the item's retail reference price
   (`entity/item/ItemTemplate.java:574`, `getReferencePrice`), computed from `terms` when proposed and part of the terms.
 - `fee_adena` = max(`RegistrationFeeMinAdena`, ⌊`value_adena` × `RegistrationFeePermille` / 1000⌋) × the territory's
-  Market Charter factor (1 until Crown Law provides one), + `SealingFeeAdena` if `visibility = PARTIES` (sealed terms).
+  Market Charter factor (1 when no Market Charter is enacted in the territory, or while Aden Remembers is frozen or
+  disabled, aden-remembers.md §3.3), + `SealingFeeAdena` if `visibility = PARTIES` (sealed terms).
   It is part of the terms, so every signer saw it. The **fee payer** is the party the terms name (the drafter by
   default); it is charged as a `FEE_NOTARIUS` sink (asset-service.md §2.5) in the operation of the last signature, which
-  fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`).
+  fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`). Under a Market Charter the charter's custody pays,
+  in the same operation, the rest of the unreduced fee into `FEE_NOTARIUS`, so the sink receives the full fee; if the
+  custody cannot, the factor is 1 for that contract (aden-remembers.md §4.5).
 - A contract with `value_adena` ≥ `RoyalThresholdAdena`, a clan or alliance party, or of type Treaty needs a Royal
-  Notarius; Mercenary contracts the Castle Notarius of the castle concerned; Caravan Escorts the Caravan Guild (15 §8).
+  Notarius; Mercenary contracts the Castle Notarius of the castle concerned; Caravan Escorts the Caravan Guild (15 §8);
+  Guild Orders the Merchant Guild, which issues them itself (no signature but the deliverer's acceptance).
   The tier's Notarius binds the **last signature** to its presence (`NpcRef`, codex-ui.md §2).
 
 ### 2.3 Identities
@@ -178,10 +182,11 @@ Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (T
 | Craft Order | client: materials and fee per batch, a unit per attempt of the batch | per attempt under §4.3, as for a Crafting Pact; a batch is the funding group of its attempts, so a partial batch is the attempts made so far | unattempted attempts' units returned |
 | Purchase Order | buyer: maximum spend (the budget unit) | per fill: a seller hands items to a Notarius (in person) or, if the order allows, through the Codex; in one operation the items go to the buyer, the budget unit is split (§2.1) into the fill's price × quantity `PAID` to the seller and the remainder `OPEN` | the remainder unit `RETURNED` |
 | Delivery Order | client: payment | the delivery: the deliverer hands the named items at the named Notarius before the deadline; items to the receiver, payment to the deliverer | payment returned |
+| Guild Order | the Merchant Guild (issuer `MERCHANT_GUILD`): payment escrowed from a Guild pool at posting | a Delivery Order whose receiver is the Guild's warehouse custody, filled at the Guild Master: each fill moves the items into that custody and pays the deliverer, in one operation (aden-remembers.md §4.6) | the remaining payment returned to the pool |
 | Loan | lender: principal (unit *P*); borrower: collateral (unit *C*) | activation settles *P* (`PAID` to the borrower); repayment is a request that creates unit *R* (the repayment, funded from the borrower) and in the same operation settles *R* (`PAID` to the lender) and *C* (`RETURNED` to the borrower) | at the deadline, unrepaid: *C* `FORFEITED` to the lender, never more |
 | Loot Charter | bidders' bids, during an auction | per routed lot (§4.5) | an unfinished auction's lot to the charter's fallback receiver |
 | Mercenary | employer: payment per mercenary party | per mercenary party, on the battle's end (§4.6) | payment returned for parties that did not qualify; all of it if the battle did not happen |
-| Caravan Escort | the Caravan Guild: payment | delivery + participation, on the caravan's arrival (12 §8) | per the issuing terms |
+| Caravan Escort | the Caravan Guild: payment escrowed from a Guild pool (plus a Caravan Protection law's custody) at dispatch | on the caravan's arrival, the escrow split among escorts by the participation shares Aden Remembers computes (aden-remembers.md §4.6) | refunded to the pool on a raid or a recall, and the unqualified remainder on arrival |
 | Treaty | each signatory: its forfeit | per (violating signatory, window): at the first violation (§4.7) in the window, that signatory's forfeit goes to the victim's side; later violations in the window are facts only | at the end of the window, every **unspent** forfeit returned to its signatory |
 
 ### 4.3 Craft for contract
@@ -437,7 +442,8 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 - Revision 6 (after the round-4 sign-off): `pact_completed` split into `pact_completed` and `pact_completed_terms`, so
   the publication registry itself refuses clause kinds and totals on any row but a `PUBLIC` and `publishable`
-  contract's (found by Chronicle's first review); under review with chronicle.md.
+  contract's (found by Chronicle's first review); the Guild Order type, Caravan Escort's funding, shares and refunds, and
+  the Market Charter's custody payment (accepted in aden-remembers.md's review). To be reviewed on its own.
 
 - Round 4 (Codex), **SIGN-OFF WITH FIXES**: one fix, made in revision 5: the damage seam also covers damage transferred
   to a caster's CP (`PlayerStatus.java:198-208`, `SummonStatus.java:76-115`), which bypasses the CP and HP points, with a

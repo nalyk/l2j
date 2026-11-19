@@ -653,7 +653,8 @@ Nothing else shows any state.
 9. **Killing NPCs gives no karma.** → raids are history and pressure, not Writs.
 10. **Container-wide first-talk listeners skip default windows** (`NpcClick.java:121-128`). → the per-template chat seam.
 
-**Amendments to reviewed specs**, made with this spec's review:
+**Amendments to reviewed specs**, accepted in this spec's review and applied in fact-journal.md revision 9,
+asset-service.md revision 10, pact.md revision 6 and black-ledger.md revision 7 (each under its own review):
 - fact-journal.md §2.6: a telemetry family declares its region dimension (atom or subregion) and families may be
   registered in a module's id range; §3.4: the writer writes `Journal.WindowWritten` after a window's rows commit.
 - asset-service.md: the `TOWN_SUPPLY` source and sink withdrawn (caravans move custody to custody); the `exchange`
@@ -672,8 +673,8 @@ Nothing else shows any state.
   the PK's occurrence time with the proclamation's, keeping the frontier barrier, with the reordered-delivery case in
   AT-AR-07. Remaining are named implementation obligations (the seams, the relocation handoff, recycling, the band
   triggers, caravan arbitration, the cursor seam) and stated limits. §11's amendments to fact-journal.md, asset-service.md,
-  pact.md and black-ledger.md were judged sufficient and consistent; they are still to be applied to those specs, and
-  reviewed there, together with chronicle.md's.
+  pact.md and black-ledger.md were judged sufficient and consistent; they are applied in those specs' next revisions,
+  each to be reviewed there.
 - Round 4 (Codex), NO SIGN-OFF: a band could be deleted and recreated narrower, past existing rows; the relocation
   operation's budget named one PACT does not define. Revision 5: bands are never deleted, prices and orders reference
   their band by foreign key, a band's insert is checked like a change; the budget is ASSET-R21's.

@@ -103,11 +103,18 @@ class IntelSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(intelOf(9, "'REGION'", "'CONFIRMED'")), "identity evidence with an area");
 			statement.execute(intelOf(9, "'NONE'", "'CONFIRMED'"));
 
+			// Identity evidence: only on an identity trace, expiring with it, bound to its seal or alias, never updated.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_identity_evidence (trace_id, kind, payload, bound_alias, expires_at) VALUES (8, 'ALIAS_LINK', '{}', 1, (SELECT expires_at FROM lc_trace WHERE trace_id = 8))"), "on a rumor trace");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_identity_evidence (trace_id, kind, payload, bound_seal, expires_at) VALUES (9, 'ALIAS_LINK', '{}', 1, (SELECT expires_at FROM lc_trace WHERE trace_id = 9))"), "an alias link bound to a seal");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_identity_evidence (trace_id, kind, payload, bound_alias, expires_at) VALUES (9, 'ALIAS_LINK', '{}', 1, NOW(3) + INTERVAL 2 HOUR)"), "outliving its trace");
+			statement.execute("INSERT INTO lc_identity_evidence (trace_id, kind, payload, bound_alias, expires_at) VALUES (9, 'ALIAS_LINK', '{\"alias\":1}', 1, (SELECT expires_at FROM lc_trace WHERE trace_id = 9))");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_identity_evidence SET bound_alias = 2 WHERE trace_id = 9"));
+
 			// The journal's expiring tables are in the registry too.
-			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_expiring_table WHERE table_name IN ('lc_fact_precise', 'lc_fact_expiring', 'lc_trace', 'lc_trace_evidence', 'lc_intel', 'lc_intel_grant', 'lc_intel_copy', 'lc_disclosure', 'lc_disclosure_cell', 'lc_signal_presence')"))
+			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_expiring_table WHERE table_name IN ('lc_fact_precise', 'lc_fact_expiring', 'lc_trace', 'lc_trace_evidence', 'lc_intel', 'lc_intel_grant', 'lc_intel_copy', 'lc_disclosure', 'lc_disclosure_cell', 'lc_signal_presence', 'lc_witness_suppression', 'lc_identity_evidence')"))
 			{
 				result.next();
-				assertEquals(10, result.getInt(1));
+				assertEquals(12, result.getInt(1));
 			}
 		}
 	}

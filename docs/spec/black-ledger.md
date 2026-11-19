@@ -1,13 +1,14 @@
 # SPEC-BL — The Black Ledger
 
-- Status: draft (revision 1)
+- Status: draft (revision 2, answering the first adversarial review; record in §12)
 - Blueprint: 16 (the Black Ledger); 03 §4.4 (`ON_CURSED_WEAPON_ACQUIRE`), §4.5 (`canWitness`); 04 §3 (Asset Service), §4
   (Intel Service), §5 (Codex), §7 (keyed randomness); 10 §7 (citizen houses); 12 §6.2 (Crown Law Bounty Endowments);
   17 (publication); consensus §6.
-- Depends on: asset-service.md (custody, fees, service mail), intel-service.md (traces, witnesses, disclosure, budgets,
-  suppression, rumors, identity evidence: its revision 6 adds the last three for this spec), actor-identity.md (snapshots,
-  principals, policy), fact-journal.md (facts, effects), codex-ui.md (pages, tokens, `NpcRef`), pact.md (shared escrow
-  primitives only: the Ledger and PACT share the Asset Service, never institutions, 20 §1).
+- Depends on: asset-service.md (custody, fees, service mail; its revision 9 adds `LEDGER_SEAL` and `FEE_BRIBE`),
+  intel-service.md (traces, witnesses, disclosure, budgets; its revision 6 adds suppression, rumors and identity evidence),
+  fact-journal.md (captured and outbox facts, gaps, expiring data, projectors), actor-identity.md (snapshots, principals,
+  policy), codex-ui.md (pages, tokens, `NpcRef`), pact.md (identities and keys, §2.3; the Ledger and PACT share the Asset
+  Service, never institutions, 20 §1).
 - DDL: `sql/migrations/V012__lc_ledger.sql` (after PACT's V011).
 - Upstream facts cited as `file:line` are at the fork's current upstream snapshot (`upstream` c9ca4c31); paths are under
   `java/org/l2jmobius/gameserver/` unless they start with `dist/`.
@@ -20,76 +21,92 @@ contract's conditions, with the hunt carried by priced, bounded information. It 
 - **contracts**: lawful **Writs** (Magistrate) and sealed **Black Contracts** (Broker), their funding, acceptance,
   conditions and settlement;
 - **hunters**: registration, ranks, aliases and calling cards;
-- the Ledger's **pages and prices** for questioning witnesses, buying informants' sightings, bribing witnesses, planting
-  false trails, buying alias links, and the reverse investigation after a failed attempt;
-- **counter-intelligence** signals to the hunted;
-- **anti-abuse** and **anti-harassment** rules, and payout holds;
+- **deaths and decisions**: the evidence of a mark's death and each contract's decision about it;
+- **payments**: every payout, with its own anti-abuse check and hold;
+- the Ledger's **pages and prices** for questioning, sightings, bribes, false trails, alias links and the reverse
+  investigation;
+- **counter-intelligence** signals, **anti-harassment** and **anti-abuse** rules;
 - the Ledger's **publication** (wanted boards, legends).
 
-It does not own: information itself (the Intel Service owns traces, witnesses, budgets, expiry and every disclosure; the
-Ledger asks and pays), assets (the Asset Service), combat (Mobius: **the Ledger grants nothing in combat**, 16 §1),
-karma (retail's, unchanged), PACT's institutions (the Notarius never handles Black Contracts).
+It does not own: information (the Intel Service owns traces, witnesses, budgets, expiry and every disclosure; the Ledger
+asks and pays), assets (the Asset Service), combat (Mobius: **the Ledger grants nothing in combat**, 16 §1), karma
+(retail's, unchanged), PACT's institutions (the Notarius never handles Black Contracts).
 
 ### 1.1 The sacred balance rule
 
 0 P.Atk, 0 M.Atk, 0 speed, 0 crit, 0 blow, 0 stealth, 0 debuff, 0 teleport-to-target, 0 combat privilege (16 §1). A hunter
-fights under normal rules; killing a white mark creates karma exactly as retail does (`entity/actor/Player.java:5687-5698`,
-`:5726-5745`); hitting a mark with karma never flags the hunter, as retail already decides (`Player.java:5798-5837`). Living
-Chronicle code calls no mechanics API (actor-identity.md §3), and AT-BL-09 checks the Ledger's.
+fights under normal rules; killing a white mark creates karma as retail does (`entity/actor/Player.java:5687-5698`,
+`:5726-5745`); hitting a mark with karma never flags the hunter, as retail decides (`Player.java:5798-5837`). Living
+Chronicle code calls no mechanics API (actor-identity.md §3); AT-BL-09 checks the Ledger's.
+
+### 1.2 Confidentiality
+
+Anonymity is the **confidentiality of Ledger records** (consensus §6.5), guaranteed **against players**: no page, fact
+payload, publication row or disclosure reveals a depositor, an alias's owner or an informant except by §4.9 and §4.10. It
+is not a guarantee against the server's operators: the Asset Service's postings are permanent financial audit
+(asset-service.md §2.2) and name the holders money moved between, readable only by admins and forensics, never by game
+code outside the Asset Service, never published. The Ledger's own identity mappings expire as soon as their use ends (§2.2).
 
 ## 2. Data
 
 ### 2.1 Tables
 
 ```text
-lc_ledger_contract(contract_id BIGINT PK auto, kind {WRIT|BLACK}, cause {KARMA|CURSED_WEAPON|CLAN_WAR|ADMIN|OPEN},
-                   state {§3.1}, version INT, mark_char INT, client_char INT NULL, created_at, deadline,
-                   principal BIGINT, intel_budget BIGINT, broker_fee BIGINT, conditions JSON, terms_hash BINARY(32),
-                   origin_npc VARCHAR(32), origin_town SMALLINT, sealed_identity BOOLEAN, min_rank TINYINT, max_hunters TINYINT,
-                   kills_required TINYINT, kills_done TINYINT)
-lc_ledger_funding(contract_id, funding_no INT, source {PLAYER|CROWN_LAW|GUILD|HOUSE}, source_id BIGINT, amount BIGINT,
-                  op_id BINARY(16), at, PRIMARY KEY(contract_id, funding_no))
-lc_ledger_custody(contract_id, purpose {PRINCIPAL|INTEL}, custody_id INT → lc_custody, PRIMARY KEY(contract_id, purpose))
-lc_ledger_hunter(char_id PK, rank {LISTENER|TRACKER|STALKER|HEAD_HUNTER|GHOST}, registered_at, completed INT, failed INT,
-                 abandoned INT, sightings_verified INT, rank_version INT)
-lc_ledger_alias(alias_id INT PK auto, name VARCHAR(24) UNIQUE, owner_char INT UNIQUE, card {FEATHER|COIN|CARD|SYMBOL},
-                created_at, exposed_at NULL)
+lc_ledger_contract(contract_id BIGINT PK auto, kind {WRIT|BLACK}, cause {KARMA|CURSED_WEAPON|CLAN_WAR|OPEN}, state {§3.1},
+                   version INT, mark_char INT, issuer_clan INT NULL, target_clan INT NULL, created_at, deadline,
+                   principal BIGINT, intel_budget BIGINT, max_sighting_price BIGINT, broker_fee BIGINT, conditions JSON,
+                   terms_hash BINARY(32), origin_npc VARCHAR(32), origin_town SMALLINT, sealed_identity BOOLEAN,
+                   min_rank TINYINT, max_hunters TINYINT, kills_required TINYINT, kills_done TINYINT)
+lc_ledger_patron(contract_id PK, client_char INT, expires_at)          -- the depositor of a Black Contract (§2.2)
+lc_ledger_funding(contract_id, funding_no INT, source {PLAYER|CROWN_LAW|GUILD|HOUSE}, amount BIGINT, op_id, at,
+                  PRIMARY KEY(contract_id, funding_no))
+lc_ledger_funder(contract_id, funding_no, source_id BIGINT, expires_at)  -- who contributed (§2.2)
+lc_ledger_custody(contract_id, purpose {PRINCIPAL|INTEL}, custody_id INT → lc_custody)
+lc_ledger_hunter(char_id PK, rank {LISTENER|TRACKER|STALKER|HEAD_HUNTER|GHOST}, registered_at, completed, failed, abandoned,
+                 sightings_verified)
+lc_ledger_alias(alias_id PK, name UNIQUE, owner_char INT NULL UNIQUE, card {FEATHER|COIN|CARD|SYMBOL}, created_at,
+                exposed_at NULL, retired_at NULL)
 lc_ledger_acceptance(contract_id, hunter_char, accepted_at, card_mode {AT_KILL|DELAYED|NONE}, state {ACTIVE|WON|FAILED|
                      ABANDONED|EXPIRED|VOID}, PRIMARY KEY(contract_id, hunter_char))
-lc_ledger_kill(kill_key VARCHAR(64), contract_id, hunter_char, mark_char, at, region_id, territory SMALLINT NULL,
-               context JSON, outcome {QUALIFIED|EXCLUDED}, reason VARCHAR(48) NULL, claim_deadline NULL, claimed_op NULL,
-               PRIMARY KEY(kill_key, contract_id))                  -- one kill may concern a Writ and a Black Contract
-lc_ledger_hold(contract_id PK, reason VARCHAR(48), evidence JSON, opened_at, review_until, state {HELD|RELEASED|RETURNED},
-               resolved_by VARCHAR(32) NULL, resolved_at NULL, expires_at)
-lc_ledger_seal(lifecycle_id BIGINT PK → lc_item_lifecycle, contract_id, hunter_char, mark_char, value_band TINYINT,
-               origin_town SMALLINT, issued_op BINARY(16))
-lc_ledger_reverse_case(case_id BIGINT PK auto, lifecycle_id UNIQUE → lc_ledger_seal, holder_char, step TINYINT, opened_at,
-                       expires_at)
-lc_ledger_offer(offer_id BIGINT PK auto, informant_char, mark_char, trace_id BIGINT, price BIGINT, state {OFFERED|SOLD|
-                HELD|PAID|EXPIRED}, buyer_contract NULL, expires_at)
-lc_ledger_inquiry(mark_char, window_start TIMESTAMP, inquiries INT, warned BOOLEAN, expires_at, PRIMARY KEY(mark_char, window_start))
-lc_ledger_pair(client_char, mark_char, window_start, contracts INT, expires_at, PRIMARY KEY(client_char, mark_char, window_start))
-lc_ledger_mark_cooldown(mark_char PK, until)
+lc_ledger_death(death_key VARCHAR(64) PK, fact_id BIGINT, victim_char INT, killer_char INT NULL, killer_kind {SELF|SUMMON|
+                TRAP|DOT|OTHER}, at, region_id, territory SMALLINT NULL, context JSON)   -- immutable evidence
+lc_ledger_decision(death_key, contract_id, outcome {QUALIFIED|EXCLUDED}, reason VARCHAR(48) NULL, decided_at,
+                   PRIMARY KEY(death_key, contract_id))                                       -- immutable
+lc_ledger_claim(contract_id, death_key, claim_deadline, claimed_at NULL, claim_op NULL, PRIMARY KEY(contract_id, death_key))
+lc_ledger_payment(payment_id BIGINT PK auto, kind {BOUNTY|SIGHTING|ALIAS_LINK}, contract_id NULL, source_custody INT NULL,
+                  beneficiary_char INT, amount BIGINT, external_share BIGINT, state {PENDING|HELD|PAID|BLOCKED|RETURNED},
+                  reason VARCHAR(48) NULL, evidence JSON NULL, review_until NULL, resolved_by NULL, op_id NULL, expires_at NULL)
+lc_ledger_seal(lifecycle_id PK → lc_item_lifecycle, contract_id, hunter_char, mark_char, value_band, origin_town, issued_op,
+               UNIQUE(contract_id, hunter_char))
+lc_ledger_reverse_case(case_id PK, lifecycle_id UNIQUE, holder_char, step TINYINT, opened_at, expires_at)
+lc_ledger_offer(offer_id PK, informant_char, mark_char, trace_id → lc_trace ON DELETE CASCADE, price, state {OFFERED|SOLD|
+                EXPIRED}, payment_id NULL, expires_at ≤ the trace's)
+lc_ledger_inquiry(mark_char, window_start, inquiries, warned, expires_at)
+lc_ledger_pair(client_char, mark_char, window_start, contracts, expires_at)
+lc_ledger_mark_cooldown(mark_char PK, cooldown_until)
+lc_ledger_endowment_use(mark_char, window_start, paid BIGINT, expires_at)
 ```
 
-- `client_char` (the depositor of a Black Contract) and `lc_ledger_alias.owner_char` are the Ledger's two secrets. They are
-  retained as financial audit (04 §4: "non-sensitive financial audit is retained separately from expiring intel"), read
-  only by the Ledger's settlement and evidence code (a static scan, AT-BL-10), never published, and disclosed only through
-  the Intel Service under §4.9 and §4.10.
-- `lc_ledger_inquiry`, `lc_ledger_pair`, `lc_ledger_offer`, `lc_ledger_reverse_case` and `lc_ledger_hold` (whose evidence
-  holds the salted IP hashes of §4.11) expire (`expires_at`) and are listed in `lc_expiring_table` (intel-service.md
-  §4.5), so they leave no trail of who asked about whom; a hold's expiry is set after its resolution.
-- `lc_ledger_kill.kill_key` is `BL/kill/<journal epoch>/<victim object id>/<victim death count>`, the death count a
-  per-character counter the kill hook increments; Mobius can dispatch a player's death event twice
-  (`entity/actor/Playable.java:100-115` fires it before its `isDead` guard), and the key makes the second one a no-op.
+### 2.2 What is kept and what expires
 
-### 2.2 Custody
+| Datum | Where | Kept |
+|---|---|---|
+| a Black Contract's depositor | `lc_ledger_patron` | until the contract is terminal, its payments resolved, and its seals' reverse cases expired (`ReverseCaseHours` after the last seal); then deleted |
+| a Writ contribution's source | `lc_ledger_funder` | until the Writ is terminal and its returns made; then deleted |
+| an alias's owner | `lc_ledger_alias.owner_char` | while the alias is active; retiring it (the owner's choice, or `AliasIdleDays` without a contract) sets it to `NULL` and keeps the name reserved |
+| a payment's beneficiary and linkage evidence | `lc_ledger_payment` | until resolved + `PaymentAuditDays`; the hashed IPs of §4.11 only in `evidence`, gone with it |
+| inquiries, pairs, offers, reverse cases, endowment use | their tables | their windows |
+| who acted in a secret operation (opening a Black Contract, registering or retiring an alias, submitting a sighting, buying a link) | the fact's `actor` field in `lc_fact_expiring` (fact-journal.md §2.4), with the life of the mapping above; the fact's own `actor_snapshot` is the institution's (`SYSTEM`, the Broker) | as above |
 
-A Black Contract has two custodies: `PRINCIPAL` (the bounty) and `INTEL` (the intelligence budget, 16 §3.6, spent on the
-hunters' questioning and purchases for this contract, transparent to the depositor). A Writ has `PRINCIPAL` only, funded by
-any number of contributions (16 §2: players, Crown Law Bounty Endowments by the Asset Service's treasury `commit`, guild fee
-pools, citizen houses as any principal). Every movement is one Asset operation with `OpId`s and keys as PACT's (pact.md §2.3):
-request, effect or kill identities; funding keys `BL/<contract>/fund/<n>`; settlement keys `BL/<contract>/<kill or unit>`.
+Every row with an `expires_at` is listed in `lc_expiring_table` (intel-service.md §4.5): purged, kept out of old backups,
+deleted on restore. Facts never name a depositor, an alias owner or an informant in their payload (FACT-INV01).
+
+### 2.3 Custody and identities
+
+A Black Contract has two custodies: `PRINCIPAL` (the bounty) and `INTEL` (the intelligence budget, transparent to the
+depositor, 16 §3.6). A Writ has `PRINCIPAL` only, funded by contributions: players, Crown Law Bounty Endowments (the Asset
+Service's treasury `commit`), guild fee pools, citizen houses. Identities and keys follow PACT's (pact.md §2.3): request,
+effect or kill identities; funding keys `BL/<contract>/fund/<n>`; settlement keys `BL/<payment>`; a death key (§4.5).
 
 ## 3. State machines
 
@@ -97,264 +114,292 @@ request, effect or kill identities; funding keys `BL/<contract>/fund/<n>`; settl
 
 | From | Event | Guard | To | Effect |
 |---|---|---|---|---|
-| — | `open` (Black, at a Broker in person) | §4.2 eligibility; principal ≥ `MinContractAdena` | `OPEN` | one operation: principal and intel budget into custody, broker fee (`FEE_BROKER`) and, if bought, sealed identity (`FEE_BROKER`) charged |
-| — | `open` (Writ, at a Magistrate, or automatically, §4.3) | the mark is lawful game (§4.3) | `OPEN` | first contribution, if any |
-| `OPEN` | `contribute` (Writ) | — | `OPEN` | funds added |
+| — | `open` (Black, at a Broker in person) | §4.2 | `OPEN` | principal and intel budget into custody; broker fee and, if bought, sealed identity charged (`FEE_BROKER`); `lc_ledger_patron` |
+| — | `open` (Writ, at a Magistrate, or automatically, §4.3) | the basis holds | `OPEN` | the basis recorded; first contribution, if any |
+| `OPEN` | `contribute` (Writ) | the basis holds | `OPEN` | funds added; `WritFeePermille` charged (`FEE_BROKER`) |
 | `OPEN` | `cancel` (Black, by the depositor) | no acceptance yet | `CANCELLED` | principal and intel returned; fees not |
-| `OPEN` | a qualifying kill (§4.5) | `kills_done + 1 < kills_required` | `OPEN` | `kills_done` + 1; the multi-kill cooldown starts |
-| `OPEN` | a qualifying kill | the last required kill | `CLAIMABLE` (Black) or `SETTLING` (Writ) | the kill recorded |
-| `CLAIMABLE` | `claim` by the killer in person at a Broker before `claim_deadline` | — | `SETTLING` | — |
-| `CLAIMABLE` | claim deadline passes | — | `OPEN` if before the deadline, else `EXPIRED` | the kill lapses unclaimed |
-| `SETTLING` | anti-abuse (§4.11) | no signal | `SETTLED` | payout to the hunter, unspent intel to the depositor |
-| `SETTLING` | anti-abuse | a hold signal | `HELD` | `lc_ledger_hold` opened |
-| `SETTLING` | anti-abuse | a block signal (§4.11) | `OPEN` or `EXPIRED` | the kill `EXCLUDED`; nothing paid |
-| `HELD` | admin `release`, or `review_until` passes | — | `SETTLED` | payout |
-| `HELD` | admin `return` with reason | — | `RETURNED` | everything back to depositor or funders |
-| `OPEN` | deadline | — | `EXPIRED` | principal and unspent intel returned (Writ: each contribution to its source) |
-| `OPEN` (Writ) | the lawful basis ends (§4.3) | — | `LAPSED` | contributions returned |
+| `OPEN` | a `QUALIFIED` decision (§4.5) | not the last required kill | `OPEN` | `kills_done` + 1 |
+| `OPEN` | a `QUALIFIED` decision | the last required kill | `CLAIMABLE` (Black) or `SETTLING` (Writ) | a claim row (Black) or a `BOUNTY` payment (Writ) |
+| `CLAIMABLE` | `claim`, the killer in person at a Broker, before `claim_deadline` | — | `SETTLING` | a `BOUNTY` payment |
+| `CLAIMABLE` | the claim deadline passes | — | `OPEN` if before the contract's deadline, else `EXPIRED` | — |
+| `SETTLING` | the bounty payment `PAID` | — | `SETTLED` | unspent intel to the depositor; the mark's cooldown (§4.2) |
+| `SETTLING` | the bounty payment `BLOCKED` or `RETURNED` | — | `OPEN` if before the deadline, else `EXPIRED` | `kills_done` stays; the death stays recorded |
+| `OPEN` | the deadline, decided only once the journal's frontier has passed it with no overlapping gap of the death family (fact-journal.md §3.3) | — | `EXPIRED` | principal and unspent intel returned (Writ: each contribution to its source) |
+| `OPEN` | the deadline with an overlapping gap | — | `REVIEW` | an admin decides from the gap and Mobius's own counters |
+| `REVIEW` | admin | — | `OPEN`, `EXPIRED` or `SETTLING` | audit fact |
+| `OPEN` (Writ) | the basis ends (§4.3) | no qualifying death awaiting payment | `LAPSED` | contributions returned |
 
-Terminal: `SETTLED`, `RETURNED`, `EXPIRED`, `CANCELLED`, `LAPSED`. Every transition is a durable fact in the transaction of
-its movements; a trigger enforces the table.
+Terminal: `SETTLED`, `EXPIRED`, `CANCELLED`, `LAPSED`. Every transition is a durable fact in the transaction of its
+movements. A trigger enforces the table **and its row guards**: `CLAIMABLE` and `SETTLING` need a `QUALIFIED` decision for
+the contract; `SETTLING` from `CLAIMABLE` needs a claimed claim; `SETTLED` needs a `PAID` bounty payment; `CANCELLED` needs
+no acceptance; `LAPSED` only for Writs; `CLAIMABLE` only for Black Contracts.
 
 ### 3.2 Acceptance
 
-`ACTIVE` → `WON` (its kill settled) | `FAILED` (killed by the mark while active, §4.7) | `ABANDONED` (by the hunter;
-counts against rank) | `EXPIRED` (the contract ended otherwise) | `VOID` (the contract was returned or blocked).
+`ACTIVE` → `WON` | `FAILED` (killed by the mark while active, §4.9) | `ABANDONED` | `EXPIRED` | `VOID`, once.
+
+### 3.3 Payment
+
+`PENDING` → `PAID` (no signal) | `BLOCKED` (a block signal; the money stays in or returns to its custody) | `HELD` (a hold
+signal); `HELD` → `PAID` (admin release, or the review window passes for a player-funded payment) | `RETURNED` (admin
+return, or the review window passes for an externally funded payment, §4.11). Each payment is checked and resolved on its
+own: a held sighting purchase does not hold the contract.
 
 ## 4. Operations
 
-### 4.1 Hunters
+### 4.1 Hunters and ranks
 
 A character registers as a hunter in person at a Magistrate or a Broker (`LISTENER`). Ranks are information access only
 (16 §3.8):
 
 | Rank | Promotion (all, *tunable*) | Unlocks |
 |---|---|---|
-| `LISTENER` | registration | tavern rumors (§4.6), Writs |
-| `TRACKER` | 3 contracts won | witness questioning up to `REGION`; Black Contracts with `min_rank` ≤ Tracker |
-| `STALKER` | 10 won, at most as many failed as won, 5 sightings verified | questioning up to `ZONE`; correlation page (the hunter's own granted items side by side) |
+| `LISTENER` | registration | tavern rumors, Writs |
+| `TRACKER` | 3 won | witness questioning up to `REGION`; Black Contracts with `min_rank` ≤ Tracker |
+| `STALKER` | 10 won, failed ≤ won, 5 sightings verified | questioning up to `ZONE`; the correlation page (the hunter's own granted items side by side) |
 | `HEAD_HUNTER` | 25 won | contracts with principal ≥ `HighValueAdena` |
-| `GHOST` | 50 won, 20 sightings verified | questioning of traces in the `OLD` age band (the others see `FRESH` and `RECENT` only) |
+| `GHOST` | 50 won, 20 sightings verified | questioning of traces in the `OLD` age band (others see `FRESH` and `RECENT` only) |
 
-Every unlock is a narrowing of what the Intel Service may already disclose (its ceilings and budgets are unchanged); none
-touches combat. A rank is recomputed from the counters at each settlement; it never falls.
+A won contract counts only if its bounty was `PAID`. Every unlock narrows what the Intel Service may already disclose; none
+touches combat. A rank never falls.
 
 ### 4.2 Black Contracts
 
-Opened by a depositor in person at a Broker: the mark, principal, intel budget, deadline (`ContractMinHours`–`MaxHours`),
-conditions (§4.5), `min_rank`, `max_hunters`, `kills_required` (1, or up to `MaxKills` with `MultiKillCooldownHours`
-between kills), and optionally **sealed identity** (`SealedIdentityAdena`, a sink) which blocks the last two reverse steps
-(§4.9). Refused when (anti-harassment, 16 §10):
+Opened by a depositor in person at a Broker: the mark, principal, intel budget, **maximum sighting price** (a cap on any
+one informant purchase, ≤ the intel budget), deadline, conditions (§4.5), `min_rank`, `max_hunters`, `kills_required`, and
+optionally sealed identity (`SealedIdentityAdena`), which obscures the last two reverse steps (§4.9). Refused when:
 
-- the mark is below `NewbieLevel` (default 40), or is not a player (an NPC fake never is a mark, actor-identity.md §3), or is
-  in `lc_ledger_mark_cooldown`;
-- the depositor and the mark share an account or a principal (actor-identity.md §2.2);
-- the depositor already opened *k* contracts on this mark in the `PairWindowDays` window and the principal is below
-  `MinContractAdena` × 2^k (diminishing eligibility), or *k* = `MaxPairContracts`;
-- a contract by the mark on the depositor was opened in the last `ReciprocalHours` (immediate reciprocal contracts).
+- the mark is below `NewbieLevel` (default 40; retail's own newbie protection is narrower: Protection Blessing stops
+  karma players attacking a target 10+ levels lower, `ai/PlayableAI.java:53-66`), is not a player, or is in cooldown;
+- the depositor and the mark share an account or a principal;
+- the mark already has `MaxOpenOnMark` open Black Contracts, from any depositors;
+- the depositor already opened *k* contracts on this mark in `PairWindowDays` and the principal is below
+  `MinContractAdena` × 2^k, or *k* = `MaxPairContracts`;
+- a contract by the mark on the depositor was opened in the last `ReciprocalHours`.
 
-A hunter accepts in person at a Broker if registered, of `min_rank` or above, not the depositor, sharing no account or
-principal with depositor or mark, within `LevelGapMax` levels above the mark, and while fewer than `max_hunters` are
-`ACTIVE`; they choose their calling-card mode (§4.8). Acceptance gives the **dossier** (§4.4).
+A hunter accepts in person at a Broker if registered, of `min_rank` or above, neither the depositor nor the mark, sharing
+no account or principal with either, at most `LevelGapMax` levels above the mark, while fewer than `max_hunters` are
+`ACTIVE`; they choose a calling-card mode (§4.8). Acceptance gives the dossier (§4.4).
+
+**Mark cooldown.** After any `QUALIFIED` decision on a mark (any contract, Writ or Black, intermediate kill or final), the
+mark is in cooldown for `MarkCooldownHours`: a death during it is decided `EXCLUDED` (`MARK_COOLDOWN`) for every contract.
+Decisions are made in log order (fact-journal.md §4.2), so of two deaths the earlier decides first.
+`MultiKillCooldownHours` is at least `MarkCooldownHours` (configuration ranges).
 
 ### 4.3 Writs
 
-A Writ is lawful: its mark must be lawful game at the moment of opening and of each qualifying kill:
-
-| Cause | Lawful while | Opened |
+| Cause | Basis recorded at opening | Lawful at a death while |
 |---|---|---|
-| `KARMA` | the mark's karma > 0 | by anyone at a Magistrate |
-| `CURSED_WEAPON` | the mark holds a cursed weapon (`managers/CursedWeaponsManager.java:349`, `checkOwnsWeaponId`) | **automatically** when one is acquired, by the `ON_CURSED_WEAPON_ACQUIRE` seam (03 §4.4) at `CursedWeapon.activate` (`entity/actor/holders/player/CursedWeapon.java:369-393`): Mobius dispatches no event there; funded by the active Crown Law Bounty Endowments and by contributions |
-| `CLAN_WAR` | the hunter's clan and the mark's clan are at **mutual** war: each `isAtWarWith` the other (`entity/clan/Clan.java:1643`), neither member an academy member, as retail's PvP credit requires (`Player.java:5672`); `Player.isAtWarWith` is one-sided (:15074-15086) and is not used | by a clan leader of a clan at war with the mark's |
+| `KARMA` | the mark's karma > 0 | the death snapshot shows karma > 0 |
+| `CURSED_WEAPON` | the mark holds one (`managers/CursedWeaponsManager.java:349`) | the snapshot shows the mark holding it |
+| `CLAN_WAR` | `issuer_clan`, `target_clan` (the mark's), mutual war: each `isAtWarWith` the other (`entity/clan/Clan.java:1643`) | the snapshot shows the killer in `issuer_clan`, the mark in `target_clan`, both directions at war, neither in the academy |
 
-When the cause ends (karma reaches 0; the cursed weapon leaves the mark by drop or expiry, `CursedWeapon.java:458`, :95-185;
-the war ends, `data/sql/ClanTable.java:443-479`), the Writ **lapses** and its contributions return to their sources, unless a
-kill was already recorded (its settlement proceeds). Any registered hunter may take a Writ (no exclusivity, no rank
-minimum). Writs are public: the wanted boards (§4.12) show each mark's total.
+A Writ is opened by anyone at a Magistrate (`KARMA`), by a clan leader of the issuing clan (`CLAN_WAR`), or **automatically**
+when a cursed weapon is acquired, through the `ON_CURSED_WEAPON_ACQUIRE` seam at `CursedWeapon.activate`
+(`entity/actor/holders/player/CursedWeapon.java:369-393`; Mobius dispatches no event there). Lawfulness is read at the
+death, synchronously, from the death snapshot (§4.5), never from asynchronous war or karma events (war events are
+dispatched before the clan sets change, `data/sql/ClanTable.java:405-408`, `:448-451`). The basis **ends** when the Ledger's
+periodic check, or a karma, war or cursed-weapon event followed by a re-read of the state, finds it false; the Writ then
+lapses, unless a qualifying death awaits payment.
+
+**Writ farming bounds.** A Writ is paid only under the same mark protections as a Black Contract (newbie level, level gap,
+cooldown) and these, for the part funded by others than players (Crown Law, guild pools, houses), its **external share**:
+the mark's karma must come from a kill of a victim sharing no account, principal, party, clan or trade with the mark or
+the hunter in `LinkWindowHours` (the karma kill's own snapshot, from the death evidence of that kill); external payouts per
+mark are capped at `EndowmentCapAdena` per `PairWindowDays` (`lc_ledger_endowment_use`); and a held external share is
+**returned** by default when its review window passes (§4.11). Player contributions carry `WritFeePermille` as a sink.
+AT-BL-14 shows a ring that manufactures a mark and kills it loses money at every scale.
 
 ### 4.4 Dossier
 
-Identity-level facts only (16 §3.1): name, race, level band (the mark's level rounded down to 5 and up to 5 more), clan,
-the contract's value and deadline, and **last confirmed activity** as the Intel Service's age band of the newest item the
-hunter's grants hold about the mark (`FRESH`/`RECENT`/`OLD`/none). Current location: always `UNKNOWN`. When the mark is
-offline, no new traces exist (intel-service.md §3), so the trail goes cold by itself (16 §3.4).
+Identity-level facts only (16 §3.1): name, race, level band (a 5-level band), clan, the contract's value and deadline, and
+the age band of the newest intel the hunter's grants hold about the mark (`FRESH`/`RECENT`/`OLD`/none). Location: always
+`UNKNOWN`. When the mark is offline, no traces are made (intel-service.md §3), so the trail goes cold by itself (16 §3.4).
 
-### 4.5 Kills and conditions
+### 4.5 Deaths and decisions
 
-**Capture.** The kill hook is a listener on `ON_CREATURE_DEATH` for players, dispatched synchronously before the victim's
-death is processed (`entity/actor/Playable.java:100-107`). It resolves the killer's acting player (`asPlayer()`, which
-for summons, pets, traps, decoys and effect points is their owner, `entity/actor/Summon.java:884`,
-`instance/Trap.java:229`, `instance/Decoy.java:220`, `instance/EffectPoint.java:52`; a damage-over-time kill's killer is its
-caster, `dist/game/data/scripts/handlers/skill/effects/DamOverTime.java:83`), takes both snapshots (actor-identity.md §2.4)
-and the context, and for each contract and acceptance the victim and killer match, stages a `Ledger.Kill` outbox fact
-keyed by the kill key. The asynchronous `OnPlayerPvPKill` (`Player.java:5308-5313`) is not used.
+**Capture**, at the **death seam**, a core patch in `Playable.doDie` (`entity/actor/Playable.java:110-119`) right after the
+synchronized block that makes the alive→dead transition (`setDead(true)`, under `synchronized (this)`): only a death that
+happened gets there, once, whatever the death event before it did (`Playable.java:100-107` dispatches before the dead
+check and may run twice). The seam increments the victim's death counter (in memory, and its value is part of the key, so
+it is assigned once per real death) and makes a **captured fact** `Ledger.Death` (fact-journal.md §3.2: primitives into the
+capture ring, no lock, no I/O, no allocation): death key `BL/death/<journal epoch>/<victim object id>/<death counter>`,
+victim and killer snapshots, the killer's kind, and the context bits read at that moment:
 
-**Excluded contexts** (the kill is recorded `EXCLUDED` with the reason, and settles nothing): the killer is not an `ACTIVE`
-acceptor of the contract (Black) or not a registered hunter (Writ); the victim is not `INTERACTIVE` (actor-identity.md
-§2.3: no offline farming); the killer holds a cursed weapon (`Player.isCursedWeaponEquipped`, :12861); either is in a PvP
-zone or a PvP instance (`entity/actor/Creature.java:428-435`: arenas, the Coliseum and event instances); either is on or
-registered for an event (`Player.java:14844-14872`); Kratei's Cube or the Underground Coliseum (`Player.java:5279-5306`).
-Olympiad and duel deaths never reach this hook: retail ends them before `doDie` (`entity/actor/status/PlayerStatus.java:270-284`,
-`:300-306`).
+- the acting player behind the killer: `asPlayer()`, the owner for summons, pets, traps, decoys and effect points
+  (`entity/actor/Summon.java:884`, `instance/Trap.java:229`, `instance/Decoy.java:220`, `instance/EffectPoint.java:52`);
+  for damage over time its caster (`dist/game/data/scripts/handlers/skill/effects/DamOverTime.java:83`);
+- PvP zone or PvP instance (`entity/actor/Creature.java:428-435`), siege zone, Olympiad mode (`Player.java:10280`), duel
+  (`:10286`; suicide skill effects call `doDie` directly even there,
+  `dist/game/data/scripts/handlers/skill/effects/PhysicalDamage.java:112`), event registration or participation
+  (`Player.java:14844-14872`), Kratei's Cube or the Underground Coliseum (`Player.java:5279-5306`), the killer holding a
+  cursed weapon (`:12861`), the victim's activity (actor-identity.md §2.3), the territory
+  (`data/xml/MapRegionData.java:412-416`);
+- the Writ bases: the victim's karma and cursed weapon; both clans' mutual war;
+- the retail anti-feed answer `AntiFeedManager.check(killer, victim)` (`managers/AntiFeedManager.java:68-117`: IP equality,
+  and a death within its interval), read **here**, before Mobius records this death's time (`Player.java:5490`), so the
+  interval is about the victim's previous death.
 
-**Conditions** (all machine-verifiable, 16 §5), read from the kill's snapshots and context: before the deadline;
-outside a siege zone (`isInsideZone(SIEGE)`, set only during an active siege, `entity/zone/type/SiegeZone.java:173-179`);
-while the mark is in a named clan; in a named territory (`data/xml/MapRegionData.java:412-416`, `getAreaCastle`) — the
-"public execution"; for a multi-kill contract, at least `MultiKillCooldownHours` after the previous qualifying kill.
+A ring full drops the capture and the journal records a `QUEUE_FULL` gap of the death family (fact-journal.md §3.3); §3.1's
+deadline rule fails closed on it, and a hunter whose kill fell into a gap can file a claim that goes to admin review with
+the gap and Mobius's own PvP and PK counters as evidence.
 
-**Settlement.** A Writ settles at once: the whole principal to the killer by service mail. A Black Contract becomes
-`CLAIMABLE`: the killer claims in person at any Broker before `claim_deadline` (`ClaimHours`), which is the **delayed
-Broker delivery** (16 §6); the principal goes to the hunter by service mail and unspent intel to the depositor. After a
-successful execution the mark enters `lc_ledger_mark_cooldown` for `MarkCooldownHours`.
+**Evidence and decisions.** The Ledger's projector writes the death as immutable evidence (`lc_ledger_death`, keyed by the
+death key: a second capture of the same death is a no-op) and, in the same transaction, one immutable decision per contract
+naming the victim as mark (`lc_ledger_decision`): `QUALIFIED`, or `EXCLUDED` with the first failing reason of: the killer
+not an `ACTIVE` acceptor (Black) or not a registered hunter (Writ); a PvP zone or instance, Olympiad, duel, event, Kratei's
+Cube or Coliseum; the killer holding a cursed weapon; the victim not `INTERACTIVE` (no offline farming); the mark in
+cooldown; the Writ's basis false at the death; a condition false (16 §5: before the deadline; outside a siege zone; the
+mark in a named clan; in a named territory, the "public execution"; for a multi-kill contract, after
+`MultiKillCooldownHours`). Anti-abuse is **not** a decision: it is the payment's (§4.11), so evidence and decisions never
+change.
 
-### 4.6 Questioning, sightings, rumors
+**Claims and payment.** A Writ's qualifying decision creates its `BOUNTY` payment at once. A Black Contract's creates a
+claim; the killer claims in person at any Broker before `claim_deadline` (`ClaimHours`), the **delayed Broker delivery**
+(16 §6), which creates the payment. A paid bounty goes to the hunter by service mail; unspent intel to the depositor.
 
-All disclosures are the Intel Service's (intel-service.md §4.2), with these purposes and prices:
+### 4.6 Questioning, rumors, sightings
 
-| Page | Where | Purpose | Paid from | Price (sink unless said) |
+All disclosures are the Intel Service's (intel-service.md §4.2, §4.8):
+
+| Page | Where | Purpose | Paid from | Price |
 |---|---|---|---|---|
-| question a witness | the witness NPC, in person | `LEDGER_QUESTIONING` (its ceiling: the hunter's rank's, §4.1) | the contract's `INTEL` custody, else the hunter | `QuestionAdena` × the disclosure's units, `FEE_QUESTIONING` |
-| tavern rumors | an information NPC, in person | `LEDGER_RUMOR` (`TERRITORY`, confidence `RUMOR`) | the hunter | `RumorAdena`, `FEE_QUESTIONING` |
-| buy a sighting | a Broker, in person | `LEDGER_INFORMANT` | `INTEL` custody | the informant's price, **transferred** to the informant by service mail (held under §4.11 if linkage) |
+| question a witness | the witness NPC, in person | `LEDGER_QUESTIONING` (ceiling: the hunter's rank's) | the contract's `INTEL` custody, else the hunter | `QuestionAdena` × units, `FEE_QUESTIONING` sink |
+| tavern rumors | an information NPC, in person | `LEDGER_RUMOR` | the hunter | `RumorAdena`, `FEE_QUESTIONING` sink |
+| buy a sighting | a Broker, in person | `LEDGER_INFORMANT` | the contract's `INTEL` custody | the offer's price ≤ the contract's `max_sighting_price`: a `SIGHTING` payment to the informant |
 
-**Clan-hall stewards** (16 §3.3) answer only about the membership and activity (age band) of the clan that owns their hall
-and its members, never about places; they refuse a hunter whose target is a member of the hall's owning clan unless the
-hunter's clan is at mutual war with it, and they are never bribable (§4.7). Willingness beyond that follows Crown Law
-politics once Crown Law is specified (12 §6), a factor of 1 until then.
+**Clan-hall stewards** (16 §3.3) answer only about the membership and activity (age band) of the clan owning their hall,
+never about places; they refuse a hunter whose mark belongs to that clan unless the hunter's clan is at mutual war with it;
+they are never bribable. Crown Law politics may scale willingness once specified (a factor of 1 until then).
 
-**Informants** (16 §3.5): a character who sighted a mark (the Intel Service's observation, intel-service.md §3.1-§3.2:
-`canWitness` held for the consecutive samples) submits the sighting in person at a Broker with an asking price; the Intel
-Service records it as an `INFORMANT` trace only if the informant shares no account or principal with the mark (intel-service.md
-§3.2). The offer is listed to hunters with active acceptances on that mark; equivalent sightings are deduplicated by the Intel
-Service (one item per trace, grants for the rest). An informant whose sighting is bought gains `sightings_verified` if they
-are also a hunter.
+**Informants** (16 §3.5): a character who sighted a mark (the Intel Service's observation, `canWitness` held for the
+consecutive samples) submits it in person at a Broker with an asking price; the Intel Service records it as an `INFORMANT`
+trace only if the informant shares no account or principal with the mark. The offer (`lc_ledger_offer`) dies with its
+trace. It can be bought only for a contract on that mark, by an `ACTIVE` acceptor, at a price ≤ the contract's cap; the
+**payment** is checked (§4.11) with the informant as beneficiary against the buying hunter, the depositor and the mark, so
+a hunter's own account cannot sell to them, and a linked one is held. Equivalent sightings are deduplicated by the Intel
+Service (one item per trace).
 
 ### 4.7 Counter-intelligence
 
-- **Intuition** (16 §4): `lc_ledger_inquiry` counts the Ledger's own disclosure requests about a mark per window
-  (`InquiryWindowMinutes`). When a window's count reaches `IntuitionThreshold`, with the keyed probability
-  `IntuitionChance` (`rng("ledger.intuition", mark, window)`, 04 §7), the mark, if `INTERACTIVE`, receives once per window
-  `ExShowScreenMessage` "You feel watched." (`network/serverpackets/ExShowScreenMessage.java:67`). Never a proximity alarm,
-  never a count.
-- **Clan intelligence**: the clan owning a castle sees on its Codex page, per day, the number of Ledger questionings
-  performed at witnesses in its territory (a count, a day, no names).
-- **Bribing a witness**: the mark, in person at a bribable witness (the witness kinds table, intel-service.md §8: gatekeepers,
-  warehouse keepers, merchants and tavern NPCs are bribable; guards, Magistrates and clan-hall stewards never), pays
-  `BribeBaseAdena` × the witness's sensitivity × (1 + the mark's PK count / 10), `FEE_BRIBE`; the Intel Service suppresses
-  that witness for that subject for `BribeMinutes` (≤ `BribeMaxMinutes`) (`intel.suppress`, intel-service.md revision 6).
-  The trace and the audit remain (INTEL-R08).
-- **False trails**: the mark pays a Broker `FalseTrailAdena` (`FEE_BROKER`) to plant a rumor that they were seen in a
-  territory of their choosing; the Intel Service records it as a `RUMOR` trace (`intel.plantRumor`), disclosed only at
-  `RUMOR` confidence through tavern rumors, among the real ones, never as `WITNESS` or `CONFIRMED`, never as history.
-- **Trail manipulation** by movement needs no mechanism: the witnesses see what the mark does (16 §4).
+- **Intuition**: `lc_ledger_inquiry` counts the Ledger's disclosure requests about a mark per `InquiryWindowMinutes`. When a
+  window's count reaches `IntuitionThreshold`, with the keyed probability `IntuitionChance` (`rng("ledger.intuition", mark,
+  window)`), an `INTERACTIVE` mark receives once per window `ExShowScreenMessage` "You feel watched."
+  (`network/serverpackets/ExShowScreenMessage.java:67`). Never a proximity alarm, never a count.
+- **Clan intelligence**: a castle-owning clan sees per day the number of Ledger questionings at witnesses in its territory.
+- **Bribes**: the mark, in person at a bribable witness, pays `BribeBaseAdena` × the witness's sensitivity × (1 + PK count / 10)
+  (`FEE_BRIBE`); the Intel Service suppresses that witness for that subject (`intel.suppress`, intel-service.md §4.8).
+- **False trails**: the mark pays a Broker `FalseTrailAdena` (`FEE_BROKER`) to plant a rumor in a territory of their choosing
+  (`intel.plantRumor`): a `RUMOR` trace, disclosed only as a rumor, alike to the real rumors.
+- **Trail manipulation** needs no mechanism: witnesses see what the mark does.
 
 ### 4.8 Aliases and calling cards
 
-A hunter may register one **nom de guerre** at a Broker (`AliasAdena`, `FEE_ALIAS`; a unique name; a card kind). The alias is
-never a visible name in the world: Mobius's visible-name override is lost on transformation
-(`entity/actor/transform/Transform.java:222-230`) and many channels send the real name anyway (chat, title, announcements),
-so the alias lives only in Ledger pages, calling cards and history. Ordinary combat shows the attacker's real character, as
-retail does (`network/serverpackets/CharInfo.java:137`): anonymity is the confidentiality of Ledger records, not invisibility
-(consensus §6.5).
+A hunter may register one nom de guerre at a Broker (`AliasAdena`, `FEE_ALIAS`). The alias never enters the world: Mobius's
+visible-name override is reset by transformations (`entity/actor/transform/Transform.java:222-230`) and many channels send
+the real name anyway, so the alias lives only in Ledger pages, calling cards and history. Ordinary combat shows the
+attacker as Mobius shows them (`network/serverpackets/CharInfo.java:137`, the visible name).
 
-Calling-card modes, chosen at acceptance: `AT_KILL` — at the qualifying kill the victim receives "A black feather was left
-beside your body." naming the alias (the victim, who saw their killer, can now link alias and character; §4.10);
-`DELAYED` — the Broker delivers the card to the victim when the kill is claimed, without the claim's time or place; `NONE`.
+Calling-card modes, chosen at acceptance: `AT_KILL` — at a qualifying death the victim is told "A black feather was left
+beside your body." with the alias; `DELAYED` — the Broker delivers the card when the kill is claimed, without its time or
+place; `NONE`.
 
 ### 4.9 Target victory and the reverse investigation
 
-When a mark kills a hunter who holds an `ACTIVE` acceptance on a **Black Contract** on that mark (any non-excluded context,
-§4.5), the acceptance `FAILED` and the mark receives by service mail a **Torn Black Seal**: a non-tradable, valueless item
-issued from the `LEDGER_SEAL` source (asset-service.md revision 9), one per (contract, hunter). Its evidence is the row
-`lc_ledger_seal`, keyed by the item's Asset lifecycle id, never by item variables: Mobius deletes an item's variables when it
-drops and does not restore them on pickup (`entity/item/instance/Item.java:1763`; `entity/item/inventory/Inventory.java:795-814`).
+When a mark kills a hunter who holds an `ACTIVE` acceptance on a **Black Contract** on that mark (a death decided under
+§4.5's context exclusions, with the hunter as victim and the mark as killer), the acceptance is `FAILED` and the mark
+receives by service mail a **Torn Black Seal**: non-tradable, valueless, issued from `LEDGER_SEAL` (asset-service.md
+revision 9), one per (contract, hunter). Its evidence is `lc_ledger_seal`, keyed by the item's Asset lifecycle id, never
+item variables (Mobius deletes them on drop, `entity/item/instance/Item.java:1763`, `entity/item/inventory/Inventory.java:795-814`).
+At issue the Ledger records, through the Intel Service, the seal's identity evidence (`PATRON_CLAN`, `PATRON_NAME`, or
+`OBSCURED` under sealed identity), bound to that seal (intel-service.md §4.8).
 
-The seal's holder opens a **reverse case** in person at a Magistrate, within `ReverseCaseHours` of the seal's issue; each
-step is an Intel Service identity disclosure (purpose `LEDGER_REVERSE`, precision `NONE`) of evidence the Ledger recorded
-when the seal was issued (`intel.recordIdentity`):
+The seal's holder opens a reverse case in person at a Magistrate within `ReverseCaseHours`; each step is a `LEDGER_REVERSE`
+disclosure:
 
 | Step | Reveals | Price |
 |---|---|---|
-| 1 | the contract's value band and origin town (the Broker network) | free |
-| 2 | the patron's clan, or "no clan" — "obscured" if sealed identity was bought | `ReverseStep2Adena`, `FEE_QUESTIONING` |
-| 3 | the patron's name — "obscured" if sealed identity was bought | `ReverseStep3Adena`, `FEE_QUESTIONING` |
+| 1 | value band and origin town (the Broker network) | free |
+| 2 | the patron's clan, "no clan", or "obscured" | `ReverseStep2Adena`, `FEE_QUESTIONING` |
+| 3 | the patron's name, or "obscured" | `ReverseStep3Adena`, `FEE_QUESTIONING` |
 
-The failed hunter is not a step: the mark fought them and saw them (CharInfo). Consequences of a discovered patron are the
-players' (16 §5): the Ledger does nothing more.
+A case starts at step 0 and moves one step at a time; the failed hunter is no step (the mark fought them).
 
 ### 4.10 The alias intelligence market
 
-The only certified alias link is the one an `AT_KILL` calling card creates: at that kill the Ledger records, through the Intel
-Service, identity evidence `ALIAS_LINK` (alias → killer) whose witness is the victim. The victim may sell it in person at a
-Broker for `AliasLinkAdena` paid by each buyer (a transfer to the victim, held under §4.11 if linkage); buyers receive the
-link at `CONFIRMED` confidence. Its first sale sets the alias's `exposed_at`. Gossip is never certified: nothing else creates
-`ALIAS_LINK` evidence. An exposed hunter is an ordinary possible mark.
+The only certified alias link is made at an `AT_KILL` card's death, and only when the victim **saw the killer itself**:
+the killer kind is `SELF` (not a summon, trap, decoy or damage over time) and the killer was not transformed with a named
+transform at the death (when the visible name is not the real one). Then the Ledger records `ALIAS_LINK` identity evidence
+(alias → killer), the victim its witness. The victim may sell it at a Broker in person (`AliasLinkAdena` per buyer, an
+`ALIAS_LINK` payment to the victim, checked under §4.11 against the buyer and the alias's owner); buyers receive it at
+`CONFIRMED`. Its first sale sets `exposed_at`. Nothing else creates `ALIAS_LINK` evidence; gossip is never certified.
 
-### 4.11 Anti-abuse
+### 4.11 Payments and anti-abuse
 
-At settlement (and at each informant or alias payment), the payout is checked against signals (16 §8-§9; consensus §6.3):
+Every payment is checked when it is created, against its beneficiary and its counterparties (for a bounty: hunter, mark,
+depositor or funders; for a sighting: informant, buying hunter, depositor, mark; for an alias link: seller, buyer, alias
+owner):
 
 | Signal | Effect |
 |---|---|
-| hunter and mark, or hunter and depositor, share an account or a principal | **block**: the kill `EXCLUDED`, nothing paid |
-| the mark is an NPC fake or a `TEST` profile actor (actor-identity.md §3 policy) | block |
-| hunter and mark in the same party or clan at the kill, or within `LinkWindowHours` before it | hold |
-| a player-to-player trade between hunter and mark, or hunter and depositor, within `LinkWindowHours` (`ON_PLAYER_TRADE_COMPLETE`, 03 §4.4) | hold |
-| the same client IP at the kill or the contract's opening (a salted hash of `GameClient.getIp`, `network/GameClient.java:188`, kept with the hold's evidence and expiring with it) | hold |
-| the hunter–mark pair settled `PairSettleMax` times in `PairWindowDays` | hold |
-| `AntiFeedManager.check(hunter, mark)` false, when that retail feature is enabled (`managers/AntiFeedManager.java:68-117`; IP-only and off by default, `dist/game/config/PVP.ini:35-50`) | hold |
+| beneficiary and a counterparty share an account or a principal | **block** |
+| the mark or a counterparty is an NPC fake or a `TEST` profile actor (actor-identity.md §3) | block |
+| the pair (beneficiary, counterparty) was paid by the Ledger `PairSettleMax` times in `PairWindowDays` | block |
+| same party or clan at the death or within `LinkWindowHours` before it | hold |
+| a player-to-player trade between them within `LinkWindowHours` (`ON_PLAYER_TRADE_COMPLETE`, 03 §4.4) | hold |
+| the same client IP at the death or at the contract's opening (a salted hash of `GameClient.getIp`, `network/GameClient.java:188`, kept only in the payment's evidence) | hold |
+| retail anti-feed answered false at the death (§4.5; it is off by default, `dist/game/config/PVP.ini:35-50`) | hold |
 
-A **hold** keeps the principal in custody (`HELD`): the hunter and depositor are told the payout is under review. An admin
-releases or returns it with a reason; with no decision by `review_until` (`HoldReviewHours`), it is **released** — the
-explicit false-positive rule: a hold delays, it does not confiscate. Nothing is ever refunded by minting (16 §7): returns go
-from the custody to its funders. The published guarantee is bounded disclosure and economically unattractive farming, not
-the identification of who controls an account (consensus §6.3).
+A **block** pays nothing: the money stays in, or returns to, its custody, and the contract continues (§3.1). A **hold**
+keeps it in custody; beneficiary and counterparties are told a payment is under review. An admin releases or returns it
+with a reason. With no decision by `review_until` (`HoldReviewHours`): a **player-funded** payment is released (a hold
+delays, it does not confiscate), an **externally funded** share is returned to its funders. Nothing is ever refunded by
+minting. The published guarantee is bounded disclosure and economically unattractive farming, not identification of who
+controls an account (consensus §6.3).
 
 ### 4.12 Publication and history
 
-Publication types registered in the publication registry (intel-service.md §4.7):
+Two publication types, with field rules the publication registry gains for them (intel-service.md §4.7, revision 6):
 
-| Type | Fields | Delay |
+| Type | Fields (rule) | Delay |
 |---|---|---|
-| `ledger_wanted` | mark (`PUBLIC_ENTITY`), total open Writ value (`COUNT`), cause, day | none: Writs are public (16 §2.1), and the row has no place |
-| `ledger_legend` | mark, alias (never the hunter's character unless exposed), value band, outcome, territory (`AREA_TERRITORY`), day | `PublicationTacticalDelayMinutes` (location-related) |
+| `ledger_wanted` | mark (`LEDGER_WRIT_MARK`: a character only while an open Writ names them), open Writ total (`COUNT`), cause, day | none: Writs are public (16 §2.1) and the row has no place |
+| `ledger_legend` | mark (`LEDGER_LEGEND_MARK`: the mark of a terminal Black Contract promoted below), alias (`LEDGER_ALIAS`), value band, outcome, territory (`AREA_TERRITORY`), day | `PublicationTacticalDelayMinutes` |
 
-A Black Contract is promoted to `ledger_legend` only after it is terminal and only if its principal ≥ `LegendValueAdena` or
-a hunter failed on it; the depositor, the conditions and the informants are never published (16 §11). Wanted boards are NPC
-pages in town squares reading `ledger_wanted`.
+A Black Contract is promoted only after it is terminal and only if its principal ≥ `LegendValueAdena` or a hunter failed
+on it. An alias's owner, a depositor, conditions and informants are **never** published, exposed or not.
 
 ## 5. Facts
 
-Outbox facts in the transaction of their change: `Ledger.ContractOpened` (kind, cause, mark; for Black, no client field),
-`Ledger.Contributed`, `Ledger.Accepted`, `Ledger.Abandoned`, `Ledger.Kill` (kill key, contract, hunter, mark, outcome,
-reason, context), `Ledger.Claimed`, `Ledger.Settled`, `Ledger.Held`, `Ledger.HoldResolved`, `Ledger.Expired`,
-`Ledger.Lapsed`, `Ledger.Cancelled`, `Ledger.SealIssued`, `Ledger.ReverseStep`, `Ledger.AliasRegistered`,
-`Ledger.AliasExposed`, `Ledger.RankChanged`, `Ledger.Bribe`, `Ledger.FalseTrail`, `Ledger.Intuition`. The client of a
-Black Contract and an alias's owner appear in no fact; the settlement's postings name the receivers, and ledger postings are
-financial audit (asset-service.md). Consumed: player deaths (the kill hook), `ON_CURSED_WEAPON_ACQUIRE`, clan war start and
-end (`ClanTable.java:405-408`, `:448-451`), karma changes (`Player.java:2065-2071`), trades.
+Captured: `Ledger.Death` (§4.5). Outbox, in the transaction of their change: `Ledger.ContractOpened` (kind, cause, mark;
+actor `SYSTEM` with the depositor in `lc_fact_expiring`, §2.2), `Ledger.Contributed`, `Ledger.Accepted`, `Ledger.Abandoned`,
+`Ledger.Decided` (death key, contract, outcome, reason), `Ledger.Claimed`, `Ledger.PaymentCreated`, `Ledger.PaymentResolved`
+(state, reason), `Ledger.Settled`, `Ledger.Expired`, `Ledger.Lapsed`, `Ledger.Cancelled`, `Ledger.Review`,
+`Ledger.SealIssued`, `Ledger.ReverseStep`, `Ledger.AliasRegistered`, `Ledger.AliasRetired`, `Ledger.AliasExposed` (alias
+only), `Ledger.RankChanged`, `Ledger.Bribe`, `Ledger.FalseTrail`, `Ledger.Intuition`. Consumed: deaths,
+`ON_CURSED_WEAPON_ACQUIRE`, karma and war changes (as triggers for re-reading state), trades.
 
 ## 6. Invariants
 
 | Id | Invariant | Checked |
 |---|---|---|
-| BL-INV01 | the Ledger changes no combat value and calls no mechanics API | the static scan; AT-BL-09 |
-| BL-INV02 | no coordinate, location or evidence reaches a Ledger page or table | the Intel Service's types; AT-BL-10 |
-| BL-INV03 | a kill settles at most once (the kill key and the settlement key) and only if qualified | keys; AT-BL-04 |
-| BL-INV04 | Ledger money only moves between custodies, holders and sinks; nothing is minted | the Asset Service's postings; AT-BL-11 |
-| BL-INV05 | a depositor's identity and an alias's owner are disclosed only by §4.9 and §4.10 | the static scan of readers; AT-BL-10 |
-| BL-INV06 | every expiring Ledger row is gone by its `expires_at` + purge interval | the expiring registry; AT-BL-10 |
+| BL-INV01 | the Ledger changes no combat value and calls no mechanics API | static scan; AT-BL-09 |
+| BL-INV02 | no coordinate or evidence reaches a Ledger page or table | Intel's types; AT-BL-10 |
+| BL-INV03 | a death is evidence once; each contract decides it once; a payment resolves once | keys and triggers; AT-BL-00, AT-BL-04 |
+| BL-INV04 | Ledger money moves only between custodies, holders and sinks | Asset postings; AT-BL-11 |
+| BL-INV05 | depositors, alias owners and informants reach players only by §4.9 and §4.10, and their mappings are gone by §2.2's times | static scan; expiry; AT-BL-10 |
 
 ## 7. Failure model
 
 | Fault | End state |
 |---|---|
-| death event dispatched twice | the second kill fact is refused by its key |
-| crash during settlement, a claim or a payment | the Asset Service's: committed or not; the next request or effect writes the key once |
-| the mark logs out | no new traces; the dossier's activity ages; the contract runs to its deadline |
-| a hunter deleted while `ACTIVE` | acceptance `VOID`; a claimable kill of theirs lapses unclaimed |
-| the depositor deleted | returns go to the deletion guard's rule (asset-service.md §2.1): the release aborts with `RECEIVER_GONE` and the contract goes to admin review |
-| Intel Service down | no questioning, no sightings, no rumors; contracts and kills continue |
+| a death event dispatched twice, or a death captured twice | one evidence row, one decision per contract |
+| a death dropped by a full ring | a gap; deadlines fail closed to `REVIEW`; the hunter's claim goes to admin review |
+| crash during a payment, claim or settlement | the Asset Service's; keys written once |
+| the mark logs out | no new traces; the contract runs to its deadline |
+| a hunter deleted while `ACTIVE` | acceptance `VOID`; their claimable kill lapses |
+| a depositor or funder deleted | returns abort with `RECEIVER_GONE` (asset-service.md §2.1); the contract goes to `REVIEW` |
+| Intel Service down | no questioning, sightings or rumors; contracts and deaths continue |
 
 ## 8. Configuration
 
@@ -365,77 +410,90 @@ end (`ClanTable.java:405-408`, `:448-451`), karma changes (`Player.java:2065-207
 | `MinContractAdena` | 10000–100000000 | 1000000 | as default everywhere | AT-BL-02 |
 | `NewbieLevel` | 1–85 | 40 | 40 everywhere | AT-BL-02 |
 | `LevelGapMax` | 5–85 | 20 | 20 everywhere | AT-BL-02 |
-| `PairWindowDays`, `MaxPairContracts`, `ReciprocalHours` | 1–90, 1–10, 1–168 | 7, 3, 24 | as default everywhere | AT-BL-02 |
+| `MaxOpenOnMark`, `PairWindowDays`, `MaxPairContracts`, `ReciprocalHours` | 1–20, 1–90, 1–10, 1–168 | 5, 7, 3, 24 | as default everywhere | AT-BL-02 |
 | `ContractMinHours`, `ContractMaxHours` | 1–720 | 6, 168 | as default everywhere | AT-BL-01 |
 | `ClaimHours` | 1–168 | 24 | 24 everywhere | AT-BL-04 |
-| `MarkCooldownHours` | 0–720 | 48 | 48 everywhere | AT-BL-02 |
-| `MaxKills`, `MultiKillCooldownHours` | 1–5, 1–168 | 3, 24 | as default everywhere | AT-BL-04 |
+| `MarkCooldownHours`, `MultiKillCooldownHours` | 0–720, ≥ `MarkCooldownHours` | 48, 48 | as default everywhere | AT-BL-02 |
+| `MaxKills` | 1–5 | 3 | 3 everywhere | AT-BL-04 |
+| `WritFeePermille`, `EndowmentCapAdena` | 0–200, 0–1000000000 | 20, 50000000 | as default everywhere | AT-BL-14 |
 | `SealedIdentityAdena`, `AliasAdena`, `AliasLinkAdena`, `FalseTrailAdena`, `RumorAdena`, `QuestionAdena` | 0–100000000 | 5000000, 1000000, 2000000, 500000, 20000, 50000 | as default everywhere | AT-BL-11 |
-| `BribeBaseAdena`, `BribeMinutes`, `BribeMaxMinutes` | — | 200000, 30, 120 | as default everywhere | AT-BL-07 |
-| `ReverseCaseHours`, `ReverseStep2Adena`, `ReverseStep3Adena` | — | 24, 1000000, 10000000 | as default everywhere | AT-BL-08 |
+| `BribeBaseAdena` | 0–100000000 | 200000 | as default everywhere | AT-BL-07 |
+| `ReverseCaseHours`, `ReverseStep2Adena`, `ReverseStep3Adena` | 1–168, 0–1000000000, 0–1000000000 | 24, 1000000, 10000000 | as default everywhere | AT-BL-08 |
 | `InquiryWindowMinutes`, `IntuitionThreshold`, `IntuitionChance` | 10–1440, 1–50, 0–1 | 60, 3, 0.5 | as default everywhere | AT-BL-07 |
-| `LinkWindowHours`, `PairSettleMax`, `HoldReviewHours` | — | 72, 3, 72 | as default everywhere | AT-BL-06 |
-| `HighValueAdena`, `LegendValueAdena` | — | 50000000, 50000000 | as default everywhere | AT-BL-12 |
+| `LinkWindowHours`, `PairSettleMax`, `HoldReviewHours`, `PaymentAuditDays`, `AliasIdleDays` | 1–720, 1–20, 1–720, 1–365, 1–365 | 72, 3, 72, 30, 90 | as default everywhere | AT-BL-06 |
+| `HighValueAdena`, `LegendValueAdena` | 1000000–10000000000 | 50000000, 50000000 | as default everywhere | AT-BL-12 |
 
 ## 9. Interface
 
-Magistrate pages: register, open and fund Writs, take a Writ, wanted board, reverse case. Broker pages: register, alias,
-open a Black Contract (with sealed identity), accept, claim, informant offers, alias links, false trails. Witness NPC
-pages: questioning (and, for the mark, bribing). Codex → Ledger tab, shown only to registered hunters, depositors, Writ marks
-and seal holders: dossiers, granted intel with confidence and age band, offers, the reverse case file, rank. Admin:
-`lc why ledger <id>`, `lc ledger hold release|return <id> <reason>`.
+Magistrate pages: register, open and fund Writs, take a Writ, wanted board, reverse case. Broker pages: register, alias
+(register, retire), open a Black Contract, accept, claim, sighting offers, alias links, false trails. Witness NPC pages:
+questioning, and bribing for a mark. Codex → Ledger tab (registered hunters, depositors, Writ marks, seal holders): dossiers,
+granted intel with confidence and age band, offers, payments under review, the reverse case file, rank. Admin:
+`lc why ledger <id>`, `lc ledger payment release|return <id> <reason>`, `lc ledger review <contract> <decision> <reason>`.
 
 ## 10. Requirements
 
 | Id | Requirement | Proven by |
 |---|---|---|
-| BL-R01 | Contracts MUST move only by §3.1, every transition a durable fact in the transaction of its movements. | AT-BL-00, AT-BL-01 |
-| BL-R02 | A Black Contract MUST be refused for protected marks, linked depositors, repeated pairs below the diminishing threshold and reciprocal contracts; a hunter MUST be refused outside rank, level gap, linkage and capacity limits. | AT-BL-02 |
-| BL-R03 | A Writ MUST exist only while its lawful basis holds, open automatically on cursed-weapon acquisition, and lapse with its basis, returning contributions. | AT-BL-03 |
-| BL-R04 | A kill MUST be captured synchronously with snapshots, excluded in the listed contexts, qualify only under its conditions, and settle at most once. | AT-BL-04 |
-| BL-R05 | Every disclosure MUST go through the Intel Service with the Ledger's purposes, ranks and prices; informant sightings MUST be server-verified. | AT-BL-05 |
-| BL-R06 | Payouts MUST be blocked or held on the listed signals, holds MUST release by default after review, and nothing MUST be refunded by minting. | AT-BL-06 |
-| BL-R07 | Intuition, bribes and false trails MUST work as specified, bribes and rumors through the Intel Service, rumors always `RUMOR`. | AT-BL-07 |
-| BL-R08 | A failed hunter's death MUST give the mark one seal, and the reverse case MUST reveal exactly its steps, honouring sealed identity. | AT-BL-08 |
+| BL-R01 | Contracts MUST move only by §3.1 with its row guards, every transition a durable fact in the transaction of its movements; deadlines MUST fail closed on overlapping death gaps. | AT-BL-00, AT-BL-01 |
+| BL-R02 | A Black Contract MUST be refused for protected or saturated marks, linked depositors, repeated pairs below the diminishing threshold and reciprocal contracts; a hunter MUST be refused outside rank, level gap, linkage and capacity; a mark in cooldown MUST qualify for no contract. | AT-BL-02 |
+| BL-R03 | A Writ MUST record its basis, qualify a death only while the basis held at it (read synchronously), open automatically on cursed-weapon acquisition, and lapse when its basis ends. | AT-BL-03 |
+| BL-R04 | A death MUST be captured once at the alive→dead transition without blocking, recorded as immutable evidence, and decided once per contract, excluded in the listed contexts and conditions. | AT-BL-04 |
+| BL-R05 | Every disclosure MUST go through the Intel Service with the Ledger's purposes, ranks, prices and caps; sightings MUST be server-verified and paid only within the contract's cap. | AT-BL-05 |
+| BL-R06 | Every payment MUST be checked against its beneficiary and counterparties, blocked or held per §4.11, resolved once, released or returned by default by its funding, and never refunded by minting. | AT-BL-06 |
+| BL-R07 | Intuition, bribes and false trails MUST work as specified, through the Intel Service. | AT-BL-07 |
+| BL-R08 | A failed hunter's death MUST give the mark one seal, and the reverse case MUST reveal exactly its steps in order, honouring sealed identity. | AT-BL-08 |
 | BL-R09 | The Ledger MUST grant nothing in combat. | AT-BL-09 |
-| BL-R10 | No coordinate MUST reach the Ledger; depositors and alias owners MUST be disclosed only by the reverse case and certified alias links; expiring rows MUST expire. | AT-BL-10 |
+| BL-R10 | No coordinate MUST reach the Ledger; depositors, alias owners and informants MUST reach players only by the reverse case and certified alias links, and their mappings MUST expire as specified. | AT-BL-10 |
 | BL-R11 | Money MUST move only through the Asset Service as transfers and sinks, with zero minting. | AT-BL-11 |
-| BL-R12 | Publication MUST be only of the Ledger's registered types, never naming depositors, conditions or informants. | AT-BL-12 |
+| BL-R12 | Publication MUST be only of the Ledger's two types with their field rules, never naming alias owners, depositors, conditions or informants. | AT-BL-12 |
 | BL-R13 | Hunts MUST succeed through evidence, with target survival and hunt duration inside declared bands, under full out-of-band sharing. | AT-BL-13 |
+| BL-R14 | Manufacturing a lawful mark and killing it MUST lose money for the ring at every scale. | AT-BL-14 |
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-BL-00 | integration | the migration applies; triggers refuse transitions outside §3.1 (all pairs), a second kill fact per key, a second seal per (contract, hunter), a reverse case skipping a step, a second alias per character or name |
-| AT-BL-01 | integration | every transition of §3.1 through the operations, with their movements and facts |
-| AT-BL-02 | integration | each refusal of §4.2 at its boundary (level 39/40, gap 20/21, the k-th pair contract at 2^k, reciprocal at 23/25 hours, cooldown) |
-| AT-BL-03 | integration | Writs per cause: opened, a kill while lawful settles, the basis ending lapses and returns each contribution to its source; a cursed-weapon acquisition opens a Writ, its drop or expiry lapses it |
-| AT-BL-04 | integration | kills by the hunter, their summon, trap and damage over time credit the hunter; each excluded context (PvP zone, event instance, event registration, cursed weapon, offline mark, Kratei's Cube) records `EXCLUDED`; each condition at its boundary; the death event delivered twice settles once; claim before and after `ClaimHours` |
-| AT-BL-05 | integration | questioning at each rank sees at most its ceiling; prices drawn from the intel custody then the hunter; a sighting with an informant sharing the mark's account refused; equivalent sightings bought by two hunters: one item, two grants |
-| AT-BL-06 | integration | each signal of §4.11 blocks or holds as listed; a hold released by an admin, returned by an admin, and released by timeout; no source posting on any path |
-| AT-BL-07 | integration | intuition at the threshold with the keyed chance, once per window, never to an offline mark; a bribed witness discloses nothing about the mark until the suppression ends; lawful witnesses refuse bribes; a planted rumor appears only as `RUMOR` among real rumors |
-| AT-BL-08 | integration | a hunter killed by the mark: one seal by mail; a reverse case reveals steps 1-3 in order, "obscured" with sealed identity; after `ReverseCaseHours` nothing |
-| AT-BL-09 | unit | the static scan: no Ledger code calls a mechanics API or reads a combat stat; a planted call fails it |
-| AT-BL-10 | unit, integration | the static scan of readers of `client_char` and `owner_char`; no Ledger table has a coordinate column; expiring rows gone after purge, also in a restored backup |
-| AT-BL-11 | integration | every Ledger flow: postings balance; sinks at their codes; no source except `LEDGER_SEAL` (valueless) |
-| AT-BL-12 | integration | publication rows of both types; a Black Contract's legend without depositor, conditions or informants; an attempt to publish another field refused |
-| AT-BL-13 | sim | the full-sharing citizen population (10 §), hunters and marks as citizens with relayed intel: target survival and hunt duration inside the declared bands of the Truth Report |
+| AT-BL-00 | integration | the migration applies; triggers refuse every transition outside §3.1 for each kind, and each guarded transition without its row (a decision, a claim, a paid payment, no acceptance), a decision or evidence changed, a payment resolved twice, a seal twice or for a non-failed hunter, a reverse case inserted past step 0 or skipping a step, a second alias per character or name, a falling rank |
+| AT-BL-01 | integration | every transition through the operations, with movements and facts; a deadline with and without an overlapping gap |
+| AT-BL-02 | integration | each refusal at its boundary (level 39/40, gap 20/21, the open-contract cap, the k-th pair contract at 2^k, reciprocal at 23/25 hours); deaths during a mark's cooldown excluded for every contract; two deaths decided in log order |
+| AT-BL-03 | integration | Writs per cause: a death while the basis held settles, a death after it ended does not; a war ending between the death and the event; a cursed-weapon acquisition opens a Writ, its drop or expiry lapses it |
+| AT-BL-04 | integration, fault | the death event fired twice and the seam reached once; a death refused by retail (an already-dead victim) captures nothing; kills by summon, trap, decoy, DoT and self; each excluded context including a suicide skill in a duel and Olympiad; each condition at its boundary; a full ring: a gap, no decision, a claim to review |
+| AT-BL-05 | integration | questioning per rank within its ceiling; prices from the intel custody then the hunter; a sighting price above the cap refused; an informant sharing the buyer's account blocked, linked held; equivalent sightings: one item, two grants |
+| AT-BL-06 | integration | each signal per payment kind; a held sighting not holding the contract; release by admin, return by admin, timeout release (player-funded) and timeout return (external); no source posting on any path |
+| AT-BL-07 | integration | intuition at the threshold with the keyed chance, once per window, never offline; a bribed witness disclosing nothing until the suppression ends; lawful witnesses refusing bribes; a planted rumor only as a rumor |
+| AT-BL-08 | integration | a hunter killed by the mark: one seal; steps 1-3 in order, "obscured" with sealed identity; after `ReverseCaseHours` nothing |
+| AT-BL-09 | unit | the static scan: no Ledger code calls a mechanics API or reads a combat stat |
+| AT-BL-10 | unit, integration | the static scan of readers of the patron, funder and alias-owner columns; no Ledger table has a coordinate; each mapping deleted at its §2.2 time, also from a restored backup; secret operations' facts carry `SYSTEM` with the actor only in `lc_fact_expiring` |
+| AT-BL-11 | integration | every flow: postings balance; sinks at their codes; no source except `LEDGER_SEAL` |
+| AT-BL-12 | integration | rows of both types; an exposed alias's owner never published; a Writ mark not publishable once no open Writ names them; another field refused |
+| AT-BL-13 | sim | the full-sharing citizen population: survival and hunt duration inside the Truth Report's declared bands |
+| AT-BL-14 | sim | rings of 2 to 20 linked and unlinked accounts manufacturing karma marks and killing them for player-funded and endowment-funded Writs: net Adena of the ring negative in every configuration, after fees, caps, holds and returns |
 
 ## 11. Upstream constraints
 
-1. **Player death fires the synchronous death event before the dead check** (`Playable.java:100-115`), naming the raw
-   killer (`OnCreatureDeath.java:32-43`). → the kill hook resolves `asPlayer()` and keys kills (§2.1, §4.5).
-2. **Olympiad and duel deaths never reach `doDie`** (`PlayerStatus.java:270-284`, `:300-306`). → no exclusion needed there.
+1. **The death event fires before the dead check** (`Playable.java:100-107`, check at :110-119) and names the raw killer
+   (`OnCreatureDeath.java:32-43`). → the death seam after the transition; `asPlayer()` resolution.
+2. **Olympiad and duel damage normally avoid `doDie`** (`PlayerStatus.java:270-284`, `:300-306`), but suicide skill effects
+   reach it (`PhysicalDamage.java:112`). → explicit context exclusions.
 3. **Cursed weapon acquisition dispatches nothing** (`CursedWeapon.java:369-393`). → the `ON_CURSED_WEAPON_ACQUIRE` seam.
-4. **Clan war is one-sided per clan** (`Clan.java:146-147`, `:1638-1648`). → mutual war tested both ways (§4.3).
-5. **AntiFeed is IP-only and off by default** (`AntiFeedManager.java:68-117`, `PVP.ini:35-50`). → a signal among the Ledger's
-   own (§4.11).
-6. **No newbie PK protection exists** (`dist/game/config/Player.ini:777,781` are spawn and teleport protection only). → the
-   Ledger's `NewbieLevel`.
-7. **Item variables do not survive a drop** (`Item.java:1763`, `Inventory.java:795-814`). → seal evidence in a Ledger
-   table keyed by the Asset lifecycle id (§4.9).
-8. **Visible-name overrides leak and are reset by transformations** (`Transform.java:222-230`). → aliases never in the world
-   (§4.8).
+4. **Clan war is one-sided per clan, and war events precede the change** (`Clan.java:146-147`, `:1638-1648`;
+   `ClanTable.java:405-408`). → mutual war read at the death; lapse by re-reading state.
+5. **AntiFeed compares IPs and the last death time, off by default** (`AntiFeedManager.java:68-117`, `PVP.ini:35-50`), and
+   `setLastDeathTime` runs during `doDie` (`Player.java:5490`). → read at the seam, before it; one signal among the Ledger's.
+6. **Retail newbie protection is Protection Blessing only** (`PlayableAI.java:53-66`). → the Ledger's `NewbieLevel`.
+7. **Item variables do not survive a drop** (`Item.java:1763`, `Inventory.java:795-814`). → seal evidence in a Ledger table.
+8. **Visible names are overridden by transformations and leak elsewhere** (`Transform.java:222-230`; `CharInfo.java:137`).
+   → aliases never in the world; alias links certified only for self kills without a named transform.
 
 ## 12. Review record
 
-- Revision 1: draft, not yet reviewed.
+- Round 1 (Codex, a different model family), NO SIGN-OFF, 18 findings: a reserved column name; a death key that did not
+  deduplicate; capture at a pre-death notification; SQL in the combat thread against the journal's capture contract; a
+  block that had to rewrite immutable evidence; informant purchases able to drain a budget to a hunter's alt; holds keyed by
+  contract; Writ farming released by default; cooldown checked only at opening; rumors and identity evidence not fitting
+  Intel's items, budgets and storage; secrecy promises against permanent records; unregistered expiring data;
+  guard-free transitions in the schema; clan-war Writs without a recorded basis; contradictory publication policy; and four
+  inaccurate upstream claims. Revision 2: `cooldown_until`; the death seam after the alive→dead transition with a captured
+  fact and a gap rule; immutable evidence and decisions apart from payments; payments with their own checks, holds and
+  defaults by funding; sighting price caps and buyer–seller checks; Writ bounds with an economic test; cooldown at decision
+  time across contracts; a confidentiality statement and expiring mappings, secret actors in `lc_fact_expiring`; guarded
+  transitions; recorded Writ bases; publication field rules; corrected upstream claims; Intel revision 6 reworked (§12 there).

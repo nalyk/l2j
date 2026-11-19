@@ -148,6 +148,25 @@ CREATE TABLE lc_witness_suppression (
 	PRIMARY KEY (witness_ref, subject_char)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- Identity evidence (spec §4.8): recorded by the Black Ledger only, bound to its seal or alias, expiring with its trace.
+CREATE TABLE lc_identity_evidence (
+	trace_id BIGINT NOT NULL,
+	kind ENUM('ALIAS_LINK', 'PATRON_CLAN', 'PATRON_NAME') NOT NULL,
+	payload JSON NOT NULL,
+	bound_seal BIGINT NULL,
+	bound_alias INT NULL,
+	expires_at TIMESTAMP(3) NOT NULL,
+	PRIMARY KEY (trace_id),
+	KEY idx_identity_expiry (expires_at),
+	CONSTRAINT fk_identity_trace FOREIGN KEY (trace_id) REFERENCES lc_trace (trace_id) ON DELETE CASCADE,
+	CONSTRAINT chk_identity_payload CHECK (JSON_VALID(payload)),
+	CONSTRAINT chk_identity_binding CHECK ((kind = 'ALIAS_LINK') = (bound_alias IS NOT NULL) AND (kind <> 'ALIAS_LINK') = (bound_seal IS NOT NULL))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TRIGGER lc_identity_evidence_insert BEFORE INSERT ON lc_identity_evidence FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND kind = 'IDENTITY' AND expires_at = NEW.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_identity_evidence: an identity trace, expiring with it'; END IF;
+
+CREATE TRIGGER lc_identity_evidence_immutable BEFORE UPDATE ON lc_identity_evidence FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_identity_evidence: rows are inserted and deleted, never updated';
+
 CREATE TABLE lc_signal_presence (
 	char_id INT NOT NULL,
 	opted_in BOOLEAN NOT NULL,
@@ -181,9 +200,9 @@ CREATE TABLE lc_pub_type (
 CREATE TABLE lc_pub_field_rule (
 	pub_type VARCHAR(48) NOT NULL,
 	field VARCHAR(48) NOT NULL,
-	rule ENUM('PUBLIC_ENTITY', 'AREA_TERRITORY', 'DAY', 'COUNT', 'TEXT_FROM_FACT') NOT NULL,
+	rule ENUM('PUBLIC_ENTITY', 'AREA_TERRITORY', 'DAY', 'COUNT', 'TEXT_FROM_FACT', 'LEDGER_WRIT_MARK', 'LEDGER_LEGEND_MARK', 'LEDGER_ALIAS') NOT NULL,
 	PRIMARY KEY (pub_type, field),
 	CONSTRAINT fk_pub_field_type FOREIGN KEY (pub_type) REFERENCES lc_pub_type (pub_type)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_trace', 'expires_at', 'INTEL', 24), ('lc_trace_evidence', 'expires_at', 'INTEL', 24), ('lc_intel', 'expires_at', 'INTEL', 24), ('lc_intel_grant', 'expires_at', 'INTEL', 24), ('lc_intel_copy', 'expires_at', 'INTEL', 24), ('lc_disclosure', 'expires_at', 'INTEL', 24), ('lc_disclosure_cell', 'expires_at', 'INTEL', 24), ('lc_signal_presence', 'expires_at', 'INTEL', 1), ('lc_fact_precise', 'expires_at', 'JOURNAL', 72), ('lc_fact_expiring', 'expires_at', 'JOURNAL', 720);
+INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_trace', 'expires_at', 'INTEL', 24), ('lc_trace_evidence', 'expires_at', 'INTEL', 24), ('lc_intel', 'expires_at', 'INTEL', 24), ('lc_intel_grant', 'expires_at', 'INTEL', 24), ('lc_intel_copy', 'expires_at', 'INTEL', 24), ('lc_disclosure', 'expires_at', 'INTEL', 24), ('lc_disclosure_cell', 'expires_at', 'INTEL', 24), ('lc_signal_presence', 'expires_at', 'INTEL', 1), ('lc_witness_suppression', 'suppressed_until', 'INTEL', 2), ('lc_identity_evidence', 'expires_at', 'INTEL', 24), ('lc_fact_precise', 'expires_at', 'JOURNAL', 72), ('lc_fact_expiring', 'expires_at', 'JOURNAL', 720);

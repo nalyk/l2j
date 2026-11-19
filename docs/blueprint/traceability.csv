@@ -138,7 +138,7 @@ TR-black-ledger-alias-intel-market,90 §2,Black Ledger: alias intel market,16 §
 TR-black-ledger-public-bounties,90 §2,Black Ledger: public bounties,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,specified
 TR-black-ledger-zero-minting,90 §2,Black Ledger: zero minting,16 §1–§14,asset-service.md;black-ledger.md,ASSET-R14;BL-R11,lc_ledger_posting,,,AT-ASSET-14;AT-BL-11,,specified
 TR-black-ledger-sinks,90 §2,Black Ledger: sinks,16 §1–§14,asset-service.md;black-ledger.md,ASSET-R14;BL-R11,lc_ledger_posting(SINK codes),,,AT-ASSET-14;AT-ASSET-01;AT-BL-11,,specified
-TR-black-ledger-anti-farm,90 §2,Black Ledger: anti-farm,16 §1–§14,black-ledger.md,BL-R06,,,,AT-BL-06,,specified
+TR-black-ledger-anti-farm,90 §2,Black Ledger: anti-farm,16 §1–§14,black-ledger.md,BL-R06;BL-R14,,,,AT-BL-06;AT-BL-14,,specified
 TR-black-ledger-anti-harassment,90 §2,Black Ledger: anti-harassment,16 §1–§14,black-ledger.md,BL-R02,,,,AT-BL-02,,specified
 TR-black-ledger-legendary-hunts,90 §2,Black Ledger: legendary hunts,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,specified
 TR-murder-market-price,90 §2,murder market price,16 §6,,,,,,,,blueprint

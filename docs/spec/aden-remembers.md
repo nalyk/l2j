@@ -1,6 +1,6 @@
 # SPEC-AR — Aden Remembers
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: reviewed (revision 6; signed off with one fix by Codex, a different model family, in round 5; record in §12)
 - Blueprint: 12 (Aden Remembers); 01 §2.5 (rumors are content); 02 §3 (game logic never branches on origin), §4, §6
   (budgets: hot-path seams ≤ 2 µs p99, never per tick); 03 §4.2 (the loot routing patch); 04 §1 (Fact Journal,
   telemetry), §3 (Asset Service), §6 (`lc why`), §7 (keyed randomness), §8 (degradation); 10 §8 (Genesis: Aden Remembers
@@ -101,7 +101,7 @@ machine of §3.1 (a trigger). Both are append-only.
 
 ```text
 lc_law(law_id PK, castle_id, kind {BOUNTY_ENDOWMENT|MARKET_CHARTER|CARAVAN_PROTECTION|AMNESTY|GATEKEEPER_LEVY|OPEN_ROADS},
-       state {ENACTED|REPEALED|EXPIRED|EXHAUSTED}, reign_key, enacted_by, enacted_at, proclaimed_fact_id, params JSON,
+       state {ENACTED|REPEALED|EXPIRED|EXHAUSTED}, reign_key, enacted_by, enacted_at, proclaimed_fact_id, proclaimed_at, params JSON,
        custody_id NULL, ended_at NULL, end_reason NULL)
 lc_influence(territory_id, clan_id, value INT, window_end, PRIMARY KEY(territory_id, clan_id))       -- derived
 lc_influence_spend(spend_id PK, territory_id, clan_id, reign_key, amount INT, law_id, fact_id)        -- durable
@@ -114,7 +114,10 @@ lc_world_pk(char_id PK, last_pk_fact_id BIGINT, last_pk_at)                     
 - **Influence** is derived daily; what has been **spent** is durable (`lc_influence_spend`, written with the law it paid
   for), so the available influence of a clan in a territory is its derived value minus its spends of the current reign,
   the same live and on replay.
-- `lc_world_pk` holds, per character, the last durable PK fact (§4.1), for Amnesty.
+- `lc_world_pk` holds, per character, the latest **occurrence time** of its applied PK facts (`last_pk_at`, the maximum
+  `occurred_at`, fact-journal.md §2.2) and that fact's id, for Amnesty; a law's `proclaimed_at` is its proclamation
+  fact's occurrence time. Fact ids are delivery order, not time (an outbox fact can be relayed before an earlier
+  capture's phase commits, fact-journal.md §3.3), so Amnesty compares times.
 
 ### 2.5 The Merchant Guild and caravans
 
@@ -390,7 +393,7 @@ Codex Laws tab, recorded in history. A law never changes combat, rates or PK mec
 | Bounty Endowment | tops up `CURSED_WEAPON` Writs on cursed-weapon holders in the territory, and only those (black-ledger.md §4.3) | committed treasury Adena in custody; `EndowmentCapAdena` per weapon life as the Ledger defines it |
 | Market Charter | the territory's Notarius fees × `CharterFactorPermille` for the payer (the factor of pact.md §2.2) | the custody pays the rest into `FEE_NOTARIUS`, so the sink receives the full fee; exhausted → the law ends |
 | Caravan Protection | escort payments for Guild caravans through the territory × (1 + `ProtectionBonusPermille`) | committed custody |
-| Amnesty | the territory's Magistrates refuse a new `KARMA` Writ on a mark with no PK since the law's proclamation (a predicate the Ledger asks at `open`, black-ledger.md §4.3), decided on the **absence** of a captured fact as the journal requires (fact-journal.md §3.3): at an `open` at time *T* the predicate waits, at most `AmnestyBarrierMillis`, until Aden Remembers' checkpoint has passed a committed phase whose frontier is ≥ *T*; then it answers "amnesty" only if `lc_world_pk.last_pk_fact_id` (or no row) is below `proclaimed_fact_id` **and** no gap record of the PK family overlaps the span from the proclamation to *T*; otherwise (not reached in time, a gap, the projector stopped) it answers "no amnesty" and the Writ opens: failing closed means a mark is never shielded on missing evidence | no money; `AmnestyInfluenceCost` influence spent (§2.4); once per reign |
+| Amnesty | the territory's Magistrates refuse a new `KARMA` Writ on a mark with no PK since the law's proclamation (a predicate the Ledger asks at `open`, black-ledger.md §4.3), decided on the **absence** of a captured fact as the journal requires (fact-journal.md §3.3): at an `open` at time *T* the predicate waits, at most `AmnestyBarrierMillis`, until Aden Remembers' checkpoint has passed a committed phase whose frontier is ≥ *T*; then it answers "amnesty" only if `lc_world_pk.last_pk_at` (or no row) is before the law's `proclaimed_at` **and** no gap record of the PK family overlaps the span from the proclamation to *T*; otherwise (not reached in time, a gap, the projector stopped) it answers "no amnesty" and the Writ opens: failing closed means a mark is never shielded on missing evidence | no money; `AmnestyInfluenceCost` influence spent (§2.4); once per reign |
 | Gatekeeper Levy | `LevyPermille` of the retail fee added to teleports from the territory's gatekeepers, credited to the treasury (`mechanics/siege/Castle.java:333`, `addToTreasuryNoTax`) | charged only if, **at the charge**, the law is enacted, the module running, and castle tax % + levy % ≤ the current Seven Signs cap (`managers/CastleManager.java:216-245`: 5, 25 or 15), all read synchronously in the teleport seam; the levy is destroyed with the fee and the treasury credited after, so a crash between can only lose it |
 | Open Roads | Guild caravans route through the territory when an alternative exists; road wardens (an existing guard template) walk its caravan routes | committed custody pays `WardenWageAdena` per warden-hour into the `CROWN_UPKEEP` sink |
 
@@ -625,7 +628,7 @@ Nothing else shows any state.
 | AT-AR-04 | integration, restart, fault | `AR-CARAVAN-*`: arrival, raid (the share dropped once, after commit, under a crash at each step), recall on timeout and disable (also from `SCHEDULED`); a freeze parks caravans with no Asset operation and the unfreeze resumes them with the parked time excluded from the timeout; arrival, raid and timeout raced: one disposition; a restart en route resumes at `last_node`; escorts paid in proportion to sampled presence above the minimum share, the rest refunded |
 | AT-AR-05 | integration, sim | the economy monitor over a week of Guild trading: no source except `RELOCATED_DROP` equal to rolled items and `SINK_RECYCLE` ≤ the recorded share; pools equal recycles plus receipts minus payments; refused trades when a pool is short; no profitable sequence through any towns and orders |
 | AT-AR-06 | integration | a replay from a snapshot reproduces §4.12's outputs exactly, with telemetry windows written late and effects dispatched slowly in the live run |
-| AT-AR-07 | integration | `AR-LAW-*`: each law enacted, funded, proclaimed, listed, recorded; repealed and expired on an owner change with the remainder returned; a teleport charged without levy when tax + levy exceeds the cap; negative tax clamped; an endowment refused for a non-cursed Writ; Amnesty refuses a Writ for a mark with no PK since, allows one after a new PK even when the PK's fact is still in the writer's ring at `open` (the barrier waits for it), allows one when a PK gap overlaps the span or the barrier times out, spends influence once, refused a second time in the reign; upkeep by alliance holding weight |
+| AT-AR-07 | integration | `AR-LAW-*`: each law enacted, funded, proclaimed, listed, recorded; repealed and expired on an owner change with the remainder returned; a teleport charged without levy when tax + levy exceeds the cap; negative tax clamped; an endowment refused for a non-cursed Writ; Amnesty refuses a Writ for a mark with no PK since, including a mark whose PK occurred before the proclamation but whose fact was delivered after it (a larger fact id), allows one after a new PK even when the PK's fact is still in the writer's ring at `open` (the barrier waits for it), allows one when a PK gap overlaps the span or the barrier times out, spends influence once, refused a second time in the reign; upkeep by alliance holding weight |
 | AT-AR-08 | integration, sim | `AR-PERCEPTION`: observer citizens with client knowledge only detect each actuator within its window (relocation 48 h, stock 72 h, Guild prices at once, caravans at departure, laws at proclamation); every Codex, website and NPC response scanned: no state value; rumors carry only allowed fields and start after their delay |
 | AT-AR-09 | integration | `AR-DISABLE`: disabled mid-situation with laws enacted and caravans scheduled and en route: every caravan recalled; drops, teleport fees, Notarius fees and NPC pages equal a server without Aden Remembers; each limited product's restock retail from its next one, a pending scaled one kept |
 | AT-AR-10 | sim | each of the eight kinds, driven by synthetic inputs: opens at its threshold after its confirmation steps, makes its asks, recedes and closes after its release steps; `AR-CATCHIN`: a mature world with new characters gets orders for catch-in items within 2 days of a shortage; `AR-TRADESHIFT`: a tax raise moves trade to neighbours within 3 days |
@@ -657,13 +660,20 @@ Nothing else shows any state.
   operation; the `RELOCATED_DROP` and `SINK_RECYCLE` sources and the `CROWN_UPKEEP` sink, with their sites.
 - pact.md: the `MERCHANT_GUILD` issuer with a custody as receiver and refund on expiry; Caravan Escort escrowed from a
   Guild pool and refunded on raid or recall; the Market Charter's factor and custody payment (§4.5).
-- black-ledger.md §4.3: the Amnesty predicate at `open`, with its frontier barrier and its fail-closed "no amnesty".
+- black-ledger.md §4.3: the Amnesty predicate at `open`, comparing PK occurrence time with the proclamation's, with its
+  frontier barrier and its fail-closed "no amnesty".
 - asset-service.md §4.2 rule 7 is kept as it is: a freeze parks caravans and moves no custody (§3.4).
 - actor-identity.md is unchanged: Aden Remembers calls nothing on its list, and relocation runs at the loot routing patch
   after the retail calculation, as the Loot Charter does.
 
 ## 12. Review record
 
+- Round 5 (Codex), **SIGN-OFF WITH FIXES**: Amnesty compared fact ids, which are delivery order; revision 6 compares
+  the PK's occurrence time with the proclamation's, keeping the frontier barrier, with the reordered-delivery case in
+  AT-AR-07. Remaining are named implementation obligations (the seams, the relocation handoff, recycling, the band
+  triggers, caravan arbitration, the cursor seam) and stated limits. §11's amendments to fact-journal.md, asset-service.md,
+  pact.md and black-ledger.md were judged sufficient and consistent; they are still to be applied to those specs, and
+  reviewed there, together with chronicle.md's.
 - Round 4 (Codex), NO SIGN-OFF: a band could be deleted and recreated narrower, past existing rows; the relocation
   operation's budget named one PACT does not define. Revision 5: bands are never deleted, prices and orders reference
   their band by foreign key, a band's insert is checked like a change; the budget is ASSET-R21's.

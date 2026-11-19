@@ -173,6 +173,7 @@ CREATE TABLE lc_law (
 	enacted_by INT NOT NULL,
 	enacted_at TIMESTAMP(3) NOT NULL,
 	proclaimed_fact_id BIGINT NULL,
+	proclaimed_at TIMESTAMP(3) NULL,
 	params JSON NOT NULL,
 	custody_id INT NULL,
 	ended_at TIMESTAMP(3) NULL,
@@ -207,7 +208,7 @@ CREATE TRIGGER lc_influence_spend_frozen BEFORE UPDATE ON lc_influence_spend FOR
 
 CREATE TRIGGER lc_influence_spend_kept BEFORE DELETE ON lc_influence_spend FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_influence_spend: spends are never deleted';
 
--- Derived: each character's last innocent kill, for Amnesty (spec §2.4).
+-- Derived: each character's latest innocent kill by occurrence time, for Amnesty (spec §2.4).
 CREATE TABLE lc_world_pk (
 	char_id INT NOT NULL,
 	last_pk_fact_id BIGINT NOT NULL,

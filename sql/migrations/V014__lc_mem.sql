@@ -18,7 +18,7 @@ CREATE TABLE lc_mem_profile (
 CREATE TABLE lc_mem_observation (
 	obs_id BIGINT NOT NULL AUTO_INCREMENT,
 	char_id INT NOT NULL,
-	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'QUEST_ABANDONED', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD', 'RUMOR', 'LEAD') NOT NULL,
+	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'QUEST_ENDED', 'QUEST_ABANDONED', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD', 'RUMOR', 'LEAD') NOT NULL,
 	subject_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NOT NULL,
 	subject_ref BIGINT NOT NULL,
 	object_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NULL,
@@ -39,7 +39,7 @@ CREATE TABLE lc_mem_observation (
 	times INT NOT NULL DEFAULT 1,
 	tier ENUM('RAW', 'SUMMARY', 'DURABLE') NOT NULL DEFAULT 'RAW',
 	expires_at TIMESTAMP(3) NULL,
-	coalesce_key VARCHAR(200) AS (IF(intel_id IS NOT NULL, CONCAT('intel/', char_id, '/', intel_id), CONCAT_WS('/', char_id, relation, subject_kind, subject_ref, IFNULL(object_kind, '-'), IFNULL(object_ref, '-'), IFNULL(region_id, '-'), provenance, IFNULL(source_char, '-'), IFNULL(source_page, '-'), value_key, tier))) PERSISTENT,
+	coalesce_key VARCHAR(200) AS (IF(intel_id IS NOT NULL, CONCAT('intel/', char_id, '/', intel_id), CONCAT_WS('/', char_id, relation, subject_kind, subject_ref, IFNULL(object_kind, '-'), IFNULL(object_ref, '-'), IFNULL(region_id, '-'), provenance, IFNULL(source_char, '-'), IFNULL(source_page, '-'), IFNULL(origin_char, '-'), IFNULL(origin_at, '-'), value_key, tier))) PERSISTENT,
 	PRIMARY KEY (obs_id),
 	UNIQUE KEY uk_mem_coalesce (coalesce_key),
 	KEY idx_mem_char (char_id, relation, last_at),
@@ -47,7 +47,7 @@ CREATE TABLE lc_mem_observation (
 	KEY idx_mem_expiry (expires_at),
 	CONSTRAINT chk_mem_value CHECK (JSON_VALID(value)),
 	CONSTRAINT chk_mem_times CHECK (times >= 1 AND last_at >= first_at),
-	CONSTRAINT chk_mem_told CHECK ((provenance = 'TOLD') = (source_char IS NOT NULL AND source_page IS NOT NULL AND origin_char IS NOT NULL AND origin_at IS NOT NULL)),
+	CONSTRAINT chk_mem_told CHECK (IF(provenance = 'TOLD', source_char IS NOT NULL AND source_page IS NOT NULL AND origin_char IS NOT NULL AND origin_at IS NOT NULL, source_char IS NULL AND source_page IS NULL AND origin_char IS NULL AND origin_at IS NULL)),
 	CONSTRAINT chk_mem_rumor CHECK ((provenance = 'RUMORED') = (rumor_source IS NOT NULL) AND (rumor_source <=> 'INTEL') <= (intel_id IS NOT NULL)),
 	CONSTRAINT chk_mem_lead CHECK ((relation = 'LEAD') <= (intel_id IS NOT NULL AND provenance = 'KNOWN')),
 	CONSTRAINT chk_mem_intel CHECK (intel_id IS NULL OR (relation IN ('LEAD', 'RUMOR') AND JSON_LENGTH(value) = 0 AND object_kind IS NULL AND object_ref IS NULL AND region_id IS NULL AND tier = 'RAW' AND expires_at IS NOT NULL)),
@@ -69,7 +69,9 @@ CREATE TABLE lc_mem_companion (
 	party_key VARCHAR(48) NOT NULL,
 	overlap_minutes INT NOT NULL,
 	at TIMESTAMP(3) NOT NULL,
+	expires_at TIMESTAMP(3) NOT NULL,
 	PRIMARY KEY (char_id, other_char, party_key),
+	KEY idx_mem_companion_expiry (expires_at),
 	CONSTRAINT chk_mem_companion CHECK (char_id <> other_char AND overlap_minutes >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
@@ -127,7 +129,7 @@ CREATE TABLE lc_mem_shared_page (
 CREATE TABLE lc_mem_shared_fact (
 	page_id BIGINT NOT NULL,
 	seq INT NOT NULL,
-	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'QUEST_ABANDONED', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD') NOT NULL,
+	relation ENUM('SOLD_BY', 'BOUGHT_FROM', 'BUYS', 'CRAFTS', 'PRICED_AT_NPC', 'OBTAINED_FROM', 'HUNTED', 'TALKED_TO', 'QUEST_FROM', 'QUEST_DONE', 'QUEST_ENDED', 'QUEST_ABANDONED', 'LEARNED_RECIPE', 'SAW_BOSS', 'HUNTED_WITH', 'TRADED_WITH', 'MET', 'VISITED', 'TOLD') NOT NULL,
 	subject_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NOT NULL,
 	subject_ref BIGINT NOT NULL,
 	object_kind ENUM('ITEM', 'NPC', 'MONSTER', 'PLAYER', 'REGION', 'RECIPE', 'QUEST', 'BOSS', 'CONTRACT') NULL,
@@ -166,4 +168,4 @@ CREATE TABLE lc_mem_session (
 	CONSTRAINT chk_mem_session_summary CHECK (JSON_VALID(summary))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_mem_observation', 'expires_at', 'WAYFARER', 87600), ('lc_mem_session', 'expires_at', 'WAYFARER', 2160);
+INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_mem_observation', 'expires_at', 'WAYFARER', 87600), ('lc_mem_session', 'expires_at', 'WAYFARER', 2160), ('lc_mem_companion', 'expires_at', 'WAYFARER', 8760);

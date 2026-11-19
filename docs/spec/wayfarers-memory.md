@@ -1,6 +1,6 @@
 # SPEC-MEM — Wayfarer's Memory
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 14 (Wayfarer's Memory); 01 §2.5 (shared content is just content); 02 §1, §4, §6 (capture ≤ 2 µs p99); 03 §4.4
   (party seams); 04 §4 (Intel Service: registered copies), §5 (Codex: the login recap); 12 (Aden Remembers moves the
   world); 13 (Signal reads "played together before"); 15 (PACT contracts in projects); 16 §8 / 14 §8 (the Ledger boundary);
@@ -35,7 +35,7 @@ on a Wayfarer row.
 
 ```text
 lc_mem_observation(obs_id PK, char_id, relation {SOLD_BY|BOUGHT_FROM|BUYS|CRAFTS|PRICED_AT_NPC|OBTAINED_FROM|HUNTED|TALKED_TO|
-                   QUEST_FROM|QUEST_DONE|QUEST_ABANDONED|LEARNED_RECIPE|SAW_BOSS|HUNTED_WITH|TRADED_WITH|MET|VISITED|TOLD|
+                   QUEST_FROM|QUEST_DONE|QUEST_ENDED|QUEST_ABANDONED|LEARNED_RECIPE|SAW_BOSS|HUNTED_WITH|TRADED_WITH|MET|VISITED|TOLD|
                    RUMOR|LEAD}, subject_kind, subject_ref, object_kind NULL, object_ref NULL, region_id NULL,
                    value JSON, value_key VARCHAR(64), provenance {KNOWN|TOLD|RUMORED|INFERRED|HISTORICAL},
                    rumor_source {WORLD|INTEL} NULL, state {CURRENT|STALE|CONTRADICTED}, source_char NULL, source_page NULL,
@@ -50,11 +50,12 @@ lc_mem_companion(char_id, other_char, party_key VARCHAR(48), overlap_minutes INT
   it and when, kept through any number of forwards); `RUMORED` heard from an NPC (`rumor_source WORLD`: Aden Remembers' crier
   and tavern lines) or from the Intel Service (`INTEL`: `LEDGER_RUMOR` disclosures to this character); `INFERRED` derived from
   the character's own rows (a project's missing items); `HISTORICAL` kept only as history.
-- **Coalescing**: a row's key is (char, relation, subject, object, region, provenance, teller, `value_key`). `value_key` is the
+- **Coalescing**: a row's key is (char, relation, subject, object, region, provenance, teller, origin, `value_key`); the
+  origin is part of it, so two forwarded reports first observed by different characters stay two rows. `value_key` is the
   part of the value that identifies a distinct observation: price and enchant for `SOLD_BY`, `BUYS`, `PRICED_AT_NPC`,
   `BOUGHT_FROM`; nothing for counts. A repeat with the same key updates `last_at` and `times`; a different price or enchant
   is a **new row**, so the older one remains to be marked `CONTRADICTED` (§3.1), and two copies of an item at two enchant
-  levels stay apart. Different tellers of the same thing stay apart.
+  levels stay apart (and never contradict each other: a store can sell both at once). Different tellers of the same thing stay apart.
 - **Intel never coalesces**: a row with an `intel_id` (`LEAD`, and `RUMOR` from `INTEL`) is unique by its `intel_id`, holds
   **no content** of its own (value `{}`, no object, no region: what is shown is read through `intel.read`), and is registered
   as a copy of exactly that item (intel-service.md §4.5). When the item expires, the Intel Service's purge deletes the row
@@ -63,7 +64,8 @@ lc_mem_companion(char_id, other_char, party_key VARCHAR(48), overlap_minutes INT
   the mark (whose identity the dossier already gave the hunter) and the day, nothing else, and no dependency. The Journal
   shows "you once had a lead on *mark* (*day*)" once the lead row is gone (14 §8).
 - **Companions** are pairwise: `lc_mem_companion` records, per party incarnation (the party seams' party key, 03 §4.4), the
-  minutes two characters were members **at the same time**; a `HUNTED_WITH` observation exists for a pair once an
+  minutes two characters were members **at the same time** (rows expire after `CompanionRetentionDays`, at most
+  `MaxCompanionRows` per character, the oldest dropped first); a `HUNTED_WITH` observation exists for a pair once an
   incarnation's overlap reaches `HuntedWithMinutes`, and its count of sessions is the number of such incarnations.
 
 ### 2.2 The rest
@@ -88,7 +90,7 @@ Bounds per character (§8): `MaxPages`, `MaxPageFacts` per page, `MaxImportedFac
 | Tier | What | Kept |
 |---|---|---|
 | `RAW` | observations as captured and coalesced | `raw_retention_days` after `last_at`, then summarised |
-| `SUMMARY` | one row per (relation, subject, object kind, region, provenance) with counts and first and last times | `SummaryRetentionDays` |
+| `SUMMARY` | one row per (relation, subject, object, region, provenance, teller, origin) with counts and first and last times: the source (which monster, which seller) is kept, only repetitions and exact times are folded | `SummaryRetentionDays` |
 | `DURABLE` | pinned observations, imported facts, notes, projects, milestones, lead history | until the character deletes them, within the bounds, or the character is deleted |
 
 Intel-bearing rows are never summarised or made durable: they live exactly as long as their item. Every expiring table is
@@ -102,15 +104,18 @@ listed in `lc_expiring_table` (intel-service.md §4.5).
 |---|---|---|
 | — | a capture, an import, a rumor told, a grant | `CURRENT`, tier `RAW` (imports: `DURABLE`) |
 | `CURRENT` | its relation's `StaleAfter` passes since `last_at` | `STALE` |
-| `CURRENT`, `STALE` | a newer `KNOWN` row of the same relation, subject and object with another `value_key` | `CONTRADICTED` |
+| `CURRENT`, `STALE` | a newer `KNOWN` row of the same relation, subject, object and enchant level with another price (only for the price relations: `SOLD_BY`, `BUYS`, `PRICED_AT_NPC`) | `CONTRADICTED` |
+| `CONTRADICTED`, `STALE` | the same observation is made again (a repeat of this row's key) | `CURRENT`, and the rows it contradicts become `CONTRADICTED` |
 | `RAW` | `raw_retention_days` pass, not pinned, no `intel_id` | folded into its `SUMMARY` row, deleted |
 | `RAW`, `SUMMARY` | pinned (within `MaxDurableRows`), no `intel_id` | `DURABLE` |
 | any with `intel_id` | the item expires | deleted by the Intel Service's purge |
 
 ### 3.2 Quest observation
 
-`QUEST_FROM` (a step given at a talk) → `QUEST_DONE` (completed) or `QUEST_ABANDONED` (the player aborted it), each a separate
-row (§3.3).
+`QUEST_FROM` (a step given at a talk) → one of, each a separate row (§3.3): `QUEST_DONE` (a non-repeatable quest left
+`COMPLETED` by its exit), `QUEST_ABANDONED` (the player aborted it through the quest window), or `QUEST_ENDED` (a repeatable
+quest's exit, where Mobius does not tell a completion from a script's own cancellation: both call `exitQuest(true…)`, and a
+give-up sound, if any, is played after the call, `dist/game/data/scripts/quests/Q00363_SorrowfulSoundOfFlute/Q00363_SorrowfulSoundOfFlute.java:155-156`).
 
 ### 3.3 Capture: the experience seams
 
@@ -121,14 +126,14 @@ patches, ledgered in `CORE_PATCHES.md` when implemented), each copying primitive
 
 | Relation | Seam | What is copied |
 |---|---|---|
-| `SOLD_BY`, `BUYS`, `CRAFTS` | the **serialisation** of the store list packets, `network/serverpackets/PrivateStoreListSell.java:42-61`, `PrivateStoreListBuy.java:37-58`, `RecipeShopSellList.java:54-59`, in `writeImpl`, while the values are written | exactly the item ids, counts, prices and enchant levels written to this viewer, the store owner and region; recipe ids resolved to their products through `RecipeData.getRecipeList` (the packet has only recipe ids); capturing at the write, not at `Player.doInteract` (`entity/actor/Player.java:4470-4494`), because these packets read live lists when serialised (`PrivateStoreListSell.java:35`), after a queue (`commons/network/Client.java:85-94`) |
+| `SOLD_BY`, `BUYS`, `CRAFTS` | the **serialisation** of the store list packets, `network/serverpackets/PrivateStoreListSell.java:42-61`, `PrivateStoreListBuy.java:37-58`, `RecipeShopSellList.java:54-59`, in `writeImpl`: entries are **staged** while written and published to the buffer only when `writeImpl` returns normally (a packet whose serialisation throws is discarded by Mobius, `commons/network/Client.java:204-225`, and so are its staged entries) | exactly the item ids, counts, prices and enchant levels written to this viewer, the store owner and region; recipe ids resolved to their products through `RecipeData.getRecipeList` (the packet has only recipe ids); capturing at the write, not at `Player.doInteract` (`entity/actor/Player.java:4470-4494`), because these packets read live lists when serialised (`PrivateStoreListSell.java:35`), after a queue (`commons/network/Client.java:85-94`) |
 | `BOUGHT_FROM` | `TradeList.privateStoreBuy` / `privateStoreSell` after each item moves, `network/holders/TradeList.java:791`, `:959` | item, count, price, the other party |
-| `PRICED_AT_NPC` | `BuyList.writeImpl`, `network/serverpackets/BuyList.java:55-90` | per product written: item id and the price written, tax included; the merchant and town |
-| `OBTAINED_FROM` | `Player.addItem` (both overloads, `Player.java:3388`, `:3485-3581`) and `addAdena` (`:3192`, `:3223`) for `LOOT`, `SWEEP`, `PICKUP` | item, count; the monster when the reference is one (auto-loot and party item loot pass it, `Player.java:4514-4527`, `entity/groups/Party.java:677-686`); for a **ground** item, the monster from Wayfarer's drop map, filled at `Npc.dropItem` (`entity/actor/Npc.java:1935`: object id → monster template and region, bounded, entries removed at pickup or after `DropMapSeconds`), because Mobius clears the dropper (`entity/item/instance/Item.java:1628-1639`); party Adena passes the initiating player (`Party.java:772`) and records no monster; herbs are consumed on pickup (`Player.java:4653-4666`) and are not obtained |
+| `PRICED_AT_NPC` | `BuyList.writeImpl`, `network/serverpackets/BuyList.java:55-90`, staged the same way | per product written: item id and the price written, tax included; the merchant and town |
+| `OBTAINED_FROM` | auto-loot and party item loot at `Player.addItem` (`Player.java:3485-3581`) and `addAdena` (`:3192`, `:3223`) for `LOOT` and `SWEEP`, whose reference is the monster (`Player.java:4514-4527`, `entity/groups/Party.java:677-686`); **ground** pickups at `Player.doPickupItem` (`Player.java:4551`), which still holds the ground item's object id (Adena merging into a stack loses it later, `:4705`) | item, count; for auto-loot, the monster; for a ground pickup, the monster **only if this character saw the drop**: when an item is dropped Mobius sends each player who sees it a `DropItem` naming the dropper (`entity/item/instance/Item.java:1955`), and that send is a seam recording, in the viewer's own buffer, item object id → monster for `DropMapSeconds`; a character who arrived later received only `SpawnItem`, without a dropper (`network/serverpackets/SpawnItem.java:45`), and records no monster. Party Adena passes the initiating player (`Party.java:772`) and records no monster; herbs are consumed on pickup (`Player.java:4653-4666`) and are not obtained |
 | `HUNTED` | the monster death, `ON_CREATURE_DEATH` on `Containers.Monsters()` (synchronous, `entity/actor/Creature.java:2626-2628`) | the monster template, region, the killer's acting player |
 | `TALKED_TO` | `NpcClick`, `dist/game/data/scripts/handlers/actions/click/NpcClick.java:121-128`, in range, when the chat or first-talk dispatch happens (never on targeting, :66; never a listener on `Containers.Npcs()`, which would skip default chat windows) | the NPC and region |
 | `QUEST_FROM` | `Quest.notifyTalk` and `Quest.notifyEvent` (`mechanics/script/Quest.java:638`, `:618`), when the quest state changes during that call | quest, step, and **the NPC that call was dispatched with**; a state change outside a talk (a kill advancing a step) records no NPC (`player.getLastFolkNPC()`, set on targeting, is never used) |
-| `QUEST_DONE`, `QUEST_ABANDONED` | `QuestState.exitQuest` (`mechanics/script/QuestState.java:680-704`); `RequestQuestAbort` (`network/clientpackets/RequestQuestAbort.java:58`) marks its own call as an abort | abandoned when reached from `RequestQuestAbort`, done otherwise |
+| `QUEST_DONE`, `QUEST_ENDED`, `QUEST_ABANDONED` | `QuestState.exitQuest` (`mechanics/script/QuestState.java:633-715`); `RequestQuestAbort` (`network/clientpackets/RequestQuestAbort.java:58`) marks its own call as an abort | abandoned when reached from `RequestQuestAbort`; done when the exit leaves the quest `COMPLETED`; ended otherwise (§3.2) |
 | `LEARNED_RECIPE` | `Player.registerRecipeList`, `Player.java:1371`, `:1386` | the recipe |
 | `SAW_BOSS` | the point Mobius sends a raid or grand boss's info **to this player**, `Npc.sendInfo(player)` (`entity/actor/Npc.java:1548`), called when the boss becomes known to the player's client (`entity/World.java:366-394`, `:600-619`) | the boss and region; the check is one template flag, so the hot path pays a branch for other NPCs |
 | `HUNTED_WITH` | the party seams (03 §4.4): join and leave times per member and party incarnation | pairwise overlap into `lc_mem_companion` (§2.1) |
@@ -285,10 +290,10 @@ exception), `Mem.Flushed`. Outbox: `Mem.PageShared` (page, author), `Mem.PageImp
 | `CaptureSlotsPerChar`, `MaxStoreItemsCaptured` | 64–8192, 10–200 | 1024, 100 | as default everywhere | AT-MEM-08 |
 | `FlushSeconds`, `WriterBacklogRows` | 5–600, 1000–1000000 | 60, 200000 | as default everywhere | AT-MEM-08 |
 | `DropMapSeconds` | 60–3600 | 600 | 600 everywhere | AT-MEM-01 |
-| `RawRetentionDays`, `SummaryRetentionDays`, `SessionRetentionDays` | 1–365, 30–3650, 1–90 | 30, 365, 14 | as default everywhere | AT-MEM-05 |
+| `RawRetentionDays`, `SummaryRetentionDays`, `SessionRetentionDays`, `CompanionRetentionDays` | 1–365, 30–3650, 1–90, 7–365 | 30, 365, 14, 90 | as default everywhere | AT-MEM-05 |
 | `StaleAfter` per relation (days) | 1–365 | prices and stores 3, drops 30, NPCs 90, quests 365 | as default everywhere | AT-MEM-03 |
 | `HuntedWithMinutes`, `CompanionSessions` | 5–240, 2–100 | 20, 5 | as default everywhere | AT-MEM-07 |
-| `MaxPages`, `MaxPageFacts`, `MaxImportedFacts`, `MaxDurableRows`, `MaxNotes`, `MaxProjects` | — | 20, 200, 2000, 1000, 200, 50 | as default everywhere | AT-MEM-05 |
+| `MaxPages`, `MaxPageFacts`, `MaxImportedFacts`, `MaxDurableRows`, `MaxNotes`, `MaxProjects`, `MaxCompanionRows` | — | 20, 200, 2000, 1000, 200, 50, 2000 | as default everywhere | AT-MEM-05 |
 | `VerifySample` | 1–1000 | 50 | 50 everywhere | AT-MEM-11 |
 
 ## 9. Interface
@@ -316,11 +321,11 @@ the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 | Test | Kind | What it does |
 |---|---|---|
 | AT-MEM-00 | integration | the migration applies; keys and checks refuse an import without teller or origin, an import as `KNOWN`, intel content on a row, intel on a durable or summary row, a second row for an intel item, a second row for one coalescing key, a durable row with an expiry, a shared fact without origin, a changed shared fact, a note over its bound; expiring tables registered |
-| AT-MEM-01 | integration | each seam: the captured values equal the bytes the client was sent (store lists, buy list) or the change made (trade, loot, quest); a store changed between the interaction and the write captures what was written; a ground pickup with its monster from the drop map, party Adena without one, herbs not obtained; a quest advanced by a kill records no NPC; an abort is `QUEST_ABANDONED`; a failed trade records nothing; a boss sent to the player recorded, one hidden from them not |
-| AT-MEM-02 | integration | the same item known, told by two tellers and rumored: four rows, three groups; a page forwarded twice keeps the original origin |
-| AT-MEM-03 | integration | a new price makes the old row `CONTRADICTED`; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
+| AT-MEM-01 | integration | each seam: the captured values equal the bytes the client was sent (store lists, buy list) or the change made (trade, loot, quest); a store changed between the interaction and the write captures what was written; a ground pickup with its monster from the drop map, party Adena without one, herbs not obtained; a quest advanced by a kill records no NPC; an abort is `QUEST_ABANDONED`, a repeatable script cancellation `QUEST_ENDED`, a non-repeatable completion `QUEST_DONE`; a failed trade records nothing; a boss sent to the player recorded, one hidden from them not; a packet whose serialisation throws leaves no observation; ground loot picked up by a character who saw the drop knows its monster, one who arrived later does not |
+| AT-MEM-02 | integration | the same item known, told by two tellers and rumored: four rows, three groups; a page forwarded twice keeps the original origin; one page carrying the same report first observed by two characters imports as two rows |
+| AT-MEM-03 | integration | a new price makes the old row `CONTRADICTED`; two enchant levels in one store never contradict; an old price seen again is `CURRENT` again and the newer one `CONTRADICTED`; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
 | AT-MEM-04 | unit, integration | the query set is exactly §4.1's; two characters with disjoint rows see only their own through every query; a forged page id or query id refused; nothing sorts across characters |
-| AT-MEM-05 | integration | 400 kills one row; raw rows summarised and deleted after retention, pinned ones kept; each bound refused at its limit; a deleted character leaves no `lc_mem_*` row |
+| AT-MEM-05 | integration | 400 kills one row; raw rows summarised and deleted after retention, the summary still naming each source monster and seller, pinned ones kept; companion rows expired and capped; each bound refused at its limit; a deleted character leaves no `lc_mem_*` row |
 | AT-MEM-06 | integration, restart | a lead and an Intel rumor read through the Intel Service; after expiry both rows gone and the lead history alone shown; no summary, session, milestone or page holds their content; a rebuild and a replay after expiry show nothing more |
 | AT-MEM-07 | integration | requirements from known and observed recipes only; recap content; milestones; a publishable mark refused for a private contract or another player's name; Signal-free history |
 | AT-MEM-08 | sim, fault | the 800-citizen benchmark with Wayfarer on for all: each seam ≤ 2 µs p99, no tick time beyond the benchmark's band; exceptions injected in every seam leave retail packets and state identical to a run without Wayfarer; a database outage drops beyond the backlog, counted |
@@ -352,6 +357,14 @@ the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: open were forwarded reports of different first observers merging, enchant levels
+  contradicting each other and no path back to current, script cancellations counted as completions, ground Adena without
+  its object id, unbounded companion rows, summaries dropping the source, the drop map inventing knowledge for late
+  arrivals, a provenance check allowing partly attributed `KNOWN` rows, and capture from a packet that is then discarded.
+  Revision 3: the origin in the coalescing key; contradiction only by price at the same enchant, and a repeat restoring a
+  row; `QUEST_ENDED` for repeatable exits Mobius cannot classify; ground pickups at `doPickupItem`; companion retention
+  and cap; summaries keyed by the source; drop witnessing from the `DropItem` each viewer receives; every attribution
+  field empty unless `TOLD`; staged capture published only after a packet serialises.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 17 findings: Ledger rumors outside the boundary; intel content
   allowed in rows; coalescing merging intel dependencies, tellers and prices; expired-lead conversion against the purge;
   `SAW_BOSS` from the boss's side; quest givers from targeting and aborts as completions; trades before success; party Adena

@@ -47,6 +47,9 @@ class MemSchemaTest
 			// Imports are TOLD with teller and origin, never KNOWN with a teller.
 			assertThrows(SQLException.class, () -> statement.execute(row("'SOLD_BY'", "'ITEM'", 57, "NULL", "NULL", "'{}'", "''", "'TOLD'", "NULL", "268477011", "5", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "an import without its origin");
 			assertThrows(SQLException.class, () -> statement.execute(row("'SOLD_BY'", "'ITEM'", 57, "NULL", "NULL", "'{}'", "''", "'KNOWN'", "NULL", "268477011", "5", "268477011", "NOW(3)", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "an import passed off as known");
+			assertThrows(SQLException.class, () -> statement.execute(row("'SOLD_BY'", "'ITEM'", 57, "NULL", "NULL", "'{}'", "''", "'KNOWN'", "NULL", "268477011", "5", "NULL", "NULL", "NULL", "'RAW'", "NOW(3) + INTERVAL 30 DAY")), "a known row with a teller but no origin");
+			// One page carrying the same report first observed by two characters imports as two rows.
+			statement.execute(row("'SOLD_BY'", "'ITEM'", 1864, "'PLAYER'", "268477010", "'{\"price\":78000}'", "'78000/0'", "'TOLD'", "NULL", "268477011", "5", "268477020", "NOW(3) - INTERVAL 3 DAY", "NULL", "'DURABLE'", "NULL"));
 
 			// Intel rows: content-free, unique by item, raw only, a lead always has one; an Intel rumor too.
 			statement.execute(intel("'LEAD'", "'KNOWN'", "NULL", 4242, "'{}'", "NULL", "'RAW'", "NOW(3) + INTERVAL 1 HOUR"));
@@ -71,17 +74,17 @@ class MemSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_mem_shared_fact SET subject_ref = 1 WHERE page_id = 7"));
 
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_note (char_id, text, created_at) VALUES (268477000, REPEAT('x', 401), NOW(3))"), "a note over its bound");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_companion (char_id, other_char, party_key, overlap_minutes, at) VALUES (1, 1, 'p', 30, NOW(3))"), "a companion of oneself");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_mem_companion (char_id, other_char, party_key, overlap_minutes, at, expires_at) VALUES (1, 1, 'p', 30, NOW(3), NOW(3) + INTERVAL 90 DAY)"), "a companion of oneself");
 
 			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_mem_observation WHERE relation = 'SOLD_BY'"))
 			{
 				result.next();
-				assertEquals(4, result.getInt(1), "two prices and two tellers are four rows");
+				assertEquals(5, result.getInt(1), "two prices, two tellers and a second first observer are five rows");
 			}
 			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_expiring_table WHERE owner_module = 'WAYFARER'"))
 			{
 				result.next();
-				assertEquals(2, result.getInt(1));
+				assertEquals(3, result.getInt(1));
 			}
 		}
 	}

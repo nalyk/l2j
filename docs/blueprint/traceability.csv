@@ -88,7 +88,7 @@ TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observ
 TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-personal-history,90 §2,Wayfarer's Memory: personal history,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-no-global-wiki,90 §2,Wayfarer's Memory: no global wiki,14 §1–§9,,,,,,,,blueprint
-TR-pact-voluntary-contracts,90 §2,PACT: voluntary contracts,15 §1–§7,pact.md,PACT-R01;PACT-R09,,,,AT-PACT-01;AT-PACT-09,,specified
+TR-pact-voluntary-contracts,90 §2,PACT: voluntary contracts,15 §1–§7,pact.md,PACT-R01;PACT-R09,,,,AT-PACT-01;AT-PACT-09;AT-PACT-00,,specified
 TR-pact-machine-verifiable-clauses,90 §2,PACT: machine-verifiable clauses,15 §1–§7,pact.md,PACT-R04,,,,AT-PACT-04,,specified
 TR-pact-crafting-pact,90 §2,PACT: crafting pact,15 §1–§7,pact.md,PACT-R03,,,,AT-PACT-03,,specified
 TR-pact-loot-charter,90 §2,PACT: loot charter,15 §1–§7,pact.md,PACT-R05,,,,AT-PACT-05,,specified
@@ -100,12 +100,12 @@ TR-pact-mercenary,90 §2,PACT: mercenary,15 §1–§7,pact.md,PACT-R06,,,,AT-PAC
 TR-pact-public-sealed,90 §2,PACT: public/sealed,15 §1–§7,pact.md,PACT-R08,,,,AT-PACT-08,,specified
 TR-pact-objective-history,90 §2,PACT: objective history,15 §1–§7,pact.md,PACT-R08,,,,AT-PACT-08,,specified
 TR-pact-default-freedom,90 §2,PACT: default freedom,15 §1–§7,pact.md,PACT-R09,,,,AT-PACT-09,,specified
-TR-notarius-town-royal-castle,90 §2,Notarius: Town / Royal / Castle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01,,specified
-TR-notarius-parchment-item,90 §2,Notarius: parchment item,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01,,specified
-TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote drafting + physical high-value signing,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01,,specified
+TR-notarius-town-royal-castle,90 §2,Notarius: Town / Royal / Castle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
+TR-notarius-parchment-item,90 §2,Notarius: parchment item,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
+TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote drafting + physical high-value signing,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
 TR-notarius-public-registration,90 §2,Notarius: public registration,"15 §3, §4, §8",pact.md,PACT-R08,,,,AT-PACT-08,,specified
 TR-notarius-escrow,90 §2,Notarius: escrow,"15 §3, §4, §8",asset-service.md;pact.md,ASSET-R01;ASSET-R02;ASSET-R03;ASSET-R04;ASSET-R07;ASSET-R08;ASSET-R09;ASSET-R10;ASSET-R11;ASSET-R20;ASSET-R22;ASSET-R16;ASSET-R27;PACT-R02,"lc_custody;lc_asset_op;lc_ledger_posting;lc_settlement_key;lc_mail_delivery;items(ESCROW,MAIL)",service mail claim (asset-service.md §9),ItemLocation.ESCROW;retired items;MailManager adoption,AT-ASSET-00;AT-ASSET-01;AT-ASSET-02;AT-ASSET-03;AT-ASSET-04;AT-ASSET-07;AT-ASSET-08;AT-ASSET-09;AT-ASSET-10;AT-ASSET-11;AT-ASSET-22;AT-ASSET-16;AT-ASSET-29;AT-ASSET-20;AT-ASSET-26;AT-ASSET-18;AT-PACT-02,,specified
-TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01,,specified
+TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
 TR-black-ledger-writ,90 §2,Black Ledger: Writ,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard Captain,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,,,,,,,,blueprint

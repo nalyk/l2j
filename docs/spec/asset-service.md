@@ -394,6 +394,9 @@ All durable (04 §1.1), written in the operation's transaction, `op_id` set.
 | `Asset.EscrowFunded`, `Asset.EscrowReleased` | custody, holder or receiver and mail, legs (item id, object id, lifecycle id, qty) |
 | `Asset.FeeCharged` | holder, sink code, amount |
 | `Asset.TreasuryCommitted`, `Asset.TreasuryReturned` | castle, custody, amount |
+| `Asset.Crafted` | contract, attempt, input legs, output legs (none on failure) |
+| `Asset.LootRouted` | charter, kill (npc object id and incarnation), source legs, receivers and their mails |
+| `Asset.ParchmentIssued` | contract, character, mail |
 | `Asset.SupplyEntered`, `Asset.SupplyArrived`, `Asset.ManifestRaided` | custody, code, reference, legs |
 | `Asset.Refunded` | aborted op, receiver and mail, legs (written by the refund transaction) |
 | `Asset.CustodyClosed`, `Asset.CustodyFrozen` | custody, reason |
@@ -484,13 +487,13 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R11 | Service mail MUST be built as §2.1 says (not rejectable, not cash on delivery, never expiring) and MUST keep its attachments until claimed; the claim itself is retail and has retail's guarantees, no more. | AT-ASSET-11 |
 | ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
-| ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget and audited `ADMIN_CORRECTION`. | AT-ASSET-14 |
+| ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget, audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT` and `LOOT_DROP` exactly as the retail craft or kill computed them at the seam, and the valueless `PACT_PARCHMENT`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and the custody, write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
 | ASSET-R16 | Nothing credited MUST be visible to anyone before the operation committed. | AT-ASSET-16 |
 | ASSET-R17 | An ambiguous commit MUST be resolved by a locking `OpId` read, and MUST NOT be aborted on a timeout. | AT-ASSET-21 |
 | ASSET-R18 | After a GameServer restart, no login MUST be accepted before recovery completes; INV11 and INV12 MUST hold for every custody and delivery. | AT-ASSET-25 |
 | ASSET-R19 | The module MUST refuse to start unless `LazyItemsUpdate = False`. | AT-ASSET-17 |
-| ASSET-R20 | An item MUST enter a custody only if it is eligible (§4.4). | AT-ASSET-18 |
+| ASSET-R20 | An item taken from a holder MUST enter a custody only if it is eligible (§4.4); an item created from a source MUST be of an item id §4.4 allows in custody (tradeable, not time-limited, not shadow, not a blanket-deletion target), or else it goes to its receiver by system mail directly, never into a custody. | AT-ASSET-18 |
 | ASSET-R21 | An operation MUST commit within `CommitBudgetMillis` at p99 under the capacity benchmark. | AT-ASSET-30 |
 | ASSET-R22 | An aborted operation MUST be followed, before any lock is released, by a committed refund operation that returns every debited asset to its holder by service mail (or to its treasury) and writes the touched stacks from memory. | AT-ASSET-22 |
 | ASSET-R23 | A retired item MUST never be written by Mobius nor accepted by any Mobius operation. | AT-ASSET-24 |
@@ -516,7 +519,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-11 | integration | service mail as written: rejecting it, deleting it with attachments, waiting past every expiry run, an offline receiver, a full inventory and a full inbox: its attachments survive until claimed; startup cleanup keeps it (DatabaseIdManager.java:68) |
 | AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row and a stale row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
-| AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except `TOWN_SUPPLY` within budget and audited corrections |
+| AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except `TOWN_SUPPLY` within budget, audited corrections, `CRAFT_OUTPUT` and `LOOT_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), and `PACT_PARCHMENT` of the parchment item only |
 | AT-ASSET-15 | integration | a forged `ESCROW` row under a closed custody: module and custody frozen, evidence written, rows untouched; only a correction commits |
 | AT-ASSET-16 | integration | no mail, client packet or cache update shows a credit before `COMMITTED` |
 | AT-ASSET-17 | unit | startup with `LazyItemsUpdate = True` refused |
@@ -613,7 +616,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 - Revision 8 (after the round-7 sign-off): PACT (pact.md) needs four posting codes and three operations: a contractual
   craft consuming materials from a custody and creating its product into one, a Loot Charter's drops created into a
   charter custody, and the parchment. They are added here, with their sites in the site table, and go to review with
-  PACT's first round.
+  PACT's first round. PACT round 1 found ASSET-R14, ASSET-R20 and AT-ASSET-14 still forbidding them and their facts
+  missing from §5: R14 and its test now admit exactly these sources, equal to the retail seam's computation; R20 covers
+  created items; the three facts are in §5.
 
 - After sign-off, aligned with the Fact Journal (revision 3): facts are staged in `lc_fact_outbox` in the operation's
   transaction and relayed into the log by the journal's writer; a deadlock victim or lock-wait timeout is retried in the

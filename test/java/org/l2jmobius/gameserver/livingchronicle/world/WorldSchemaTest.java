@@ -13,7 +13,7 @@ import org.l2jmobius.testing.Migrations;
 import org.l2jmobius.testing.TestDatabase;
 
 /**
- * AT-AR-00 (docs/spec/aden-remembers.md): the migration applies; triggers and keys refuse a protected item in a family (insert or update, both tables), an actuator row outside its bounds or its kind's ceiling, changed or deleted, a second open situation, a situation born other than emerging, a state change without its newest transition row, a transition outside the machine, active to closed without a freeze or disable reason, a second enacted law of a kind per castle, a second Amnesty in a reign, an ended law changed or deleted, a Guild buy or order price at or above a sell price, a concurrent price writer (it waits for the first's lock, then is refused), a caravan transition outside its machine or a node going back, a rumor beyond its life.
+ * AT-AR-00 (docs/spec/aden-remembers.md): the migration applies; triggers and keys refuse a protected item in a family (insert or update, both tables), an actuator row outside its bounds or its kind's ceiling, changed or deleted, a second open situation, a situation born other than emerging, a state change without its newest transition row, a transition outside the machine or with no predecessor, active to closed without a freeze or disable reason, a second enacted law of a kind per castle, a second Amnesty in a reign, an ended law changed or deleted, a band without a gap, a price or order outside its item's band, a band narrowed past a price or order, a price written against a band changed after the writer's snapshot, a caravan transition outside its machine or a node going back, a rumor beyond its life.
  */
 class WorldSchemaTest
 {
@@ -91,20 +91,23 @@ class WorldSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_law WHERE law_id = 50"), "deleting a law");
 			statement.execute("INSERT INTO lc_law (castle_id, kind, reign_key, enacted_by, enacted_at, params) VALUES (3, 'AMNESTY', '3/1002/900', 268477001, NOW(3), '{}')");
 
-			// The Guild: written in READ COMMITTED only; buy and order prices below every sell price, across towns.
+			// The Guild: a band per item, buy ceiling below sell floor; every price and order inside it; a band never
+			// narrowed past an existing price or order.
 			statement.execute("INSERT INTO lc_guild_town (town_id, territory_id, warehouse_custody_id, pool_custody_id) VALUES (9, 1, 1, 2), (10, 2, 3, 4)");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1870, 10, 20, " + APP + ")"), "a price writer in repeatable read");
-			statement.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_band (item_id, buy_ceiling, sell_floor, application_id) VALUES (1870, 20, 20, " + APP + ")"), "a band without a gap");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1870, 10, 20, " + APP + ")"), "a price for an item with no band");
+			statement.execute("INSERT INTO lc_guild_band (item_id, buy_ceiling, sell_floor, application_id) VALUES (1870, 15, 18, " + APP + ")");
 			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1870, 10, 20, " + APP + ")");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 22, 30, " + APP + ")"), "buying above another town's sell price");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 5, 9, " + APP + ")"), "selling below another town's buy price");
-			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 12, 19, " + APP + ")");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_order (town_id, item_id, qty, unit_price, contract_id) VALUES (9, 1870, 100, 19, 7001)"), "an order at a sell price");
-			statement.execute("INSERT INTO lc_guild_order (town_id, item_id, qty, unit_price, contract_id) VALUES (9, 1870, 100, 15, 7002)");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_price SET sell_price = 15 WHERE town_id = 10"), "lowering a sell price to an open order's price");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_price SET buy_price = 19 WHERE town_id = 9"), "raising a buy price to another town's sell price");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (9, 1871, 20, 20, " + APP + ")"), "no spread in one town");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 16, 30, " + APP + ")"), "buying above the ceiling");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 12, 17, " + APP + ")"), "selling below the floor");
+			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (10, 1870, 15, 18, " + APP + ")");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_guild_order (town_id, item_id, qty, unit_price, contract_id) VALUES (9, 1870, 100, 16, 7001)"), "an order above the ceiling");
+			statement.execute("INSERT INTO lc_guild_order (town_id, item_id, qty, unit_price, contract_id) VALUES (9, 1870, 100, 14, 7002)");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_band SET buy_ceiling = 13 WHERE item_id = 1870"), "narrowing the ceiling past a price and an order");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_band SET sell_floor = 19 WHERE item_id = 1870"), "raising the floor past a sell price");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_price SET buy_price = 16 WHERE town_id = 9"), "raising a buy price past the ceiling");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_guild_order SET unit_price = 18 WHERE contract_id = 7002"), "repricing an order");
+			statement.execute("UPDATE lc_guild_band SET sell_floor = 17 WHERE item_id = 1870");
 
 			// Caravans: start scheduled, follow the machine, never go back a node.
 			statement.execute("INSERT INTO lc_caravan_route (route_name, origin_town, dest_town, nodes, scheduled_minutes, fort_ids) VALUES ('lc_caravan_giran_oren', 9, 10, 12, 90, '[]')");
@@ -124,53 +127,35 @@ class WorldSchemaTest
 	}
 
 	@Test
-	void concurrentPriceWritersSerialise() throws Exception
+	void aWriterSeesTheLatestBand() throws Exception
 	{
 		try (Connection setup = _database.connect();
 			Statement statement = setup.createStatement())
 		{
 			statement.execute("INSERT INTO lc_region (region_id, kind, name_key) VALUES (21, 'TERRITORY', 'dion'), (22, 'TERRITORY', 'aden')");
 			statement.execute("INSERT INTO lc_resource_family (family_id, name_key, catch_in, max_relocate_permille, max_rate_permille_day, recovery_days) VALUES (5, 'skins', TRUE, 50, 10, 14)");
-			statement.execute("INSERT INTO lc_resource_item (item_id, family_id) VALUES (1867, 5), (1868, 5)");
+			statement.execute("INSERT INTO lc_resource_item (item_id, family_id) VALUES (1867, 5)");
 			statement.execute("INSERT INTO lc_guild_town (town_id, territory_id, warehouse_custody_id, pool_custody_id) VALUES (21, 21, 11, 12), (22, 22, 13, 14)");
-			statement.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
-			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (21, 1867, 10, 20, " + APP + "), (22, 1867, 12, 19, " + APP + "), (21, 1868, 10, 20, " + APP + "), (22, 1868, 12, 19, " + APP + ")");
+			statement.execute("INSERT INTO lc_guild_band (item_id, buy_ceiling, sell_floor, application_id) VALUES (1867, 18, 19, " + APP + ")");
+			statement.execute("INSERT INTO lc_guild_price (town_id, item_id, buy_price, sell_price, application_id) VALUES (21, 1867, 10, 20, " + APP + "), (22, 1867, 12, 19, " + APP + ")");
 		}
 		try (Connection first = _database.connect();
 			Connection second = _database.connect();
 			Statement one = first.createStatement();
 			Statement two = second.createStatement())
 		{
-			one.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
-			two.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+			// The second writer runs in repeatable read and takes its snapshot first, band included.
+			two.execute("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
 			first.setAutoCommit(false);
 			second.setAutoCommit(false);
-			two.execute("SET SESSION innodb_lock_wait_timeout = 1");
-			one.execute("UPDATE lc_guild_price SET buy_price = 18 WHERE town_id = 21 AND item_id = 1867");
-			// The second writer cannot validate against the first's uncommitted row: it waits for the item's lock.
-			assertThrows(SQLException.class, () -> two.execute("UPDATE lc_guild_price SET sell_price = 17 WHERE town_id = 22 AND item_id = 1867"), "a concurrent writer must wait");
-			second.rollback();
+			two.executeQuery("SELECT buy_ceiling FROM lc_guild_band WHERE item_id = 1867").close();
+			// Another transaction narrows the ceiling to 12 (every price still fits) and commits.
+			one.execute("UPDATE lc_guild_band SET buy_ceiling = 12 WHERE item_id = 1867");
 			first.commit();
-			// After the first commits, the same write is refused: it would let a buy at 18 meet a sell at 17.
-			assertThrows(SQLException.class, () -> two.execute("UPDATE lc_guild_price SET sell_price = 17 WHERE town_id = 22 AND item_id = 1867"), "the write the first made unsafe");
-			second.rollback();
-		}
-		try (Connection first = _database.connect();
-			Connection second = _database.connect();
-			Statement one = first.createStatement();
-			Statement two = second.createStatement())
-		{
-			one.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
-			two.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
-			first.setAutoCommit(false);
-			second.setAutoCommit(false);
-			// The second transaction reads the prices before the first writes and commits.
-			two.executeQuery("SELECT COUNT(*) FROM lc_guild_price WHERE item_id = 1868").close();
-			one.execute("UPDATE lc_guild_price SET buy_price = 18 WHERE town_id = 21 AND item_id = 1868");
-			first.commit();
-			// It read a buy price of 10, but the trigger's reads, taken after the lock, see the committed 18.
-			assertThrows(SQLException.class, () -> two.execute("UPDATE lc_guild_price SET sell_price = 17 WHERE town_id = 22 AND item_id = 1868"), "validation against what it read earlier");
-			second.rollback();
+			// Its snapshot still shows a ceiling of 18, but the trigger's locking read of the band sees 12.
+			assertThrows(SQLException.class, () -> two.execute("UPDATE lc_guild_price SET buy_price = 17 WHERE town_id = 21 AND item_id = 1867"), "a price against a band changed after the snapshot");
+			two.execute("UPDATE lc_guild_price SET buy_price = 11 WHERE town_id = 21 AND item_id = 1867");
+			second.commit();
 		}
 	}
 

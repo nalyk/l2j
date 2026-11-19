@@ -65,7 +65,7 @@
 
 5. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
    MariaDB raises error 1442 on `FOR UPDATE` of the table that fired the trigger.
-   Do instead: lock a row of another table as the mutex, require `READ COMMITTED` in the trigger, then read plainly (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
+   Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
 
 ## Shell & Command Reliability
 1. **[2026-11-19] `git checkout -- .` on ultra leaves scp'd NEW files untracked, and push (updateInstead) then fails**

@@ -228,6 +228,16 @@ CREATE TABLE lc_guild_town (
 	CONSTRAINT fk_guild_territory FOREIGN KEY (territory_id) REFERENCES lc_region (region_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+CREATE TABLE lc_guild_band (
+	item_id INT NOT NULL,
+	buy_ceiling BIGINT NOT NULL,
+	sell_floor BIGINT NOT NULL,
+	application_id BINARY(16) NOT NULL,
+	PRIMARY KEY (item_id),
+	CONSTRAINT chk_guild_band CHECK (buy_ceiling > 0 AND sell_floor > buy_ceiling),
+	CONSTRAINT fk_guild_band_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
 CREATE TABLE lc_guild_price (
 	town_id INT NOT NULL,
 	item_id INT NOT NULL,
@@ -256,17 +266,19 @@ CREATE TABLE lc_guild_order (
 	CONSTRAINT fk_guild_order_item FOREIGN KEY (item_id) REFERENCES lc_resource_item (item_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- No loop gains Adena: for an item, every buy price and open order price is below every sell price. A writer must run
--- in READ COMMITTED; each check first locks the item's row in lc_resource_item, so writers of one item serialise, and
--- then reads the other rows, each read a fresh snapshot taken after the lock is held (spec §2.5). (MariaDB refuses a
--- locking read of a trigger's own table, error 1442.)
-CREATE TRIGGER lc_guild_price_no_loop BEFORE INSERT ON lc_guild_price FOR EACH ROW BEGIN DECLARE f SMALLINT; DECLARE min_sell BIGINT; DECLARE max_buy BIGINT; DECLARE max_order BIGINT; IF @@session.transaction_isolation <> 'READ-COMMITTED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Guild prices and orders are written in READ COMMITTED'; END IF; SELECT family_id INTO f FROM lc_resource_item WHERE item_id = NEW.item_id FOR UPDATE; SELECT MIN(sell_price), MAX(buy_price) INTO min_sell, max_buy FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id; SELECT MAX(unit_price) INTO max_order FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED'; IF NEW.buy_price >= IFNULL(min_sell, NEW.buy_price + 1) OR NEW.sell_price <= IFNULL(max_buy, NEW.sell_price - 1) OR NEW.sell_price <= IFNULL(max_order, NEW.sell_price - 1) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: a buy or order price must stay below every sell price'; END IF; END;
+-- No loop gains Adena: each item's band has its buy ceiling below its sell floor; every buy and open order price is at
+-- most the ceiling and every sell price at least the floor. Each check reads the band with a locking read of another
+-- table (always the latest committed row), and a band change checks the item's prices and orders the same way, so no
+-- check compares rows of its own table and no isolation level can break the rule (spec §2.5).
+CREATE TRIGGER lc_guild_price_band BEFORE INSERT ON lc_guild_price FOR EACH ROW BEGIN DECLARE ceiling BIGINT; DECLARE floor_price BIGINT; SELECT buy_ceiling, sell_floor INTO ceiling, floor_price FROM lc_guild_band WHERE item_id = NEW.item_id FOR UPDATE; IF ceiling IS NULL OR NEW.buy_price > ceiling OR NEW.sell_price < floor_price THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: prices stay inside the item''s band'; END IF; END;
 
-CREATE TRIGGER lc_guild_price_no_loop_update BEFORE UPDATE ON lc_guild_price FOR EACH ROW BEGIN DECLARE f SMALLINT; DECLARE min_sell BIGINT; DECLARE max_buy BIGINT; DECLARE max_order BIGINT; IF @@session.transaction_isolation <> 'READ-COMMITTED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Guild prices and orders are written in READ COMMITTED'; END IF; SELECT family_id INTO f FROM lc_resource_item WHERE item_id = NEW.item_id FOR UPDATE; SELECT MIN(sell_price), MAX(buy_price) INTO min_sell, max_buy FROM lc_guild_price WHERE item_id = NEW.item_id AND town_id <> NEW.town_id; SELECT MAX(unit_price) INTO max_order FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED'; IF NEW.buy_price >= IFNULL(min_sell, NEW.buy_price + 1) OR NEW.sell_price <= IFNULL(max_buy, NEW.sell_price - 1) OR NEW.sell_price <= IFNULL(max_order, NEW.sell_price - 1) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: a buy or order price must stay below every sell price'; END IF; END;
+CREATE TRIGGER lc_guild_price_band_update BEFORE UPDATE ON lc_guild_price FOR EACH ROW BEGIN DECLARE ceiling BIGINT; DECLARE floor_price BIGINT; SELECT buy_ceiling, sell_floor INTO ceiling, floor_price FROM lc_guild_band WHERE item_id = NEW.item_id FOR UPDATE; IF ceiling IS NULL OR NEW.buy_price > ceiling OR NEW.sell_price < floor_price THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_price: prices stay inside the item''s band'; END IF; END;
 
-CREATE TRIGGER lc_guild_order_no_loop BEFORE INSERT ON lc_guild_order FOR EACH ROW BEGIN DECLARE f SMALLINT; DECLARE min_sell BIGINT; IF @@session.transaction_isolation <> 'READ-COMMITTED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Guild prices and orders are written in READ COMMITTED'; END IF; SELECT family_id INTO f FROM lc_resource_item WHERE item_id = NEW.item_id FOR UPDATE; SELECT MIN(sell_price) INTO min_sell FROM lc_guild_price WHERE item_id = NEW.item_id; IF NEW.state = 'POSTED' AND NEW.unit_price >= IFNULL(min_sell, NEW.unit_price + 1) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_order: an order price must stay below every sell price'; END IF; END;
+CREATE TRIGGER lc_guild_order_band BEFORE INSERT ON lc_guild_order FOR EACH ROW BEGIN DECLARE ceiling BIGINT; SELECT buy_ceiling INTO ceiling FROM lc_guild_band WHERE item_id = NEW.item_id FOR UPDATE; IF NEW.state = 'POSTED' AND (ceiling IS NULL OR NEW.unit_price > ceiling) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_order: an order price stays at or below the item''s buy ceiling'; END IF; END;
 
 CREATE TRIGGER lc_guild_order_state BEFORE UPDATE ON lc_guild_order FOR EACH ROW IF OLD.state <> 'POSTED' OR NEW.unit_price <> OLD.unit_price OR NEW.item_id <> OLD.item_id OR NEW.qty <> OLD.qty OR NEW.contract_id <> OLD.contract_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_order: an order only moves from posted to filled or expired'; END IF;
+
+CREATE TRIGGER lc_guild_band_change BEFORE UPDATE ON lc_guild_band FOR EACH ROW BEGIN DECLARE max_buy BIGINT; DECLARE min_sell BIGINT; DECLARE max_order BIGINT; SELECT MAX(buy_price), MIN(sell_price) INTO max_buy, min_sell FROM lc_guild_price WHERE item_id = NEW.item_id FOR UPDATE; SELECT MAX(unit_price) INTO max_order FROM lc_guild_order WHERE item_id = NEW.item_id AND state = 'POSTED' FOR UPDATE; IF NEW.item_id <> OLD.item_id OR NEW.buy_ceiling < IFNULL(GREATEST(IFNULL(max_buy, 0), IFNULL(max_order, 0)), 0) OR NEW.sell_floor > IFNULL(min_sell, NEW.sell_floor) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_guild_band: a band never leaves an existing price or open order outside it'; END IF; END;
 
 -- Derived: the projector's view of each warehouse (spec §2.5).
 CREATE TABLE lc_guild_stock (
@@ -313,6 +325,7 @@ CREATE TRIGGER lc_caravan_transition BEFORE UPDATE ON lc_caravan FOR EACH ROW IF
 CREATE TABLE lc_caravan_escort (
 	caravan_id BIGINT NOT NULL,
 	char_id INT NOT NULL,
+	clan_id INT NULL,
 	contract_id BIGINT NOT NULL,
 	joined_at TIMESTAMP(3) NOT NULL,
 	presence_seconds INT NOT NULL DEFAULT 0,

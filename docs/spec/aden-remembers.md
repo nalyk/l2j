@@ -1,6 +1,6 @@
 # SPEC-AR — Aden Remembers
 
-- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
+- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
 - Blueprint: 12 (Aden Remembers); 01 §2.5 (rumors are content); 02 §3 (game logic never branches on origin), §4, §6
   (budgets: hot-path seams ≤ 2 µs p99, never per tick); 03 §4.2 (the loot routing patch); 04 §1 (Fact Journal,
   telemetry), §3 (Asset Service), §6 (`lc why`), §7 (keyed randomness), §8 (degradation); 10 §8 (Genesis: Aden Remembers
@@ -120,6 +120,7 @@ lc_world_pk(char_id PK, last_pk_fact_id BIGINT, last_pk_at)                     
 
 ```text
 lc_guild_town(town_id PK, territory_id UNIQUE, warehouse_custody_id, pool_custody_id)
+lc_guild_band(item_id PK, buy_ceiling BIGINT, sell_floor BIGINT, application_id)                   -- buy_ceiling < sell_floor
 lc_guild_price(town_id, item_id, buy_price, sell_price, application_id, PRIMARY KEY(town_id, item_id))
 lc_guild_order(order_id PK, town_id, item_id, qty, unit_price, contract_id UNIQUE, situation_id NULL,
                state {POSTED|FILLED|EXPIRED})
@@ -127,18 +128,19 @@ lc_guild_stock(town_id, item_id, qty BIGINT, fact_id, PRIMARY KEY(town_id, item_
 lc_caravan_route(route_name PK, origin_town, dest_town, nodes, scheduled_minutes, fort_ids JSON)
 lc_caravan(caravan_id PK, route_name, manifest_custody_id UNIQUE, state {SCHEDULED|EN_ROUTE|ARRIVED|RAIDED|RECALLED|SETTLED},
            depart_at, last_node, arrived_at NULL, outcome JSON NULL, escort_contract_id NULL)
-lc_caravan_escort(caravan_id, char_id, contract_id, joined_at, presence_seconds)
+lc_caravan_escort(caravan_id, char_id, clan_id NULL, contract_id, joined_at, presence_seconds)
 ```
 
 - Each Guild town has a **warehouse** custody (real goods) and a **pool** custody (Adena) (asset-service.md §2.2, `POOL`).
-- **No loop gains Adena through the Guild**: for every item, every town's buy price and every open order's unit price is
-  below every town's sell price. Triggers check it on every write of a price or an order: a writer must run in
-  `READ COMMITTED` (the trigger refuses any other isolation); the trigger first locks the item's row in
-  `lc_resource_item`, so writers of one item serialise, and then reads the other prices and orders, each read taking a
-  fresh snapshot after the lock is held, so a transaction that read prices before another writer committed still
-  validates against that writer's rows. (Locking reads of the trigger's own table are what one would reach for, and
-  MariaDB refuses them, error 1442.) The only writer is Aden Remembers'
-  effect dispatcher, one effect at a time (fact-journal.md §4.4); the triggers hold the rule for any writer.
+- **No loop gains Adena through the Guild**: each family item has a **band** (`lc_guild_band`) with its buy ceiling
+  strictly below its sell floor, and every town's buy price and every open order's unit price for the item is at most the
+  ceiling, every town's sell price at least the floor. So every buy is below every sell without comparing rows of one
+  table with each other. Triggers check each price or order row against its item's band, read with a locking read of
+  `lc_guild_band` (a different table, so always the latest committed row whatever the writer's isolation or snapshot),
+  which also serialises them with band changes; a band change is checked against the item's prices and open orders with
+  locking reads of those tables, so it never leaves one outside. No check reads another row of its own table, so no
+  isolation level and no ordering of writers can break the rule. The only writer is Aden Remembers' effect dispatcher
+  (fact-journal.md §4.4); the triggers hold the rule for any writer.
 - `lc_guild_stock` is the projector's view of each warehouse, built from the Guild's facts (§5), so decisions read a
   history, not a live custody; the verifier compares it with the custody (§4.11).
 
@@ -227,8 +229,11 @@ subregion of a monster is the `int[]` of §2.1, read at the seam. Families: `ar_
 journal family id per resource family, in a range registered to Aden Remembers; counted at the loot routing patch: items
 rolled, and `sum_a` items relocated), `ar_npc_trade` (atom; `network/clientpackets/RequestBuyItem.java:243`,
 `RequestSellItem.java:203`; `sum_a` Adena paid, `sum_b` received), `ar_store_trade` (atom; `network/holders/
-TradeList.java:637`, `:859`), `ar_craft_<family>` (atom; materials consumed per family, at the item granted in
-`managers/RecipeManager.java:686`), `ar_teleport_fee` (atom; `entity/teleporter/TeleportHolder.java:221`, `sum_a` Adena
+TradeList.java:637`, `:859`; Adena), `ar_store_units_<family>` (atom; at the same two points, `sum_a` units of the family's
+items that changed hands), `ar_craft_<family>` (atom; materials of the family consumed, at their destruction in
+`RecipeItemMaker.listItems(true)`, `managers/RecipeManager.java:642`, called at `:404` **before** the success roll at
+`:416`, so failed attempts count; and a contractual craft's `CRAFT_INPUT` legs from the Asset Service's facts, pact.md
+§4.3), `ar_teleport_fee` (atom; `entity/teleporter/TeleportHolder.java:221`, `sum_a` Adena
 destroyed), `ar_pvp` (atom; `Player.java:5609`), `ar_deaths`, `ar_new_chars` (`network/clientpackets/CharacterCreate.java:
 327-329`, synchronous), and an `ar_levels` snapshot of online characters per atom each bucket. Each is a telemetry seam (a
 core patch, `CORE_PATCHES.md`, ≤ 2 µs).
@@ -244,7 +249,10 @@ SeedOfDestructionManager.java:201`, `managers/SeedOfInfinityManager.java:87`, `d
 SeedOfAnnihilation/SeedOfAnnihilation.java:302-324`), Manor settlement (`managers/CastleManorManager.java:346-424`), clan war
 start and end (after the clan sets change, `data/sql/ClanTable.java:400`, `:443`), and **innocent kills**
 (`World.InnocentKilled`: killer, territory; at `Player.onKillUpdatePvPKarma`, `Player.java:5609`, when it raises the
-killer's karma). Also consumed: the Guild's and caravans' own facts, Asset, PACT and Ledger facts as counts (never a
+killer's karma), and **clan presence** (`World.ClanPresence`: day, territory, clan, distinct member principals), written
+once a day from a presence sampler that every `PresenceSampleMinutes` (15) adds each online clan member's principal to an
+in-memory sketch per (territory of the member's atom, clan): off the hot path, and durable as a fact so replay has it.
+Also consumed: the Guild's and caravans' own facts, Asset, PACT and Ledger facts as counts (never a
 contract's parties), and Signal's daily demand cells (aden-signal.md §4.8).
 
 ### 4.2 Regional state
@@ -271,16 +279,18 @@ is neutral (1000) and no situation can open on it (**cold start**). A key's valu
 the EWMA with the half-life in the table, evaluated at its step. Two keys are computed differently:
 
 - `supply_health_<f>` (town) is **days of cover** in ‰: 1000 × (Guild stock of the family's items in `lc_guild_stock` +
-  the 7-day mean of units of the family sold in the town's private stores per day) ÷ max(1, the 7-day mean of units of the
-  family consumed by crafts in the town per day × the Signal factor), where the Signal factor is 1.10, 1.25 or 1.50 when
+  the 7-day mean of `ar_store_units_<family>` in the town's atoms per day) ÷ max(1, the 7-day mean of `ar_craft_<family>`
+  units in the town's atoms per day × the Signal factor), where the Signal factor is 1.10, 1.25 or 1.50 when
   the territory's latest `CRAFTING` or `MATERIALS` demand cell is 5-9, 10-19 or 20+ (aden-signal.md §4.8), and 1 without
   one. `SHORTAGE` reads it directly (§4.4); `craft_demand_<f>` is the denominator's daily units.
 - `conflict` is the absolute count of the territory's sieges, Territory War battles and ward captures in the last 14 days.
 
-**Influence** of a clan in a territory is the EWMA (half-life 14 days) of daily points: 100 for owning its castle, 25 per
-fortress in it, 20 per ward captured there, 1 per hour of members' escort presence on caravans through it, 10 per day with
-the clan's Manor procure or crops in its castle, 5 per public PACT contract of the clan completed there, and 1 per
-distinct member principal active there that day.
+**Influence** of a clan in a territory is the EWMA (half-life 14 days) of daily points, each from a durable input: 100
+for owning its castle and 25 per fortress in it (owner facts); 20 per ward captured there (`World.WardCaptured`, with the
+capturer's clan); 1 per hour of members' escort presence on caravans through it (`lc_caravan_escort`, whose `clan_id`
+is the member's clan at joining); 10 per day the castle it owns has a Manor procure or seed list set (`World.ManorSettled`);
+5 per public PACT contract with the clan as a party completed there (PACT's completion facts); and 1 per distinct member
+principal of the day's `World.ClanPresence` there.
 
 **History significance** of a candidate event is: distinct participant principals + 2 × duration in hours + value in
 millions of Adena (manifests, contract totals, treasuries moved) + 100 if it is a first or a record + 200 if it changed an
@@ -317,8 +327,9 @@ counted), so relocation never queues on the kill path.
   by rates, champions, premium bonuses or player bonuses.
 - Excluded: protected items (§2.2); kills of raid and grand bosses and of their minions; kills outside every subregion.
 - Hot path: one array read `share[subregion][family]` from an immutable snapshot swapped at each step, the item → family
-  `int[]`, and a keyed roll only for family items of a subregion whose share is above zero (≤ 2 µs). The Asset operation
-  runs only for kills with a selected item, on the same terms and budget as the Loot Charter's, and is rate-limited.
+  `int[]`, and a keyed roll only for family items of a subregion whose share is above zero: the 2 µs budget covers this
+  selection only. The Asset operation runs only for kills with a selected item, under the Loot Charter's routing budget
+  (pact.md §4.5), rate-capped.
 - Perception: hunters there find fewer of the family; the destination's Guild offers them; Guild prices; rumors.
 
 #### 4.3.2 Limited merchant stock (`STOCK`, per town and product)
@@ -335,7 +346,9 @@ Perception: "sold out" more or less often.
 The Guild's own buy and sell prices for family items (§4.6), within [`GuildBuyMinPermille`, `GuildBuyMaxPermille`] of the
 retail buy-back (reference price ÷ 2, `network/clientpackets/RequestSellItem.java:165`, `:183`) and
 [`GuildSellMinPermille`, `GuildSellMaxPermille`] of the reference price, moving at most `GuildPriceRatePermilleDay` per
-day, always under §2.5's no-loop rule. Perception: posted prices and orders at the Guild Master.
+day, always inside the item's band (§2.5). The band is decided with the prices at each daily step: the ceiling is the
+highest buy or order price it will allow and the floor the lowest sell price, a band change committed before the prices
+that need it when it widens and after them when it narrows. Perception: posted prices and orders at the Guild Master.
 
 Mobius has no runtime spawn-group API (`entity/spawns/SpawnGroup.java:224`) and Aden Remembers needs none: it changes no
 spawn and no respawn time, so "denser monsters near a boss" (12 §4) is not an actuator. A denser spawn changes experience
@@ -521,7 +534,7 @@ Emitted, durable: `World.SituationChanged`, `World.ActuatorDecided` (kind, regio
 `World.CastleOwnerChanged`, `World.FortOwnerChanged`, `World.SiegeStarted`, `World.SiegeEnded`,
 `World.TerritoryWarStarted`, `World.TerritoryWarEnded`, `World.WardCaptured`, `World.SevenSignsPeriod`,
 `World.TaxChanged`, `World.HellboundChanged`, `World.SeedChanged`, `World.ManorSettled`, `World.ClanWarChanged`,
-`World.InnocentKilled`. Consumed: §4.1.
+`World.InnocentKilled`, `World.ClanPresence`. Consumed: §4.1.
 
 ## 6. Invariants
 
@@ -574,6 +587,7 @@ fact (fact-journal.md §4.1).
 | `RumorDelayMinutes`, `RumorLifeHours`, `HistorySignificance` | 60–2880, 1–168, 1–1000 | 360, 48, 500 | as default everywhere | AT-AR-08 |
 | `RelocationOpsPerSecond`, `MinDemandUnits`, `AmnestyBarrierMillis` | 1–1000, 1–10000, 100–60000 | 50, 20, 5000 | as default everywhere | AT-AR-01, AT-AR-10, AT-AR-07 |
 | `EscortSampleSeconds`, `EscortRadius`, `EscortMinSharePermille` | 10–120, 300–5000, 0–1000 | 30, 1500, 300 | as default everywhere | AT-AR-04 |
+| `PresenceSampleMinutes` | 5–60 | 15 | as default everywhere | AT-AR-06 |
 
 ## 9. Interface
 
@@ -602,7 +616,7 @@ Nothing else shows any state.
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-AR-00 | integration | the migration applies; triggers and keys refuse: a transition row after the first with no predecessor state; a protected item in a family (insert or update, both tables); an actuator row outside its bounds or its kind's ceiling, changed or deleted; a second open situation of a kind and region; a situation inserted other than `EMERGING`; a state change without its newest transition row; a transition outside the machine; `ACTIVE → CLOSED` without `FROZEN`/`DISABLED`; a second enacted law of a kind per castle; a second Amnesty in a reign; an ended law changed or deleted; a Guild buy price or order price at or above any sell price; concurrent price writers (the second waits for the first's lock, then is refused, also when it read prices before the first's commit); a price writer outside `READ COMMITTED`; a caravan transition outside its machine or a node going back; a rumor beyond its life |
+| AT-AR-00 | integration | the migration applies; triggers and keys refuse: a transition row after the first with no predecessor state; a protected item in a family (insert or update, both tables); an actuator row outside its bounds or its kind's ceiling, changed or deleted; a second open situation of a kind and region; a situation inserted other than `EMERGING`; a state change without its newest transition row; a transition outside the machine; `ACTIVE → CLOSED` without `FROZEN`/`DISABLED`; a second enacted law of a kind per castle; a second Amnesty in a reign; an ended law changed or deleted; a band whose ceiling is not below its floor; a buy or order price above its band's ceiling, a sell price below its floor; a band narrowed past an existing price or open order; a price written against a band another transaction changed after the writer's snapshot (the locking read sees the change); a caravan transition outside its machine or a node going back; a rumor beyond its life |
 | AT-AR-01 | integration, sim | `AR-OVERHARVEST`: 10⁶ kills of a drop list with groups, protected items, Adena and champions, with relocation at its ceiling and off: every item's frequency (relocated counted as dropped) equal between the two within a chi-square test at p ≥ 0.001; per kill, rolled family items = dropped + relocated exactly, and none both; an aborted operation returns the items to retail; an uncertain commit resolved either way leaves each item in exactly one place; past `RelocationOpsPerSecond` selections are skipped to retail; the overharvest situation opens at the declared threshold and windows and recovers after pressure stops |
 | AT-AR-02 | unit, integration | property test over random situations: every value within bounds and rate, recovery to neutral, kill switch and freeze neutral at once |
 | AT-AR-03 | unit | actor-identity.md's static scan passes over Aden Remembers; no code writes rates, skills, stats, spawns, respawn times, prices or Hellbound or seed state; the actuator set is exactly §4.3's |
@@ -615,7 +629,7 @@ Nothing else shows any state.
 | AT-AR-10 | sim | each of the eight kinds, driven by synthetic inputs: opens at its threshold after its confirmation steps, makes its asks, recedes and closes after its release steps; `AR-CATCHIN`: a mature world with new characters gets orders for catch-in items within 2 days of a shortage; `AR-TRADESHIFT`: a tax raise moves trade to neighbours within 3 days |
 | AT-AR-11 | integration | for random applied rows, `lc why` returns the situations, facts and windows behind them, and recomputing from those gives the value |
 | AT-AR-12 | integration | a planted out-of-bounds row, a relocated protected item, a `World.Relocated` fact without its operation, a custody mismatch at the boundary, a looping price, an over-share recycle and a rumor with a forbidden field: alarm and freeze; a trade committed but not yet projected raises no alarm |
-| AT-AR-13 | sim, fault | the 800-citizen benchmark: the relocation lookup and each telemetry seam ≤ 2 µs p99 (the enqueued Asset operation is not on the hot path); an exception injected in each seam leaves the retail outcome |
+| AT-AR-13 | sim, fault | the 800-citizen benchmark: the relocation lookup and selection and each telemetry seam ≤ 2 µs p99; the relocation's Asset operation, run only for kills with a selected item and rate-capped, is measured against the Loot Charter's routing budget (pact.md §4.5), not the 2 µs one; an exception injected in each seam leaves the retail outcome |
 
 ## 11. Upstream constraints
 
@@ -648,6 +662,13 @@ Nothing else shows any state.
 
 ## 12. Review record
 
+- Round 3 (Codex), NO SIGN-OFF: open were an isolation guard that reads the session default, not the active
+  transaction's level; formula operands the declared inputs could not supply (store units per family, clan presence);
+  craft consumption counted only on success; a latency oracle describing a removed queue. Revision 4: a per-item band
+  (buy ceiling below sell floor) that each price and order checks with a locking read of another table, so no row is ever
+  compared with its own table and isolation no longer matters; `ar_store_units_<family>`, a daily durable clan-presence
+  fact and escorts' clan at joining; consumption at material destruction, before the roll, and contractual crafts'
+  inputs; the 2 µs budget limited to selection.
 - Round 2 (Codex), NO SIGN-OFF: twelve of twenty fixed; open were validation reads under an old snapshot, Amnesty
   deciding on a PK fact not yet projected, relocation's handoff (queued items, uncertain commits, the crash limit),
   arithmetic for supply, cold starts, influence, significance and escort participation, a NULL path through the

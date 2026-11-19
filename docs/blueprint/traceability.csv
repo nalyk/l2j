@@ -39,11 +39,11 @@ TR-starting-title,90 §1,Starting Title,03 §8 (each with policy and reason),pro
 TR-transmog,90 §1,Transmog,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
 TR-walker-bot-protection,90 §1,Walker/Bot Protection,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
 TR-wedding,90 §1,Wedding,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
-TR-pc-cafe-pc-bang,90 §1,PC Cafe / PC Bang,"H5 has `PcCafePointsManager`, configured in `PremiumSystem.ini`; OFF — 03 §8 (PremiumSystem row)",,,,,,,,blueprint
+TR-pc-cafe-pc-bang,90 §1,PC Cafe / PC Bang,"H5 has `PcCafePointsManager`, configured in `PremiumSystem.ini`; OFF — 03 §8 (PremiumSystem row)",profiles.md,PRO-R04,,,,AT-PRO-04,,specified
 TR-vip-tier-system,90 §1,VIP Tier System,not present in H5 (Kamael-only configs),,,,,,,,blueprint
 TR-sayune-for-everyone,90 §1,Sayune for Everyone,not present in H5 (Kamael-only configs),,,,,,,,blueprint
 TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (Kamael-only configs),,,,,,,,blueprint
-TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",,,,,,,,blueprint
+TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",profiles.md,PRO-R04,,,,AT-PRO-04,,specified
 TR-aden-remembers,90 §2,Aden Remembers,12; 04 §1 (Fact Journal),aden-remembers.md,AR-R01;AR-R02;AR-R03;AR-R06;AR-R09;AR-R11;AR-R12;AR-R13,lc_region;lc_region_atom;lc_subregion_spawn;lc_region_state;lc_actuator;lc_actuator_switch;lc_situation,projector over telemetry and durable facts (§4.1),telemetry and fact seams (§4.1),AT-AR-01;AT-AR-02;AT-AR-03;AT-AR-06;AT-AR-09;AT-AR-11;AT-AR-12;AT-AR-13;AT-AR-00,,reviewed
 TR-living-world-director,90 §2,Living World Director,12; 04 §1 (Fact Journal),aden-remembers.md,AR-R02;AR-R03;AR-R10;AR-R11,lc_region;lc_region_atom;lc_subregion_spawn;lc_region_state;lc_situation;lc_situation_transition;lc_actuator,"situations → actuators (§4.4, §3.2)",,AT-AR-02;AT-AR-03;AT-AR-10;AT-AR-11,,reviewed
 TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13;FACT-R15;FACT-R16;FACT-R17,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13;AT-FACT-03;AT-FACT-15;AT-FACT-16;AT-FACT-06;AT-FACT-18,,reviewed
@@ -141,9 +141,9 @@ TR-black-ledger-sinks,90 §2,Black Ledger: sinks,16 §1–§14,asset-service.md;
 TR-black-ledger-anti-farm,90 §2,Black Ledger: anti-farm,16 §1–§14,black-ledger.md,BL-R06;BL-R14,,,,AT-BL-06;AT-BL-14,,reviewed
 TR-black-ledger-anti-harassment,90 §2,Black Ledger: anti-harassment,16 §1–§14,black-ledger.md,BL-R02,,,,AT-BL-02,,reviewed
 TR-black-ledger-legendary-hunts,90 §2,Black Ledger: legendary hunts,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,reviewed
-TR-murder-market-price,90 §2,murder market price,16 §6,,,,,,,,blueprint
+TR-murder-market-price,90 §2,murder market price,16 §6,black-ledger.md,BL-R11;BL-R14,,,,AT-BL-11;AT-BL-14,,reviewed
 TR-hunter-mythology,90 §2,hunter mythology,16 §6,black-ledger.md,BL-R10;BL-R12,,,,AT-BL-10;AT-BL-12,,reviewed
-TR-profession-definition,90 §2,profession definition (App. F),16 §6,,,,,,,,blueprint
+TR-profession-definition,90 §2,profession definition (App. F),16 §6,black-ledger.md,BL-R13,,,,AT-BL-13,,reviewed
 TR-retail-truth-statuses,90 §2,Retail Truth: statuses,11,retail-truth.md,RT-R01;RT-R03,truth/cases,,,AT-RT-00;AT-RT-02,,specified
 TR-retail-truth-evidence-cases,90 §2,Retail Truth: evidence cases,11,retail-truth.md,RT-R01;RT-R05,truth/cases;truth/evidence,,,AT-RT-00;AT-RT-04,,specified
 TR-retail-truth-clean-profile,90 §2,Retail Truth: clean profile,11,profiles.md,PRO-R03;PRO-R09,,,,AT-PRO-03;AT-PRO-07,,specified
@@ -169,7 +169,7 @@ TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, �
 TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
 TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02;ACTOR-R10,lc_account,,,AT-ACTOR-02;AT-ACTOR-00;AT-ACTOR-10,,reviewed
 TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10;AT-FACT-06,,reviewed
-TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
+TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,aden-remembers.md,AR-R11,,,,AT-AR-11,,reviewed
 TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,reviewed
 TR-persistence,90 §3,persistence,04 §9,asset-service.md;fact-journal.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28;FACT-R17,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28;AT-ASSET-01;AT-ASSET-09;AT-ASSET-02;AT-FACT-02,,reviewed
 TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00;AT-ASSET-08;AT-ASSET-26;AT-ASSET-09,AssetSchemaTest,reviewed
@@ -188,14 +188,14 @@ TR-bards,90 §4,bards,17 §2–§3,chronicle.md,CHR-R01;CHR-R04,lc_pub_row;lc_ch
 TR-town-criers,90 §4,town criers,17 §2–§3,chronicle.md,CHR-R07,lc_chr_crier_log,criers (§4.2),Npc.broadcastSay,AT-CHR-07,,specified
 TR-saga-replays,90 §4,saga replays,17 §5,chronicle.md,CHR-R02;CHR-R10,lc_chr_battle;lc_chr_battle_sample;lc_chr_battle_mark,battles and replays (§4.7),battle sampler; Door.doDie,AT-CHR-02,,specified
 TR-public-truth-report,90 §4,public Truth Report,11 §5,retail-truth.md,RT-R08,truth/,,,AT-RT-07,,specified
-TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
+TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,aden-remembers.md,AR-R11,,,,AT-AR-11,,reviewed
 TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,reviewed
 TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint
 TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,aden-signal.md,SIG-R03;SIG-R06,,,,AT-SIG-03;AT-SIG-07,,reviewed
 TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,wayfarers-memory.md,MEM-R03,,,,AT-MEM-03,,reviewed
-TR-remembers-pact-public-contracts-treaties-mercena,20 §1,"Remembers ↔ PACT: public contracts, treaties, mercenary deals become high-confidence history (no AI inferring politics from chat)",20 §1,,,,,,,,blueprint
-TR-remembers-ledger-big-campaigns-and-notorious-bou,20 §1,Remembers ↔ Ledger: big campaigns and notorious bounties become history; regional politics shift witness behaviour; never reveal targets,20 §1,,,,,,,,blueprint
-TR-remembers-crown-law-ledger-bounty-endowments-fun,20 §1,Remembers ↔ Crown Law ↔ Ledger: Bounty Endowments fund Writs; Amnesty stops new Writs; Caravan Protection funds escorts,20 §1,,,,,,,,blueprint
+TR-remembers-pact-public-contracts-treaties-mercena,20 §1,"Remembers ↔ PACT: public contracts, treaties, mercenary deals become high-confidence history (no AI inferring politics from chat)",20 §1,chronicle.md,CHR-R01,,,,AT-CHR-01,,specified
+TR-remembers-ledger-big-campaigns-and-notorious-bou,20 §1,Remembers ↔ Ledger: big campaigns and notorious bounties become history; regional politics shift witness behaviour; never reveal targets,20 §1,black-ledger.md;chronicle.md,BL-R12;CHR-R01,,,,AT-BL-12;AT-CHR-01,,specified
+TR-remembers-crown-law-ledger-bounty-endowments-fun,20 §1,Remembers ↔ Crown Law ↔ Ledger: Bounty Endowments fund Writs; Amnesty stops new Writs; Caravan Protection funds escorts,20 §1,aden-remembers.md;black-ledger.md,AR-R07;BL-R14,,,,AT-AR-07;AT-BL-14,,reviewed
 TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,aden-signal.md;wayfarers-memory.md,SIG-R03;MEM-R10,,,,AT-SIG-03;AT-MEM-10,,reviewed
 TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,aden-signal.md,SIG-R10,,,,AT-SIG-11,,reviewed
 TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md;pact.md,ASSET-R01;ASSET-R03;ASSET-R14;PACT-R02,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00;AT-PACT-02,,specified

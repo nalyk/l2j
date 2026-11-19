@@ -189,7 +189,7 @@ TR-town-criers,90 §4,town criers,17 §2–§3,,,,,,,,blueprint
 TR-saga-replays,90 §4,saga replays,17 §5,,,,,,,,blueprint
 TR-public-truth-report,90 §4,public Truth Report,11 §5,,,,,,,,blueprint
 TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
-TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,,,,,,,,blueprint
+TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,specified
 TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint
 TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,,,,,,,,blueprint
 TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,,,,,,,,blueprint

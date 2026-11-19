@@ -186,6 +186,8 @@ class LedgerSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_payment_party SET expires_at = NOW(3) + INTERVAL 30 DAY WHERE payment_id = 40"), "a party expiring before its contract ends");
 			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_ledger_payment WHERE payment_id = 40"), "a payment deleted");
 			statement.execute(move(4, "SETTLING", "SETTLED", 3));
+			assertThrows(SQLException.class, () -> statement.execute("DELETE FROM lc_ledger_payment_party WHERE payment_id = 40"), "a party deleted before its expiry");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_payment_party SET expires_at = NOW(3) - INTERVAL 1 DAY WHERE payment_id = 40"), "an expiry skipping the audit interval");
 			statement.execute("UPDATE lc_ledger_payment_party SET expires_at = NOW(3) + INTERVAL 30 DAY WHERE payment_id = 40");
 
 			// A two-kill contract settles on its last counted death, never an earlier one.
@@ -229,10 +231,13 @@ class LedgerSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(leg(70, 7, "PLAYER", 600000)), "a leg before settling");
 			statement.execute(move(7, "OPEN", "SETTLING", 1));
 			statement.execute(leg(70, 7, "PLAYER", 600000));
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_ledger_payment SET state = 'PAID' WHERE payment_id = 70"), "resolved without its party");
+			statement.execute(party(70));
 			assertThrows(SQLException.class, () -> statement.execute(leg(72, 7, "PLAYER", 1)), "a second player leg");
 			statement.execute("UPDATE lc_ledger_payment SET state = 'PAID' WHERE payment_id = 70");
 			assertThrows(SQLException.class, () -> statement.execute(move(7, "SETTLING", "SETTLED", 2)), "settled without its external leg");
 			statement.execute(leg(71, 7, "EXTERNAL", 400000));
+			statement.execute(party(71));
 			statement.execute("UPDATE lc_ledger_payment SET state = 'HELD', reason = 'SAME_IP', review_until = NOW(3) WHERE payment_id = 71");
 			assertThrows(SQLException.class, () -> statement.execute(move(7, "SETTLING", "SETTLED", 2)), "settled with a held leg");
 			statement.execute("UPDATE lc_ledger_payment SET state = 'RETURNED' WHERE payment_id = 71");
@@ -246,6 +251,7 @@ class LedgerSchemaTest
 			statement.execute(count(9));
 			statement.execute(move(9, "OPEN", "SETTLING", 1));
 			statement.execute(leg(90, 9, "EXTERNAL", 400000));
+			statement.execute(party(90));
 			statement.execute("UPDATE lc_ledger_payment SET state = 'HELD', reason = 'SAME_IP', review_until = NOW(3) WHERE payment_id = 90");
 			statement.execute("UPDATE lc_ledger_payment SET state = 'RETURNED' WHERE payment_id = 90");
 			voidIfLeaving(statement, 9, "SETTLING", "OPEN");
@@ -346,6 +352,11 @@ class LedgerSchemaTest
 		return "INSERT INTO lc_ledger_claim (contract_id, death_key, claim_deadline) VALUES (" + contract + ", 'BL/death/1/" + contract + "', NOW(3) + INTERVAL 1 DAY)";
 	}
 
+	private static String party(int payment)
+	{
+		return "INSERT INTO lc_ledger_payment_party (payment_id, beneficiary_char) VALUES (" + payment + ", 700)";
+	}
+
 	private static String count(int contract)
 	{
 		return "INSERT INTO lc_ledger_count (contract_id, death_key, ordinal, counted_at) VALUES (" + contract + ", 'BL/death/1/" + contract + "', 1, NOW(3))";
@@ -370,6 +381,7 @@ class LedgerSchemaTest
 	private static void bounty(Statement statement, int contract, String state, long amount) throws SQLException
 	{
 		statement.execute("INSERT INTO lc_ledger_payment (payment_id, kind, contract_id, death_key, amount) VALUES (" + contract + ", 'BOUNTY', " + contract + ", 'BL/death/1/" + contract + "', " + amount + ")");
+		statement.execute(party(contract));
 		statement.execute("UPDATE lc_ledger_payment SET state = '" + state + "'" + (state.equals("BLOCKED") ? ", reason = 'SAME_ACCOUNT'" : "") + " WHERE payment_id = " + contract);
 	}
 

@@ -1,6 +1,6 @@
 # SPEC-BL — The Black Ledger
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
 - Blueprint: 16 (the Black Ledger); 03 §4.4 (`ON_CURSED_WEAPON_ACQUIRE`), §4.5 (`canWitness`); 04 §3 (Asset Service), §4
   (Intel Service), §5 (Codex), §7 (keyed randomness); 10 §7 (citizen houses); 12 §6.2 (Crown Law Bounty Endowments);
   17 (publication); consensus §6.
@@ -102,7 +102,7 @@ lc_ledger_endowment_use(mark_char, window_start, paid BIGINT, expires_at)
 | a Black Contract's depositor | `lc_ledger_patron` | until the contract is terminal, its payments resolved, and its seals' reverse cases expired (`ReverseCaseHours` after the last seal); then deleted |
 | a Writ contribution's source | `lc_ledger_funder` | until the Writ is terminal and its returns made; then deleted |
 | an alias's owner | `lc_ledger_alias.owner_char` | while the alias is active; retiring it (the owner's choice, or `AliasIdleDays` without a contract) sets it to `NULL` and keeps the name reserved. **Stated limit**: restoring a database backup returns the server to the backup's moment, and a retirement made after it is undone with everything else; the restore procedure lists the aliases retired since the backup's time (from the journal's `Ledger.AliasRetired` facts, if the journal survives) so an admin can re-apply them, and otherwise the owner may retire again |
-| a payment's beneficiary and linkage evidence | `lc_ledger_payment_party` | until the payment is resolved **and** its contract is terminal, + `PaymentAuditDays` (a trigger refuses an earlier expiry); the hashed IPs of §4.11 only in `evidence`, gone with it. The payment row itself (kind, contract, death, funding, amount, state, operation) is durable and names nobody, so a leg's identity and outcome outlive its evidence |
+| a payment's beneficiary and linkage evidence | `lc_ledger_payment_party` | until the payment is resolved **and** its contract is terminal, + `PaymentAuditDays` (set by the resolving operation; the schema refuses an expiry set before both, or less than a day ahead, the configuration's minimum, and any deletion before the expiry). Every payment has its party row before it can resolve, so a bounty's killer-bound recipient is never optional; the hashed IPs of §4.11 only in `evidence`, gone with it. The payment row itself (kind, contract, death, funding, amount, state, operation) is durable and names nobody, so a leg's identity and outcome outlive its evidence |
 | inquiries, pairs, offers, reverse cases, endowment use | their tables | their windows |
 | who acted in a secret operation (opening a Black Contract, registering or retiring an alias, submitting a sighting, buying a link, bribing, planting a false trail), and the holders of its Asset operations' facts (the Ledger runs these as **confidential operations**, asset-service.md §5, revision 9: fee charges included) | the fact's `actor` field in `lc_fact_expiring` (fact-journal.md §2.4), with the life of the mapping above; the fact's own `actor_snapshot` is the institution's (`SYSTEM`, the Broker) | as above |
 
@@ -524,6 +524,9 @@ granted intel with confidence and age band, offers, payments under review, the r
 
 ## 12. Review record
 
+- Round 5 (Codex), NO SIGN-OFF: two schema gaps, a payment resolving without its party row and a party expiry able to
+  skip the audit interval. Revision 6: resolution requires the party; expiry at least a day ahead (the configured
+  `PaymentAuditDays` applied by the operation) and no deletion before it.
 - Round 4 (Codex), NO SIGN-OFF: open were the subsidy bound counted per activation (one drop can activate many times), the
   final kill not bound to the settlement, payment expiry able to erase a leg's identity before its settlement ends, and
   legs not bound to their amount and recipient. Revision 5: the cap per weapon life and BL-R14 scoped to what is

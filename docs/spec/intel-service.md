@@ -75,9 +75,9 @@ lc_expiring_table(table_name VARCHAR(64) PK, expires_column VARCHAR(32), owner_m
 - An **intel item** is the one coarse statement ever made from a trace (`UNIQUE(trace_id)`): the first disclosure fixes its
   precision; any later request about the same trace, from any audience, for any purpose, receives a **grant** of that
   same item (`lc_intel_grant`), never a refinement. A grant has its own view: the coarser of the item's precision and the
-  purpose's ceiling, and its own expiry: the earlier of the item's and the purpose's lifetime (§4.4). So a Signal grant of
-  an item first made at `ZONE` for the Ledger shows `REGION` and lives for Signal's TTL; nothing is ever shown finer than
-  the item. Only new evidence (a new trace) can say more.
+  purpose's ceiling, and its own expiry: the earlier of the item's and the purpose's lifetime (§4.4). So a grant for a
+  coarser purpose of an item first made at `ZONE` for the Ledger shows that purpose's ceiling and lives no longer than its
+  lifetime; nothing is ever shown finer than the item. (Signal does not use items: its regions are §4.9's.) Only new evidence (a new trace) can say more.
 - `lc_disclosure` is the budget's ledger, keyed by target and witness, never by requester, and `lc_disclosure_cell` the
   cells (§4.3) each positive answer implied. Both rows **expire with the window** (`expires_at` = `at` +
   `DisclosureWindowMinutes`), are in the expiring registry, and are purged like traces, so the ledger never outlives the
@@ -142,6 +142,7 @@ long        intel.plantRumor(Connection tx, int subjectChar, int territoryId, Du
 long        intel.recordIdentity(Connection tx, int subjectChar, IdentityKind kind, WitnessRef witness, IdentityPayload payload, Duration life);
 void        intel.signalPresence(int subjectChar, Optional<Integer> regionId);
 void        intel.signalMutual(long introductionId, int charA, int charB, Instant until);
+void        intel.signalUnmutual(long introductionId);
 Optional<RegionView> intel.signalRegion(Requester requester, int subjectChar, long introductionId);
 void        intel.registerCopies(Connection tx, String module, String table, String rowKey, long... intelIds);
 PublicationDecision intel.publishable(PubRow row);
@@ -282,12 +283,17 @@ Signal location is not trace-based: it is the character's own current region, ke
   (`MapRegionData`), whatever a caller passes, and none deletes the `lc_signal_presence` row. A row lives
   `SignalLocationTtlMinutes` unless refreshed, so a character who stops taking part disappears by expiry even if a report
   is lost.
-- **Mutual introductions** (`signalMutual`): Signal registers, in memory, that two characters reached mutual interest in an
-  introduction, until a time (aden-signal.md §3.2). Only Signal calls it.
+- **Mutual introductions** (`signalMutual`, `signalUnmutual`): Signal registers, in memory, that two characters reached
+  mutual interest in an introduction, until a time, and revokes the registration the moment the introduction is dropped
+  (aden-signal.md §3.2). Only Signal calls them; a registration is current only until its time or its revocation.
 - **Region** (`signalRegion`): returns the subject's region only if the introduction is registered as mutual between the
   requester and the subject and not past its time, the subject's presence row exists and is unexpired, and §4.4's Signal
   rules hold (opt-in, `INTERACTIVE`, no block either way, Signal's visibility including the requester). The view holds the
   region and nothing else; it is not an intel item, has no grant, and is not kept.
+- **Against the other rules**: a Signal region is a consented disclosure (both characters asked to meet), so it has no
+  budget units; it is not evidence-driven, so the quantum grid (§4.6) does not apply to it; but it **enters the combined
+  bound** (§4.3) as a positive answer whose implied area is the region's cells, so that no other purpose can afterwards
+  narrow the subject below the floor by combining it with Signal's answer.
 
 ## 5. Facts
 
@@ -379,7 +385,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | AT-INTEL-02 | integration | several accounts, contracts and clans asking about one subject from one witness, concurrently and across window boundaries: units charged by the configured table (1, 2, 4, 8), precision by the configured ladder, cumulative 1, 3, 7, and the fourth charged disclosure in a window refused (7 + 8 > 14), a grant of an existing item costing nothing; after the window the ledger rows are gone |
 | AT-INTEL-03 | integration, restart | items, grants, evidence, traces and every copy (multi-dependency rows included) gone at expiry; an item made just before its trace expires dies with it; a restore of an old backup deletes expired rows before start; a rebuild and a replay after expiry give "expired lead" at most |
 | AT-INTEL-04 | integration | sightings across walls, floors, invisibility, hide, teleport, login, doors, summons, instances, missing and partly loaded geodata, and a target leaving and returning between samples: a trace exactly when §3 held for the consecutive samples |
-| AT-INTEL-05 | integration | one trace asked by two audiences at two precisions: one item, at the first precision, two grants, one cost; a Ledger item at `ZONE` granted to Signal is viewed at `REGION` and expires at Signal's TTL |
+| AT-INTEL-05 | integration | one trace asked by two audiences at two precisions: one item, at the first precision, two grants, one cost; a Ledger item at `ZONE` granted for a `REGION`-ceiling purpose with a shorter lifetime is viewed at `REGION` and expires at that lifetime |
 | AT-INTEL-06 | unit | a module table holding an intel payload, or an intel id without registration or not listed as expiring, and module code reading intel other than through `intel.read`, fail the scan of migrations and code |
 | AT-INTEL-07 | integration | property test over every publication type: no row breaks its field rules or its delay; an unknown type is refused; a location-related type registered below the tactical delay is refused; two hunters with the same private knowledge (everything one account could legitimately learn), one also given the website and history filtered to humans, locate a mark equally often within the statistical margin: the publication adds nothing (17) |
 | AT-INTEL-08 | integration | a bribed witness discloses nothing about its subject until the suppression ends; the trace and audit remain |
@@ -390,7 +396,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | AT-INTEL-13 | integration | Signal: a non-opted-in, offline, detached, blocking or not-visible-to-the-requester character is never located; an opted-in one only at `REGION`, for the TTL; an opt-out or block after a grant hides it at the next read |
 | AT-INTEL-14 | integration | a disclosure asked remotely, for another contract, with a forged budget or audience, or by a non-party: refused; a reader who left the clan or contract of a grant reads nothing |
 | AT-INTEL-15 | integration | a bribe at a guard refused, at a gatekeeper beyond the kind's maximum capped; suppression starting and ending on the grid; a real trace disclosed as `WITNESS` before and after its heard rumor, in both orders, unchanged; heard and planted rumors indistinguishable in fields, never above `RUMOR`, never under another purpose; rumors in the combined bound at territory size |
-| AT-INTEL-17 | integration | `signalRegion` refused without a mutual introduction, after its time, for a third character, after the presence expired or was deleted, under a block or outside visibility; returned at `REGION` otherwise; a lost presence report expires the row |
+| AT-INTEL-17 | integration | `signalRegion` refused without a mutual introduction, after its time, after `signalUnmutual`, for a third character, after the presence expired or was deleted, under a block or outside visibility; returned at `REGION` otherwise; a lost presence report expires the row; a Ledger questioning after a Signal region sees the region counted in the combined bound |
 | AT-INTEL-16 | integration, unit | identity evidence recorded by another module refused (static scan and a database grant); an `ALIAS_LINK` never to its owner, only at a Broker in person; `PATRON_*` only to the bound seal's holder, in step order, after its contract ended; no identity item carries an area; identity evidence gone with its trace |
 
 ## 11. Upstream constraints

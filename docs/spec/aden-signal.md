@@ -1,6 +1,6 @@
 # SPEC-SIG — Aden Signal
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 13 (Aden Signal); 02 §1 (we do not break the game), §4 (production checks), §9 (tests decide); 03 §4.4
   (`ON_PLAYER_PARTY_JOIN`, `ON_PLAYER_PARTY_LEAVE`); 04 §4 (Intel Service), §5 (Codex), §7 (keyed randomness); 10
   (citizens as candidates); 12 (Aden Remembers consumes demand); 14 (Wayfarer's collaborators); 17 (Gazette); 20 §1
@@ -64,7 +64,10 @@ In memory, per online character, on the character's Codex queue (codex-ui.md §3
 binds; **latent groups** (§4.6); and the **interest ledger** of cooldowns and caps (§4.5). In-memory state is published
 by the queue that changes it: an operation either publishes its new state or leaves the old one, and durable parts
 (profile, schedule, block) are committed **before** the memory publication, so a failure never leaves memory ahead of the
-database.
+database. **An introduction has its own lock**: every transition of it, from either character's queue, takes that lock
+and, under it, checks that the introduction is not dropped and that both bound intent versions are still the current
+ones; an intent edit, under each of its introductions' locks in turn, drops them. So a transition on B's queue can never
+publish a mutual introduction for a version A has just replaced.
 
 ### 2.2 Reference data
 
@@ -72,9 +75,13 @@ database.
   all 103 classes) to the roles it fills: `TANK`, `HEALER`, `BUFFER`, `NUKER`, `ARCHER`, `DAGGER`, `SUMMONER`, `SPOILER`,
   `CRAFTER`, `SUPPORT`, `DAMAGE` (a class may fill several). Reviewed like the spec; a test fails on a class missing from it.
 - **Travel minutes** between map regions (the journal's region index, fact-journal.md §2.3) are computed at startup, the
-  same way on every server: the least of walking (region-centre distance at 120 units per second) and the gatekeeper
-  network (one minute per hop between regions with a gatekeeper of `dist/game/data/teleporters/` connecting them, plus
-  walking at both ends), rounded up to whole minutes.
+  same way on every server, as a shortest path in a graph whose nodes are regions: a region's **centre** is the mean of the
+  centres of its map cells (Mobius's map-region data, `data/xml/MapRegionData.java:91`, keeps cells and respawns, not a
+  centre, so Signal computes it); a **walking edge** joins two regions whose cells touch, costing the centre distance at
+  120 units per second; a **gatekeeper edge** costs one minute and joins the region of each gatekeeper to the region of
+  each destination of its **unrestricted** teleport lists (`dist/game/data/teleporters/`; a list with conditions, such as
+  noblesse or item lists, is not an edge). Minutes are rounded up; between a viewer and an intent with several declared
+  regions, travel is the minimum over them.
 
 ## 3. State machines
 
@@ -94,7 +101,9 @@ database.
 | — | B is among A's top `ShowCandidates` and visible to A (§4.2) | `SHOWN` | A sees B anonymised (§4.4); the view's fields are the token's terms (codex-ui.md §4.3) |
 | `SHOWN` | A expresses interest, on the Codex queue, with the token of that view | `A_INTERESTED` | B is told someone compatible is interested, anonymised; the interest ledger is charged (§4.5) |
 | `A_INTERESTED` | B expresses interest in A (B's view of A, its own token) | `MUTUAL` | both see names, notes and, through the Intel Service, regions (§4.4); Intel is told the introduction is mutual until `MutualMinutes` |
-| any | a bound version changes, either intent is gone, a block either way, `InterestMinutes` pass | `DROPPED` | the pair's cooldown starts (§4.5) |
+| `SHOWN`, `A_INTERESTED` | `InterestMinutes` pass | `DROPPED` | the pair's cooldown starts (§4.5) |
+| `MUTUAL` | `MutualMinutes` pass (at least `SessionWindowMinutes`, by their ranges) | `DROPPED` | Intel told (`signalUnmutual`) |
+| any | a bound version changes, either intent is gone, a block either way | `DROPPED` | the pair's cooldown starts; if it was mutual, Intel told (`signalUnmutual`) at once |
 | `MUTUAL` | the two are in one party within `SessionWindowMinutes`, having **not** been in one party at `MUTUAL` | session | `lc_signal_session` keyed by the introduction id |
 
 Every transition re-checks §4.2 on the queue; one that fails drops the introduction.
@@ -122,8 +131,9 @@ B is a candidate for A only if all hold, checked at every transition: both opted
 trader, offline play, or an `NPC_FAKE`: a `PARTICIPATION` policy rule, actor-identity.md §3); B's visibility includes A;
 neither blocked the other in Mobius (`entity/actor/holders/player/BlockList.java:151`, both directions) or in Signal; no
 active cooldown for the pair (§4.5); B is a citizen only if A allows synthetic candidates; level ranges, objectives and time
-windows intersect; the travel minutes from A's region to B's **declared** regions are within A's tolerance, and from B's to
-A's declared within B's; and B's party has room (9, `network/clientpackets/RequestJoinParty.java:217`) and allows joining.
+windows intersect; the travel minutes from A's own current region to B's **declared** regions are within A's tolerance,
+and from B's **declared** regions to A's declared regions within B's (B's actual whereabouts are never an input: moving B
+changes nothing A can see or be offered); and B's party has room (9, `network/clientpackets/RequestJoinParty.java:217`) and allows joining.
 
 **The synthetic preference** changes at most once per `SyntheticToggleDays` (a new intent version), and is a viewer's own
 filter: packets about a character never depend on its origin (actor-identity.md AT-ACTOR-09, whose candidate-list
@@ -201,9 +211,9 @@ A session is recorded when a `MUTUAL` introduction's two characters are in one p
 not in one party when it became mutual, observed through the `ON_PLAYER_PARTY_JOIN` and `ON_PLAYER_PARTY_LEAVE` seams (03
 §4.4; Mobius dispatches no party events, `entity/groups/Party.java:301`, `:422`, `:551`). One session per introduction
 (its id is unique). Members are rows with their origin; the cohort is `HUMAN`, `SYNTHETIC` or `MIXED` (a `METRICS` rule).
-The session ends when fewer than two of its members remain in one party; `continued_after_first` is set when two still are
-after `ContinueMinutes`. A restart before that leaves it `NULL` (unknown), and unknown sessions are excluded from
-conversion metrics.
+The session ends when fewer than two of its members remain in one party; `continued_after_first` is set `TRUE` when two still are
+after `ContinueMinutes`, and `FALSE` when the session ends before then; a restart before either leaves it `NULL`
+(unknown), and unknown sessions are excluded from conversion metrics.
 
 ### 4.10 Signal introduces, PACT commits
 
@@ -213,7 +223,9 @@ PACT's (pact.md §3.1); no Signal state depends on it.
 
 ### 4.11 Production checks
 
-Every `MatchSeconds` a verifier re-checks a sample of `VerifySample` shown candidates against §4.2 and every opted-out
+Every `MatchSeconds` a verifier re-checks a sample of `VerifySample` shown candidates against §4.2, inspects the rendered
+pages of a sample of pre-mutual views for any field outside §4.4's shown row (a name, a note, pace, an actual region),
+recounts the distinct principals of a sample of the day's demand cells from the day's intents, and checks every opted-out
 character's absence from intents and Intel presence; a violation is an alarm and freezes Signal (`lc_module_state`,
 asset-service.md §2.2): pages show Signal unavailable, nothing is shown or disclosed until an admin unfreezes it.
 
@@ -232,7 +244,7 @@ objective, introduced by), `Signal.SessionEnded` (continued), `Signal.OptOut`, `
 | SIG-INV02 | no actual region before mutual interest except §4.6's same-region band; no name before mutual interest; never a coordinate | the disclosure table; the verifier (§4.11); AT-SIG-04 |
 | SIG-INV03 | no shown candidate violates §4.2 | the verifier, sampling each cycle; AT-SIG-02 |
 | SIG-INV04 | an opt-out leaves nothing when its operation returns | the operation; the verifier; AT-SIG-05 |
-| SIG-INV05 | no demand cell below 5 principals | the schema; AT-SIG-07 |
+| SIG-INV05 | no demand cell below 5 principals | the writer's count, recounted by the verifier (§4.11); AT-SIG-07 (the schema only keeps the bands) |
 
 ## 7. Failure model
 
@@ -253,13 +265,13 @@ objective, introduced by), `Signal.SessionEnded` (continued), `Signal.OptOut`, `
 |---|---|---|---|---|
 | `MatchSeconds` | 5–120 | 20 | 20 / 20 / 5 / 20 / 20 | AT-SIG-05 |
 | `ShowCandidates`, `MinScore` | 1–50, 0–20 | 10, 4 | as default everywhere | AT-SIG-03 |
-| `InterestMinutes`, `MutualMinutes` | 1–60, 5–240 | 10, 60 | as default everywhere | AT-SIG-04 |
+| `InterestMinutes`, `MutualMinutes` | 1–60, 30–240 (≥ `SessionWindowMinutes`) | 10, 60 | as default everywhere | AT-SIG-04 |
 | `TravelBucketMinutes` | 1–30 | 5 | 5 everywhere | AT-SIG-04 |
 | `PairCooldownMinutes`, `IncomingPerHour` | 10–10080, 1–100 | 1440, 10 | as default everywhere | AT-SIG-12 |
 | `SyntheticToggleDays` | 1–90 | 7 | 7 everywhere | AT-SIG-02 |
 | `LatentMinParty`, `LatentGroupMinutes`, `LatentPromptMinutes` | 3–9, 1–30, 10–1440 | 3, 5, 60 | as default everywhere | AT-SIG-06 |
 | `SchedulePromptMinutes`, `ScheduleMinOverlap` | 5–240, 10–240 | 30, 30 | as default everywhere | AT-SIG-06 |
-| `SessionWindowMinutes`, `ContinueMinutes`, `SessionRetentionDays` | 5–120, 10–240, 1–90 | 30, 60, 30 | as default everywhere | AT-SIG-08 |
+| `SessionWindowMinutes`, `ContinueMinutes`, `SessionRetentionDays` | 5–30, 10–240, 1–90 | 30, 60, 30 | as default everywhere | AT-SIG-08 |
 | `MaxNotesChars` | 0–200 | 120 | 120 everywhere | AT-SIG-04 |
 | `VerifySample` | 1–1000 | 50 | 50 everywhere | AT-SIG-13 |
 | weights `w_objective` … `w_collaborated` | 0–10 | 3, 2, 3, 2, 2, 2, 1, 1 | as default everywhere | AT-SIG-03 |
@@ -291,7 +303,7 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-SIG-00 | integration | the migration applies; keys and checks refuse latent without opt-in, a schedule ending before it starts or expiring elsewhere, a self block, a session member twice, a second session for an introduction, a demand cell below five |
+| AT-SIG-00 | integration | the migration applies; keys and checks refuse latent without opt-in, a schedule ending before it starts or expiring elsewhere, a self block, a session member twice, a second session for an introduction, a demand band other than the three, a second cell per day, territory and objective |
 | AT-SIG-01 | integration | profile, intent and schedule flows through the Codex; `.signal` opens the tab |
 | AT-SIG-02 | integration | each exclusion of §4.2 at its boundary; a synthetic toggle refused within `SyntheticToggleDays`; with the default preference, candidate lists equal for paired human and citizen runs |
 | AT-SIG-03 | unit | the table of hand-computed scores (each term at 0, between and 1) and greedy parties; keyed ties; every `PlayerClass` in the role table; the static scan finds no other score input |
@@ -301,7 +313,7 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 | AT-SIG-07 | integration | four controlled principals and none other: no cell; alts of one account counted once; cells banded, daily, after the delay |
 | AT-SIG-08 | integration, restart | sessions once per introduction; a party already shared at mutual interest is no session; continued at `ContinueMinutes`; a restart before it gives unknown, excluded from metrics |
 | AT-SIG-09 | unit | the static scan: no mechanics API, grant, reward or NPC spawn in Signal code |
-| AT-SIG-10 | sim, human | characters assigned by `rng("signal.ab", char)` to treatment (Signal and retail matching) or control (retail matching only), at least 2 000 intents per cohort and arm; time to first contact (intent set → first mutual interest or party invite between the two) censored at the intent's end; conversion (intents leading to a session within 60 minutes); acceptance: treatment's median time to first contact at least 20 % lower and conversion at least 10 points higher, each with a 95 % bootstrap interval excluding no effect, in the human and the mixed cohorts; and parties seeking a healer or a buffer reach mutual interest with one faster under treatment, same bound |
+| AT-SIG-10 | sim, human | characters assigned by `rng("signal.ab", char)` to treatment (Signal and retail matching) or control (retail matching only), at least 2 000 **looking periods** per cohort and arm. A looking period is defined the same way in both arms: it starts when the character registers in retail party matching (`PartyMatchWaitingList` or a party room) or sets a Signal intent, and ends when that registration or intent ends. Both arms are measured with the same events, the party seams: **time to first contact** is from the start to the first party invitation the character sends or receives during the period (censored at its end); **conversion** is the share of periods in which the character is in a party of at least two within 60 minutes; for periods seeking a healer or a buffer, the time to a party containing one; acceptance: treatment's median time to first contact at least 20 % lower and conversion at least 10 points higher, each with a 95 % bootstrap interval excluding no effect, in the human and the mixed cohorts; and the time to a party containing a healer or a buffer lower under treatment, same bound |
 | AT-SIG-11 | integration | the offered draft per pairing, pre-filled only with declared fields; Signal unchanged by its fate |
 | AT-SIG-12 | integration | an edit, a visibility, clan or synthetic change between interest and answer drops the introduction; re-interest within the pair cooldown refused across new intents; the per-recipient cap; an anonymous block excludes the pair both ways without naming the sender |
 | AT-SIG-13 | integration | a planted ineligible candidate and a planted stale presence: the verifier alarms and freezes Signal; nothing shown until unfreeze |
@@ -317,6 +329,15 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: open were eligibility still reading the candidate's actual region, transitions on two
+  queues without a shared check, no revocation of Intel's mutual registration, early-ended sessions left unknown, an A/B
+  control without equivalent events, travel computation underspecified, a schema test claiming the writer's threshold, a
+  verifier blind to rendered payloads, an interest timer cutting mutual introductions short, and Intel's old Signal-grant
+  wording. Revision 3: declared regions both ways; a lock per introduction with version checks under it;
+  `signalUnmutual` and Signal regions reconciled with the combined bound and the grid (intel-service.md); `FALSE` on early
+  end; looking periods measured alike in both arms from retail matching registration or an intent; region centres, walking
+  and unrestricted gatekeeper edges, minimum over declared regions; AT-SIG-00 and INV05 restated; the verifier inspecting
+  rendered views and recounting demand; separate timers for pending and mutual introductions.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 16 findings: travel buckets and tolerance filters as a location
   oracle; anonymous fields and exact counts identifying people; the synthetic filter distinguishing citizens; demand cells
   open to controlled contributors; consent not bound to intent versions or latent groups; recyclable interest for

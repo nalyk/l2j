@@ -302,7 +302,7 @@ public class AttackableAI extends CreatureAI
 			return true;
 		}
 		
-		if ((npc.getSpawn() != null) && ((npc.getSpawn().getSpawnTerritory() != null) ? !npc.getSpawn().getSpawnTerritory().isInsideZone(npc.getX(), npc.getY()) : !npc.isInsideRadius3D(npc.getSpawn().getLocation(), NpcConfig.MAX_DRIFT_RANGE + NpcConfig.MAX_DRIFT_RANGE)))
+		if ((npc.getSpawn() != null) && ((npc.getSpawn().getSpawnTerritory() != null) ? !npc.getSpawn().getSpawnTerritory().holds(npc.getX(), npc.getY(), npc.getZ()) : !npc.isInsideRadius3D(npc.getSpawn().getLocation(), NpcConfig.MAX_DRIFT_RANGE + NpcConfig.MAX_DRIFT_RANGE)))
 		{
 			return true;
 		}
@@ -655,7 +655,7 @@ public class AttackableAI extends CreatureAI
 		}
 		
 		// Order this attackable to return to its spawn because there's no target to attack.
-		if (!npc.isWalker() && (npc.getSpawn() != null) && ((npc.getSpawn().getSpawnTerritory() != null) ? !npc.getSpawn().getSpawnTerritory().isInsideZone(npc.getX(), npc.getY()) : (npc.calculateDistance2D(npc.getSpawn()) > NpcConfig.MAX_DRIFT_RANGE)) && ((getTarget() == null) || getTarget().isInvisible() || (getTarget().isPlayer() && !NpcConfig.ATTACKABLES_CAMP_PLAYER_CORPSES && getTarget().asPlayer().isAlikeDead())))
+		if (!npc.isWalker() && (npc.getSpawn() != null) && ((npc.getSpawn().getSpawnTerritory() != null) ? !npc.getSpawn().getSpawnTerritory().holds(npc.getX(), npc.getY(), npc.getZ()) : (npc.calculateDistance2D(npc.getSpawn()) > NpcConfig.MAX_DRIFT_RANGE)) && ((getTarget() == null) || getTarget().isInvisible() || (getTarget().isPlayer() && !NpcConfig.ATTACKABLES_CAMP_PLAYER_CORPSES && getTarget().asPlayer().isAlikeDead())))
 		{
 			npc.setWalking();
 			npc.returnHome();
@@ -834,7 +834,7 @@ public class AttackableAI extends CreatureAI
 		if (territory != null)
 		{
 			// Leaving the territory alone is not straying, the chase range still applies.
-			return outOfRange && !territory.isInsideZone(npc.getX(), npc.getY());
+			return outOfRange && !territory.holds(npc.getX(), npc.getY(), npc.getZ());
 		}
 		
 		return outOfRange;

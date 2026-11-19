@@ -87,3 +87,19 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   isolated case goldens (skills, auto-attacks) did not.
 - Proof: `TimerLockTest.territoryNpcsComeBackFacingAnyWay` (before the patch every one faced due east),
   `TimerLockTest.everySpawnRespawnsAsRecorded` (no territory NPC comes back outside its territory).
+
+## CP-0006 A creature's place in its spawn territory is judged at its own height
+
+- Files: `java/org/l2jmobius/gameserver/entity/zone/type/NpcSpawnTerritory.java`, `java/org/l2jmobius/gameserver/ai/AttackableAI.java`
+- Reason: a spawn territory may ban only a band of heights over part of its area: in the Swamp of Screams (rune12_2216_03)
+  NPCs must not be placed under the swamp, below -2969, but may stand on it. `getRandomPoint` judges a ban at the point's
+  own height and places NPCs above the band. The AI asks `isInsideZone(x, y)`, which judges a ban at the territory's lowest
+  height, so it turns such an NPC out of the territory that placed it there: an idle one is woken as having strayed, and
+  one with nothing to fight is sent home from a place it was spawned at.
+- Change: `NpcSpawnTerritory.holds(x, y, z)` tests the polygon on the XY plane, ignoring the territory's own height band as
+  the flat test does, and the bans at the creature's height, as `getRandomPoint` does. The AI's three territory tests (waking,
+  going home, straying) use it. `isInsideZone(x, y)` is left as it was for any other caller.
+- Invariant: an NPC a territory placed is inside that territory for its AI; outside a height-banded ban nothing changes.
+- Proof: `NpcSpawnTerritoryTest` (the swamp territory and its ban: a Splinter Stakato where the respawn lock saw one come
+  back holds the territory, the flat test turned it out), `TimerLockTest.everySpawnRespawnsAsRecorded` (every NPC a
+  territory placed holds it).

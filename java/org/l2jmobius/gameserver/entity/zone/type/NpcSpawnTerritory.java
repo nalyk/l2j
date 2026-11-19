@@ -164,6 +164,35 @@ public class NpcSpawnTerritory
 		return true;
 	}
 	
+	/**
+	 * Tests whether a creature standing at a point holds this territory: inside its polygon on the XY plane, its Z band ignored as {@link #isInsideZone(int, int)} ignores it, and outside every banned territory at the creature's own height, which is how {@link #getRandomPoint()} judges the points it places NPCs at.<br>
+	 * {@link #isInsideZone(int, int)} tests the bans at the territory's lowest height instead, so where a ban covers only a band of heights it rejects points above or below the band that this territory places NPCs at.
+	 * @param x
+	 * @param y
+	 * @param z the creature's height
+	 * @return {@code true} if a creature standing there is inside the territory
+	 */
+	public boolean holds(int x, int y, int z)
+	{
+		if (!_territory.isInsideZone(x, y, _territory.getLowZ()))
+		{
+			return false;
+		}
+		
+		if (_bannedTerritories != null)
+		{
+			for (ZoneForm territory : _bannedTerritories)
+			{
+				if (territory.isInsideZone(x, y, z))
+				{
+					return false;
+				}
+			}
+		}
+		
+		return true;
+	}
+	
 	public int getHighZ()
 	{
 		return _territory.getHighZ();

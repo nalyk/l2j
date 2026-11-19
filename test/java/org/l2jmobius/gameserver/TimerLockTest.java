@@ -225,8 +225,8 @@ class TimerLockTest
 		final Spawn spawn = npc.getSpawn();
 		if (spawn.getSpawnTerritory() != null)
 		{
-			// In three dimensions, as the territory picks its points: a territory may ban only a band of heights over part of it.
-			return spawn.getSpawnTerritory().isInsideZone(npc.getX(), npc.getY(), npc.getZ());
+			// As the territory picks its points: a territory may ban only a band of heights over part of it (CORE_PATCHES.md CP-0006).
+			return spawn.getSpawnTerritory().holds(npc.getX(), npc.getY(), npc.getZ());
 		}
 		final Location spot = spot(spawn);
 		final int slack = RandomSpawnsConfig.ENABLE_RANDOM_MONSTER_SPAWNS ? RandomSpawnsConfig.MOB_MAX_SPAWN_RANGE : 0;

@@ -23844,7 +23844,7 @@ npc	name	place	delay	group	back
 21510	Splinter Stakato Soldier	rune12_2216_b11	42000	-	43000
 21511	Splinter Stakato Drone	rune12_2216_01	22000..62000	-	27000
 21511	Splinter Stakato Drone	rune12_2216_02	22000..62000	-	31000
-21511	Splinter Stakato Drone	rune12_2216_03	22000..62000	-	61000
+21511	Splinter Stakato Drone	rune12_2216_03	22000..62000	-	42000
 21511	Splinter Stakato Drone	rune12_2216_04s	22000..62000	-	47000
 21511	Splinter Stakato Drone	rune12_2216_04s	22000..62000	-	23000
 21511	Splinter Stakato Drone	rune12_2216_05s	22000..62000	-	35000

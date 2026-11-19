@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 10: amendments for aden-remembers.md, reviewed, and chronicle.md, under review; revision 9 was signed off; record in §12)
+- Status: reviewed (revision 10; its amendments signed off by Codex in amendment round 3; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -629,6 +629,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Amendment round 3 (Codex): revision 10 **SIGN-OFF**.
 - Amendment round 2 (Codex), NO SIGN-OFF: `move` restricted to one owner, though its callers cross modules. Fixed: two
   owners allowed, both predicates checked, refused if either is frozen.
 - Amendment round 1 (Codex) on revision 10, NO SIGN-OFF: `relocate` allowed one destination; the new facts had no

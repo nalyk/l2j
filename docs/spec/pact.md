@@ -39,7 +39,8 @@ lc_pact_contract(contract_id BIGINT PK auto, type {CRAFTING_PACT|CRAFT_ORDER|PUR
                  fee_adena BIGINT, fee_payer TINYINT, review_reason VARCHAR(128) NULL)
 lc_pact_party(contract_id, party_no TINYINT, role {CLIENT|CONTRACTOR|LENDER|BORROWER|BUYER|SELLER|DELIVERER|EMPLOYER|
               MERCENARY|SIGNATORY|LEADER|MEMBER}, kind {CHAR|CLAN|ALLIANCE|INSTITUTION}, char_id INT NULL, clan_id INT NULL,
-              ally_id INT NULL, institution {MERCHANT_GUILD|CARAVAN_GUILD} NULL, institution_custody INT NULL, signed_terms_version INT NULL, signed_at TIMESTAMP(3) NULL, signed_token BINARY(16) NULL,
+              ally_id INT NULL, institution {MERCHANT_GUILD|CARAVAN_GUILD} NULL, institution_pool INT NULL,
+              institution_receiver INT NULL, signed_terms_version INT NULL, signed_at TIMESTAMP(3) NULL, signed_token BINARY(16) NULL,
               PRIMARY KEY(contract_id, party_no))
 lc_pact_clause(contract_id, clause_no SMALLINT, kind {DELIVER_ITEMS|PAY_ADENA|CRAFT_ATTEMPT|DEADLINE|PARTICIPATION|
                REGISTRATION|LOOT_POLICY|COLLATERAL|REPAY|FORFEIT|CANCEL_CONDITION}, params JSON, PRIMARY KEY(contract_id, clause_no))
@@ -87,15 +88,15 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
 
 - `value_adena` = Adena to be escrowed + Σ item quantities × the item's retail reference price
   (`entity/item/ItemTemplate.java:574`, `getReferencePrice`), computed from `terms` when proposed and part of the terms.
-- `fee_adena` = max(`RegistrationFeeMinAdena`, ⌊`value_adena` × `RegistrationFeePermille` / 1000⌋) × the territory's
-  Market Charter factor (1 when no Market Charter is enacted in the territory, or while Aden Remembers is frozen or
-  disabled, aden-remembers.md §3.3), + `SealingFeeAdena` if `visibility = PARTIES` (sealed terms).
+- `fee_adena` = max(`RegistrationFeeMinAdena`, ⌊`value_adena` × `RegistrationFeePermille` / 1000⌋) + `SealingFeeAdena`
+  if `visibility = PARTIES` (sealed terms). No charter enters it: a Market Charter is a rebate after signing (below).
   It is part of the terms, so every signer saw it. The **fee payer** is the party the terms name (the drafter by
   default); it is charged as a `FEE_NOTARIUS` sink (asset-service.md §2.5) in the operation of the last signature, which
   fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`). **Market Charter**: the fee in the terms is
   always the unreduced one, and the payer pays it whole into `FEE_NOTARIUS` at the last signature, exactly as without a
   charter, so no charter state can change a quoted fee. After that signature commits, if a Market Charter is enacted in
-  the territory and not suspended, its custody pays the payer a **rebate** of (1 − factor) × fee by service mail (Asset
+  the territory and not suspended, its custody pays the payer a **rebate** of ⌊(1 − factor) × the registration part of
+  `fee_adena`⌋ (never of the sealing fee) by service mail (Asset
   `release`), once, under the settlement key `CHARTER/<law>/<contract>`; if the custody cannot pay, no rebate is paid
   (the Codex shows the rebate as expected, never as part of the terms) (aden-remembers.md §4.5).
 - A contract with `value_adena` ≥ `RoyalThresholdAdena`, a clan or alliance party, or of type Treaty needs a Royal
@@ -182,11 +183,11 @@ Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (T
 An `INSTITUTION` party (the Merchant Guild or the Caravan Guild of a town, aden-remembers.md §4.6) is a party whose
 owner module acts for it. **Issuing** is one operation that runs §3.1's ordinary transitions in order, in one
 transaction: `draft` (inserted `DRAFT`), `propose`, `sign` (the institution's signature on the current terms version,
-which is the last signature when it is the only party, so the contract is `SIGNED`), `fund` (its funding moved from the
-pool in `institution_custody` into the contract's funding custody by Asset `move`, writing the funding key), and
+which is the last signature when it is the only party, so the contract is `SIGNED`), `fund` (its funding moved from its Adena pool, `institution_pool`, into the contract's funding custody by Asset `move`,
+writing the funding key; refunds return there), and
 activation. So funding still follows every signature and the trigger sees only permitted transitions; for a Guild Order
 the institution is the only party, and a fill is the seller's acceptance, not a signature of the terms. An institution never signs through the Codex, never
-counter-proposes, and its contracts are `PUBLIC`. Received items go into `institution_custody`, never to service mail.
+counter-proposes, and its contracts are `PUBLIC`. Received items go into its goods custody, `institution_receiver` (the Guild's warehouse), never to service mail.
 
 ### 4.2 Contract types
 
@@ -195,7 +196,7 @@ counter-proposes, and its contracts are `PUBLIC`. Received items go into `instit
 | Crafting Pact | client: materials for *n* attempts + fee per attempt | per attempt (§4.3): the attempt's fee to the contractor whatever the outcome; product, if any, to the client; materials consumed per retail | unattempted attempts' materials and fees returned |
 | Craft Order | client: materials and fee per batch, a unit per attempt of the batch | per attempt under §4.3, as for a Crafting Pact; a batch is the funding group of its attempts, so a partial batch is the attempts made so far | unattempted attempts' units returned |
 | Purchase Order | buyer: maximum spend (the budget unit) | per fill: a seller hands items to a Notarius (in person) or, if the order allows, through the Codex; in one operation the items go to the buyer, the budget unit is split (§2.1) into the fill's price × quantity `PAID` to the seller and the remainder `OPEN` | the remainder unit `RETURNED` |
-| (Guild Order) | a Purchase Order whose buyer is the `MERCHANT_GUILD` institution (§4.1a): its maximum spend moved from the Guild pool (Asset `move`) | as a Purchase Order, filled at the Guild Master; the fill's items go into the buyer's warehouse custody (`institution_custody`) instead of service mail | the remainder `RETURNED` to the pool |
+| (Guild Order) | a Purchase Order whose buyer is the `MERCHANT_GUILD` institution (§4.1a): its maximum spend moved from the Guild pool (Asset `move`) | as a Purchase Order, filled at the Guild Master; the fill's items go into the buyer's warehouse (`institution_receiver`) instead of service mail | the remainder `RETURNED` to the pool |
 | Delivery Order | client: payment | the delivery: the deliverer hands the named items at the named Notarius before the deadline; items to the receiver, payment to the deliverer | payment returned |
 | Loan | lender: principal (unit *P*); borrower: collateral (unit *C*) | activation settles *P* (`PAID` to the borrower); repayment is a request that creates unit *R* (the repayment, funded from the borrower) and in the same operation settles *R* (`PAID` to the lender) and *C* (`RETURNED` to the borrower) | at the deadline, unrepaid: *C* `FORFEITED` to the lender, never more |
 | Loot Charter | bidders' bids, during an auction | per routed lot (§4.5) | an unfinished auction's lot to the charter's fallback receiver |
@@ -344,8 +345,8 @@ publication types (intel-service.md §4.7):
 
 | Type | Fields (rule) | When |
 |---|---|---|
-| `pact_registered` | contract type (`TEXT_FROM_FACT`), public names of parties (`PUBLIC_ENTITY`), day (`DAY`) | a `PARTIES` or `PUBLIC` contract signed |
-| `pact_completed` | contract type, public names of parties, outcome, day | a terminal state of a `PARTIES` or `PUBLIC` contract; never for `PRIVATE` |
+| `pact_registered` | contract type (`TEXT_FROM_FACT`), clan and alliance parties (`party_clans`, `PUBLIC_ENTITY`), character parties (`party_characters`, `NAME_TOKEN` basis `PACT_PARTY`, chronicle.md §2.2), day (`DAY`) | a `PARTIES` or `PUBLIC` contract signed |
+| `pact_completed` | contract type, `party_clans`, `party_characters`, outcome, day | a terminal state of a `PARTIES` or `PUBLIC` contract; never for `PRIVATE` |
 | `pact_completed_terms` | as `pact_completed`, plus the clause kinds (`TEXT_FROM_FACT`) and the item and Adena totals (`COUNT`) | a terminal state of a `PUBLIC` and `publishable` contract, instead of `pact_completed` |
 
 No field holds free text; clauses are typed, so there is no text in which a sealed term could hide. The rows are written
@@ -433,7 +434,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | AT-PACT-04 | unit | each clause kind's evaluator against a table of inputs and expected results, including boundaries (a deadline at the same millisecond, a member reaching the minutes exactly); the static scan finds no evaluator reading outside its named inputs |
 | AT-PACT-05 | integration | raids and kills with charters and without; the charter's leader disbanding and forming a new party (the new party's kills retail); a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
 | AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, hits on an invulnerable or offline-protected target (no activity), damage transferred to a caster's CP leaving no residual HP damage (activity), expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
-| AT-PACT-07 | integration | fees: values and fees computed independently from the terms, charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
+| AT-PACT-07 | integration | fees: values and fees computed independently from the terms (a base of 1 000 under a 0.8 charter: 1 000 charged into the sink, then a 200 rebate by service mail once; no rebate when the charter custody cannot pay or the charter is suspended; never a rebate of the sealing fee), charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
 | AT-PACT-08 | integration | publication rows of the three types for every visibility: a `PUBLIC` and `publishable` completion writes `pact_completed_terms` and no `pact_completed`; a `PUBLIC` contract that is not `publishable` and a `PARTIES` one write `pact_completed` only, with no clause kind or total; a `PRIVATE` one writes nothing; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
 | AT-PACT-09 | integration | acts outside contracts (attacking a treaty party, keeping a lent weapon outside a loan, leaving a party) stay possible; a clan member without the leader's authority cannot sign or fund, and with `ACCESS_WAREHOUSE` can fund only when `AltMembersCanWithdrawFromClanWH` is on |
 
@@ -454,6 +455,9 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Amendment round 3 (Codex), NO SIGN-OFF: one institutional custody field served both the Adena pool and the goods
+  warehouse; the fee formula still applied the charter factor. Fixed: `institution_pool` and `institution_receiver`; the
+  fee never includes a charter, the rebate is of its registration part, with an oracle in AT-PACT-07.
 - Amendment round 2 (Codex), NO SIGN-OFF: issuance inserted a contract `PROPOSED`, which the machine forbids; the charter
   reservation had no units or keys. Fixed: issuing runs the ordinary transitions in one transaction; the charter is a
   rebate after signing under its own settlement key, the fee in the terms always unreduced.

@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 9: telemetry amendments for aden-remembers.md, reviewed; revision 8 was signed off; record in §12)
+- Status: reviewed (revision 9; its telemetry amendment signed off with one test fix by Codex in amendment round 3; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -474,7 +474,7 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 | AT-FACT-08 | integration | expiring rows deleted on time; a restore deletes rows already expired before the server starts; backups of the expiring tables older than their life are refused |
 | AT-FACT-09 | integration | a projector run twice, and with a crash between derived write and checkpoint: identical derived state and intents |
 | AT-FACT-10 | integration | a gap record and an unclean epoch boundary each stop a projector and freeze its effects; acknowledgement resumes it |
-| AT-FACT-11 | integration | replay into an isolated schema after partitions were dropped under §4.5: equal derived state from the newest usable snapshot; a snapshot below its families' highest dropped id refused; a projector of other families keeps its snapshots; maintenance interrupted between watermark and drop leaves replay correct; no effect written |
+| AT-FACT-11 | integration | replay into an isolated schema after partitions were dropped under §4.5: equal derived state from the newest usable snapshot; a snapshot below its families' highest dropped id refused; a projector of other families keeps its snapshots; maintenance interrupted between watermark and drop leaves replay correct; no effect written; telemetry buckets a projector has passed are deleted while a heartbeating replay continues, and its later 7-day means and 28-day baselines equal those of an uninterrupted run; a bucket whose window no consumer has read yet is never deleted |
 | AT-FACT-12 | unit, integration | an upcaster chain reads every stored version; an unregistered type is refused; the game server's user cannot update or delete `lc_fact` |
 | AT-FACT-13 | unit | every capture record holds only primitives and immutable snapshots (reflection over the sealed hierarchy) |
 | AT-FACT-14 | sim | 800-citizen siege benchmark: lag p99 within 5 s; a caught-up projector reports zero |
@@ -506,6 +506,7 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Amendment round 3 (Codex), **SIGN-OFF WITH FIXES**: the bucket retention needed its test oracle, added to AT-FACT-11.
 - Amendment round 2 (Codex), NO SIGN-OFF: a replay could pass a window's marker yet need the window later for a baseline.
   Fixed: a projector reads a window once and keeps what it needs later in its derived state and snapshots.
 - Amendment round 1 (Codex) on revision 9, NO SIGN-OFF: the window marker could be lost in a crash after the rows

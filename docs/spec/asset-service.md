@@ -247,7 +247,7 @@ A `CLOSED` custody never reopens; a new holding is a new custody. Custody rows a
 | `MARKED` | `TAKEN` | every debit from a Mobius holder is taken in memory as §3.3 orders it, the stack write locks held from then on; a debit that is no longer possible (gone, moved, insufficient, ineligible) ends the operation as `ABORTED` |
 | `TAKEN` | `COMMITTING` | the statements (the touched Mobius rows written from memory, custody and mail rows, postings, settlement key, owner state and version, facts, deleting the pending mark, `lc_asset_op`) run on one connection, autocommit off; `COMMIT` is sent |
 | `COMMITTING` | `COMMITTED` | the commit returned |
-| `COMMITTING` | `ABORTED` | an error before `COMMIT` was sent: rollback |
+| `COMMITTING` | `ABORTED` | an error before `COMMIT` was sent: rollback; a deadlock victim or a lock-wait timeout is first retried, holding the locks, up to `DeadlockRetries` times in the global row-lock order (fact-journal.md §3.1) |
 | `COMMITTING` | `UNCERTAIN` | the connection failed after `COMMIT` was sent |
 | `UNCERTAIN` | `COMMITTED` / `ABORTED` | a **locking** read of `opId` in `lc_asset_op` on a new connection returns (it waits while the original transaction is unresolved): present means committed, absent means aborted |
 | `UNCERTAIN` | `UNCERTAIN` | the read times out or fails: retried, the locks still held; after `UncertainCommitLookupMillis` the module is frozen; never aborted on a timeout |
@@ -600,6 +600,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- After sign-off, aligned with the Fact Journal (revision 3): facts are staged in `lc_fact_outbox` in the operation's
+  transaction and relayed into the log by the journal's writer; a deadlock victim or lock-wait timeout is retried in the
+  journal's global row-lock order before the operation aborts (§3.2). No guarantee of this spec changed.
 - Round 7 (Codex): **SIGN-OFF.** The deletion guard covers both deletion paths (`deletetime` and `DeleteDays = 0`) with
   the mark committed before any deleting statement; pending marks protect a mandatory refund; the traceability test
   checks that a row's tests cover its requirements' and that its blueprint documents exist. Remaining, as named N4

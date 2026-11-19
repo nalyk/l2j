@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -26,61 +26,69 @@ player may learn from them (Intel Service), what is published (Chronicle), nor a
 
 ## 2. Data
 
-### 2.1 Two kinds of stream
+### 2.1 One log, one sequencer
 
-A **stream** is the unit of order. Every stream is of exactly one kind, fixed by its name:
+All durable facts form **one log**, ordered by `lc_fact.id`, which only the journal's **writer** assigns. The writer is a
+single thread with a single database session; it inserts facts in batches, each batch one transaction, in increasing id
+order, so a reader that sees id *n* committed has seen every committed id below it. Ids may skip values (an aborted
+insert consumes one); readers never treat a skipped id as a loss. Losses are explicit records in the log (§3.4).
 
-| Kind | Name | Order assigned | Writer | Delivery |
-|---|---|---|---|---|
-| **outbox** | `asset.custody.<id>`, `pact.<contract>`, `ledger.<contract>`, `castle.<id>`, `config`, … | in the transaction that records the change, under the stream's head row lock (§3.1) | the module's own transaction | exactly once |
-| **captured** | `cap.<family>` or `cap.<family>.<key>` (e.g. `cap.kill.<region>`, `cap.pvp`, `cap.boss`) | at capture, by an atomic counter, before the fact is queued (§3.2) | the journal's single batch writer | at most once; every loss visible as a hole |
+Facts reach the writer two ways:
 
-An outbox stream never holds captured facts and a captured stream never holds outbox facts, so the two writers never
-compete for a stream, and order within a stream is the order of its one writer. Order *across* streams is defined in
-§4.2.
+| Delivery | How | Guarantee |
+|---|---|---|
+| **outbox** | inserted into `lc_fact_outbox` by the module's own transaction, with the change it records (§3.1) | exactly once: it exists exactly when the change committed |
+| **captured** | copied at the owning operation into a preallocated record and offered to the writer's bounded queue (§3.2) | at most once; every refusal and every loss is an explicit gap record in the log |
+
+The writer **relays** committed outbox rows into the log (inserting them into `lc_fact` and deleting them from
+`lc_fact_outbox` in the same transaction) and drains the capture queue, so the log's order is the writer's: a serial order
+of everything that happened, the same live and on replay. A **stream** still names the aggregate a fact belongs to
+(`asset.custody.<id>`, `pact.<contract>`, `cap.kill`, …) and an outbox stream's facts carry consecutive `stream_seq`
+numbers from its head row (§3.1), so a consumer can version an aggregate; order *between* streams is simply log order.
 
 ### 2.2 Tables
 
 ```text
-lc_fact(id BIGINT auto, occurred_at TIMESTAMP(3), stream VARCHAR(48), epoch INT, stream_seq BIGINT, type SMALLINT,
-        schema_ver SMALLINT, logical_time BIGINT, actor_snapshot JSON, region_id SMALLINT, zone_id INT NULL, instance_id INT,
-        sensitivity TINYINT, payload JSON, op_id BINARY(16) NULL, batch_id BIGINT NULL, PRIMARY KEY(id, occurred_at))
+lc_fact(id BIGINT auto, occurred_at TIMESTAMP(3), stream VARCHAR(48), stream_seq BIGINT NULL, type SMALLINT, schema_ver SMALLINT,
+        logical_time BIGINT, actor_snapshot JSON, region_id SMALLINT, zone_id INT NULL, instance_id INT, sensitivity TINYINT,
+        payload JSON, op_id BINARY(16) NULL, batch_id BIGINT, PRIMARY KEY(id, occurred_at))
         PARTITION BY RANGE (UNIX_TIMESTAMP(occurred_at)), one partition per month and a catch-all
-lc_stream_head(stream VARCHAR(48) PK, epoch INT, last_seq BIGINT, last_logical_time BIGINT, clean_end BOOLEAN)
+lc_fact_outbox(outbox_id BIGINT PK auto, staged_at TIMESTAMP(3), stream VARCHAR(48), stream_seq BIGINT, type SMALLINT,
+               schema_ver SMALLINT, logical_time BIGINT, actor_snapshot JSON, region_id SMALLINT, zone_id INT NULL,
+               instance_id INT, sensitivity TINYINT, payload JSON, op_id BINARY(16) NULL)
+lc_stream_head(stream VARCHAR(48) PK, last_seq BIGINT)
 lc_journal_epoch(epoch INT PK auto, started_at TIMESTAMP(3), ended_at TIMESTAMP(3) NULL, clean BOOLEAN)
-lc_journal_batch(batch_id BIGINT PK, epoch INT, committed_at TIMESTAMP(3), facts INT, frontier_logical_time BIGINT)
-lc_journal_gap(stream VARCHAR(48), epoch INT, from_seq BIGINT, to_seq BIGINT NULL, refused BIGINT NULL,
-               reason {QUEUE_FULL|STORE_DOWN|RESTART}, acknowledged_by VARCHAR(32) NULL, acknowledged_reason VARCHAR(128) NULL,
-               PRIMARY KEY(stream, epoch, from_seq))
+lc_journal_batch(batch_id BIGINT PK, epoch INT, committed_at TIMESTAMP(3), first_id BIGINT NULL, last_id BIGINT NULL,
+                 relayed INT, captured INT, phase BIGINT NULL, frontier_logical_time BIGINT NULL)
+lc_journal_gap(fact_id BIGINT PK, epoch INT, phase BIGINT NULL, family VARCHAR(32), refused BIGINT NULL,
+               from_logical_time BIGINT, to_logical_time BIGINT, reason {QUEUE_FULL|STALLED|RESTART},
+               acknowledged_by VARCHAR(32) NULL, acknowledged_reason VARCHAR(128) NULL)
 lc_fact_expiring(fact_id BIGINT, field VARCHAR(32), value JSON, expires_at TIMESTAMP(3), PRIMARY KEY(fact_id, field))
 lc_fact_precise(fact_id BIGINT PK, x INT, y INT, z INT, instance_id INT, expires_at TIMESTAMP(3))
 lc_telemetry_bucket(window_start TIMESTAMP, window_len INT, region_id SMALLINT, family SMALLINT, actor_class TINYINT,
-                    events BIGINT UNSIGNED, sum_a BIGINT, sum_b BIGINT, unique_actors INT UNSIGNED,
+                    events BIGINT UNSIGNED, sum_a BIGINT, sum_b BIGINT, unique_actors INT UNSIGNED, stalled BOOLEAN,
                     PRIMARY KEY(window_start, region_id, family, actor_class))
-lc_projector_checkpoint(projector VARCHAR(48), stream VARCHAR(48), epoch INT, last_seq BIGINT, reducer_ver SMALLINT,
-                        config_ver INT, PRIMARY KEY(projector, stream))
-lc_effect_outbox(application_id BINARY(16) PK, projector VARCHAR(48), fact_id BIGINT, kind VARCHAR(32), payload JSON,
-                 state {PENDING|DONE|FAILED}, attempts INT, created_at TIMESTAMP(3), done_at TIMESTAMP(3) NULL)
+lc_projector_checkpoint(projector VARCHAR(48) PK, last_fact_id BIGINT, reducer_ver SMALLINT, config_ver INT)
+lc_effect_outbox(application_id BINARY(16) PK, projector VARCHAR(48), fact_id BIGINT, effect_index SMALLINT, kind VARCHAR(32),
+                 payload JSON, state {PENDING|DONE|FAILED}, attempts INT, created_at TIMESTAMP(3), done_at TIMESTAMP(3) NULL,
+                 UNIQUE(projector, fact_id, effect_index))
 lc_config_version(config_ver INT PK auto, module VARCHAR(16), changed_at TIMESTAMP(3), content JSON)
 lc_fact_type(type SMALLINT PK, name VARCHAR(64) UNIQUE, schema_ver SMALLINT, durability {DURABLE|TELEMETRY},
-             delivery {OUTBOX|CAPTURED}, stream_family VARCHAR(32), sensitivity TINYINT, retention_days INT NULL,
-             owner_module VARCHAR(16))
-lc_replay_snapshot(projector VARCHAR(48), taken_at TIMESTAMP(3), checkpoint JSON, store_ref VARCHAR(128),
-                   PRIMARY KEY(projector, taken_at))
+             delivery {OUTBOX|CAPTURED}, family VARCHAR(32), sensitivity TINYINT, retention_days INT NULL, owner_module VARCHAR(16))
+lc_replay_snapshot(projector VARCHAR(48), last_fact_id BIGINT, taken_at TIMESTAMP(3), store_ref VARCHAR(128),
+                   PRIMARY KEY(projector, last_fact_id))
 ```
 
-- `lc_fact` is immutable: the game server's database user may `INSERT` and `SELECT` it and nothing else (§8); nothing
-  that must ever be removed is written into it (§2.4). It is partitioned by month; MariaDB allows no unique key on a
-  partitioned table without the partition column and no foreign keys at all, so uniqueness of `(stream, epoch,
-  stream_seq)` comes from how sequences are assigned (§3.1, §3.2) and from batch identity (`lc_journal_batch`), and is
-  checked by every projector as it reads (INV02).
-- An **epoch** is one run of the capture side: it begins at startup (`lc_journal_epoch`) and ends cleanly only when the
-  writer has drained the queue at shutdown and recorded `clean`. Captured sequences restart at 1 in each epoch. Outbox
-  streams use epoch 0 forever.
-- `logical_time` is the game clock at the fact (`GameClock.millis`, `gameserver/livingchronicle/clock/GameClock.java:35`).
-- `lc_effect_outbox` is how a projector's decision becomes an effect exactly once (§4.4).
-- `lc_config_version` records every configuration a reducer may read; a configuration change is an outbox fact on the
-  `config` stream, so a replay reads the configuration that was in force at each fact (§4.1).
+- `lc_fact` is immutable: the game server's database user may `INSERT` and `SELECT` it and nothing else (§8), and nothing
+  that must ever be removed is written into it (§2.4). It is partitioned by month (MariaDB allows no unique key there
+  without the partition column, and no foreign keys); its order is the writer's.
+- An **epoch** is one run of the writer: it begins at startup and ends cleanly only when the writer has drained the queue
+  and the outbox at shutdown and recorded `clean`. A **phase** is one interval of the capture side (§3.3).
+- `logical_time` is the game clock at the fact (`GameClock.millis`, `gameserver/livingchronicle/clock/GameClock.java:35`);
+  it is data a reducer may compare, never the order of application.
+- `lc_effect_outbox` turns a projector's decision into an effect exactly once (§4.4); `lc_config_version` binds
+  configuration to facts (§4.1); `lc_replay_snapshot` records copies of derived state by the log position they cover
+  (§4.5).
 
 ### 2.3 Region
 
@@ -108,8 +116,7 @@ Both tables are purged at `expires_at` by deleting rows, never by rewriting a fa
 ### 2.5 Fact types
 
 Every fact type is a Java record implementing a sealed interface, registered in `lc_fact_type` with its id, name, schema
-version, durability, delivery, stream family, sensitivity, retention and owner module; a captured type names the
-stream family its facts go to. Adding a type, or bumping its schema version, is a change to the owner's spec and to this
+version, durability, delivery, family, sensitivity, retention and owner module. Adding a type, or bumping its schema version, is a change to the owner's spec and to this
 registry. A schema bump is additive: older versions are read through an explicit upcaster to the newest; a stored row is
 never rewritten. The payload is canonical JSON (sorted keys, integers only, fractions as integers with a stated scale).
 
@@ -123,67 +130,74 @@ cell). The current window is a buffer of preallocated arrays indexed by (region 
 
 ### 3.1 Outbox facts
 
-A fact whose meaning depends on a state change is written in the transaction that makes the change: the caller locks
-its stream's head row, takes the next numbers, inserts the facts and advances the head before its `COMMIT`. Outbox facts
-are exactly once: they exist exactly when their change does (INV03).
+A fact whose meaning depends on a state change is staged in the transaction that makes the change: the caller locks its
+stream's head row, takes the next `stream_seq` numbers, inserts the facts into `lc_fact_outbox` and advances the head,
+all before its `COMMIT`. A staged fact exists exactly when its change does (INV03); the writer relays it into the log
+within `RelayMillis`. A uncertain relay commit is resolved by a locking read of the staged rows: if they are gone, the
+batch committed.
 
-**Row-lock order.** Every Living Chronicle transaction takes its database row locks in one global order: `characters`
-rows (by id), custody rows (by id), owner-module rows (by table, then id), stream heads (by stream name), always last.
-Within that order there is no cycle. A transaction that InnoDB still picks as a deadlock victim got a definite rollback
-before `COMMIT`: it retries its statements up to `DeadlockRetries` times, holding the in-memory locks it already holds,
-and only then aborts (for an Asset operation: aborts and refunds, asset-service.md §3.2).
+**Row-lock order.** Every Living Chronicle transaction takes its database row locks in one global order, each category
+by key: `characters` rows; `castle` rows; custody rows; `items` rows and their attribute, elemental and variable rows (by
+object id); `messages` and `lc_mail_delivery` rows; `lc_asset_pending` rows; owner-module rows (by table, then id);
+`lc_settlement_key` and `lc_asset_op` rows; stream heads; then the inserts into `lc_fact_outbox`, which lock nothing
+another transaction waits for. Every transaction sets a lock-wait timeout of `LockWaitMillis`. A deadlock victim or a
+lock-wait timeout is a definite rollback before `COMMIT`: the transaction is retried up to `DeadlockRetries` times,
+holding the in-memory locks it holds, and only then fails; for an Asset operation that failure is the abort-and-refund
+of asset-service.md §3.2.
 
 ### 3.2 Captured facts
 
-A fact that records something Mobius did on its own is captured where Mobius does it, by a core-seam call that copies
-primitives into a fixed-size record (03 §4.4), **numbers it in its stream** with an atomic counter (the stream's next
-sequence in the current epoch), and offers it to the journal's bounded queue without blocking. Mobius's own event
-objects are not used: they hold live `Player`, `Item` and `Location` references
+A fact that records something Mobius did on its own is captured where Mobius does it (§3.5), by a core-seam call that
+claims a slot in the writer's preallocated ring of fixed-size records, copies primitives into it (03 §4.4) and publishes
+it, without blocking, without I/O and without allocating. Mobius's own event objects are not used: they hold live
+`Player`, `Item` and `Location` references
 (`gameserver/mechanics/events/holders/actor/player/inventory/OnPlayerItemTransfer.java:30-32`; `WorldObject.getLocation`
 returns the live field, `WorldObject.java:748-751`), and async listeners run later on a pool with an unbounded queue
 (`gameserver/mechanics/events/EventDispatcher.java:159`; `commons/threads/ThreadPool.java:86`).
 
-- **A refused capture leaves a hole.** Its number was taken; the fact was not queued; the counter of refusals for the
-  stream goes up. A projector reading the stream sees the missing number at the exact place the loss happened and stops
-  there (§4.3), whether or not the gap row has been written yet. The writer records the hole as an `lc_journal_gap` row
-  (`QUEUE_FULL`, or `STORE_DOWN` when the store was down) as soon as it can.
-- **One writer thread** drains the queue in batches. Each batch is one transaction that inserts its facts, advances the
-  heads of its streams to their highest numbers, and inserts its `lc_journal_batch` row, whose id is
-  (epoch, writer's own counter). If the commit is uncertain, the writer reads that batch id with a locking read before
-  doing anything else: present means committed and the batch is dropped from memory; absent means the batch is retried as
-  it was, same id. A batch is never re-offered with new numbers. Mobius's file logger is the precedent for a daemon writer
-  behind a bounded queue whose `offer` never blocks and counts refusals (`log/handler/AsyncFileHandler.java:47, 87-89,
-  125-129`).
-- **Heartbeats.** Every `HeartbeatMillis` the writer commits a batch row even when it has no facts, carrying the
-  **frontier**: the logical time up to which every capture taken has been written or recorded as a hole. Projectors use it
-  to advance past an idle stream (§4.2).
-- **A crash loses what was queued.** Its numbers are gone with it. At startup a new epoch begins; every captured stream
-  whose head says its last epoch did not end cleanly gets a `RESTART` gap from its last committed number to the open end
-  (`to_seq` and `refused` unknown, `NULL`). A stream whose first fact of that epoch was never committed has no head, and
-  the epoch is then marked not clean as a whole: a projector meeting an epoch boundary without a clean end stops (§4.3),
-  so "no activity" and "lost activity" are never confused.
-- **Bulk facts** (a siege's end with its participants, a raid boss's kill with its contributors) are not hot-path facts:
-  their snapshot is O(n) in participants, n is capped at `MaxParticipantsPerFact` per fact, and a larger set is written
-  as several facts sharing a correlation id with their parts numbered. Their budget is `BulkCaptureMicros` per fact, not
-  the hot path's 2 µs.
+- **A full ring refuses** the capture and counts it for its family in the current phase, with the earliest and latest
+  logical time refused. Mobius's file logger is the precedent for a writer behind a bounded queue whose offer never blocks
+  and counts refusals (`log/handler/AsyncFileHandler.java:47, 87-89, 125-129`).
+- **Bulk facts** (a siege's end with its participants, a raid boss's kill with its contributors) take one record per
+  `MaxParticipantsPerFact` participants, sharing a correlation id with their parts numbered; their budget is
+  `BulkCaptureMicros`, not the hot path's 2 µs.
 - **Coherent locations.** Mobius's `Location` has five independently written volatile fields (`entity/Location.java:36-40`)
-  and `setXYZ` writes them one after another (`WorldObject.java:760-762`), so reading another actor's place while it
-  moves or teleports can mix two moments. A core patch gives `Location` a version counter, made odd during a write and
-  even after it; capture reads the fields between two equal, even readings of the version, retrying up to three times,
-  and otherwise records the location as `torn` (a flag, not a guess).
+  written one after another (`WorldObject.java:760-762`), possibly from more than one thread. A core patch gives
+  `Location` a version: a writer moves it from even to odd by compare-and-set (spinning while it is odd, so writers exclude
+  one another), writes the fields, then makes it even again; capture reads the fields between two equal, even readings,
+  retrying up to three times, and otherwise records the location as `torn`.
 
-### 3.3 Telemetry capture
+### 3.3 Phases: when every capture is accounted for
 
-`Telemetry.add(family, regionIndex, actorClass, a, b, actorId)`: O(1), no allocation, no lock.
+Every capture runs inside a **phase**: it increments its thread's stripe of the current phase's in-flight counter before
+claiming a slot or counting a refusal, and decrements it in a `finally`. The writer, every `HeartbeatMillis`, opens a new
+phase and waits until every stripe of the old one is zero; from then on every capture of the old phase is either in the
+ring or counted as refused. The writer then drains the ring, writes the old phase's refusals as `QUEUE_FULL` gap records
+(`Journal.Gap` facts in the log, with their family, count and logical-time span), commits, and records the batch with the
+phase and its **frontier**: the logical time at which the phase was closed. Every capture taken before the frontier is in
+the log, or covered by a gap record in the log, at or before that batch.
 
-- The producer reads the current buffer, increments the buffer's in-flight counter (striped by thread), re-reads the
-  current buffer, and if it changed meanwhile, decrements and starts again; then adds `events`, the two sums and the
-  sketch register (an atomic max) into its cell, and decrements the in-flight counter.
-- At the window's end the writer swaps in a fresh buffer, waits until every stripe of the old buffer's in-flight counter is
-  zero, then writes one row per non-empty cell and returns the buffer, cleared, to the pool. An add is therefore counted in
-  exactly one window, whole: never lost, never split, never counted twice.
+- A stripe that is not zero after `PhaseDrainMillis` (a producer stuck, or one whose `finally` itself failed) does not
+  stop the writer: it writes a `STALLED` gap for the phase (count unknown), abandons that phase's counters for good, and
+  goes on.
+- The same phases close telemetry windows (§3.4): a window's buffer is written only after its phase drained, or written
+  flagged `stalled`.
+- A **crash** loses what the ring held. At startup a new epoch begins; the writer records a `RESTART` gap from the last
+  committed frontier of the previous epoch (count unknown), unless that epoch ended clean.
 
-### 3.4 Where capture happens
+A module that must decide on the **absence** of a captured fact (no kill before a deadline) decides only once the log's
+frontier has passed the deadline, and treats a gap record overlapping it as "unknown", failing closed. A module that
+needs a fact exactly once makes it an outbox fact in its own transaction.
+
+### 3.4 Telemetry capture
+
+`Telemetry.add(family, regionIndex, actorClass, a, b, actorId)`: O(1), no allocation, no lock. Inside the current phase
+(§3.3), the producer adds into its cell of the current window's buffer: `events`, the two sums and the distinct-actor
+sketch register (an atomic max). At a window's end the writer swaps in a fresh buffer, and once the phases that could
+still add to the old one have drained, writes one row per non-empty cell; a buffer whose phase stalled is written with
+`stalled` set. An add is therefore counted in exactly one window, whole.
+
+### 3.5 Where capture happens
 
 The core seam (blueprint 03 §4.4) adds capture calls at the owning operations. The natural points, as Mobius stands:
 
@@ -205,66 +219,65 @@ where a module's spec needs them.
 
 ### 4.1 Determinism
 
-The same facts, the same reducer version and the same configuration give the same derived state. Randomness a reducer
+The same log, the same reducer version and the same configuration give the same derived state. Randomness a reducer
 needs comes from the fact (recorded outcomes) or from a keyed stream seeded by the fact's id (04 §7); time is the fact's
 `logical_time`, never the wall clock; configuration is the `config_ver` in force at the fact (the latest `config` fact
-before it), recorded in the checkpoint.
+before it in the log), recorded in the checkpoint.
 
 ### 4.2 Order
 
-Within a stream, facts apply in (epoch, `stream_seq`) order. A projector that combines streams applies facts in the total
-order (`logical_time`, stream name, epoch, `stream_seq`), and applies a fact at time *T* only when every input stream's
-**frontier** has reached *T*:
-
-- a captured stream's frontier is the writer's last committed heartbeat frontier (§3.2);
-- an outbox stream's frontier is the oldest `logical_time` any open transaction may still write to it: the service that
-  owns the stream registers a transaction's start time when it locks the head and removes it at commit or rollback, so
-  the frontier is the earliest registered start, or the current time when none is open. An outbox fact therefore always
-  carries a `logical_time` at or after the frontier its stream had when its transaction began.
-
-A fact can then never arrive behind the frontier, and a live run and a replay apply the same facts in the same order.
+A projector applies the facts it consumes in log order (`lc_fact.id`), reading only committed batches. That order is the
+same live and on replay, whatever streams a projector combines; ties and frontiers do not arise.
 
 ### 4.3 Checkpoints and gaps
 
-A projector writes its derived rows, its `lc_projector_checkpoint` rows (epoch, last number, reducer version, config
-version) and its effect intents (§4.4) in one transaction; a fact at or below the checkpoint is skipped. It **stops** at
-a missing number in a stream, at a `lc_journal_gap` row, and at an epoch boundary without a clean end, and records
-`Journal.ProjectorStopped` with its watermark; its owner module's actuators and effects freeze (04 §8) until an admin
-acknowledges the gap with a reason (`Journal.GapAcknowledged`), after which it continues past it.
+A projector writes its derived rows, its checkpoint (the last fact id applied, reducer and config versions) and its effect
+intents (§4.4) in one transaction; a fact at or below the checkpoint is skipped. A projector **stops** at a gap record of
+a family it consumes, and at an epoch boundary that did not end clean, recording `Journal.ProjectorStopped`; its owner
+module's effects freeze (04 §8) until an admin acknowledges the gap with a reason (`Journal.GapAcknowledged`).
 
 ### 4.4 Effects
 
-A projector never calls the Asset Service or an actuator directly. It writes the effect it decided as a row in
-`lc_effect_outbox` with a deterministic application id (from the projector, the deciding fact and the effect's index), in
-the transaction of its checkpoint. A dispatcher executes `PENDING` effects in order, each as an Asset operation (or
-actuator call) whose operation id is the application id, so executing one twice has no second effect
-(asset-service.md §3.2), and marks it `DONE`. A crash between checkpoint and execution leaves the intent `PENDING`; it is
-executed after restart. A failing effect is retried up to `EffectAttempts` and then marked `FAILED`, which freezes the
-module. Replay writes no effect.
+A projector never calls the Asset Service or an actuator directly. It writes each effect it decided into
+`lc_effect_outbox` with its position (fact id, effect index) and a deterministic application id derived from them, in the
+transaction of its checkpoint. One dispatcher per projector executes that projector's `PENDING` effects strictly in
+(fact id, effect index) order; an effect that has not succeeded blocks the ones after it.
+
+- **Asset effects** run as Asset operations with operation id `OpId.of(application id, attempt)`. A `COMMITTED` outcome
+  marks the effect `DONE`; an aborted-and-refunded outcome (asset-service.md §3.2) means nothing happened, so the next
+  attempt runs with the next attempt number. After `EffectAttempts` refunded attempts the effect is `FAILED`, which freezes
+  the module.
+- **Actuator effects** are accepted only from actuators that are idempotent by application id: one whose effect is
+  database state commits the application id with it (a unique key) and answers whether it already applied it; one whose
+  effect is in the world (a spawned monument, a caravan) tags what it creates with the application id and checks for it
+  before acting. The dispatcher asks before executing and after a crash.
+- A crash between checkpoint and execution leaves the intent `PENDING`; it is executed after restart. Replay writes no
+  effect.
 
 ### 4.5 Replay and retention
 
-Replay rebuilds an isolated store (its own schema) from the oldest **replay snapshot** of the projector
-(`lc_replay_snapshot`: a copy of derived state with the checkpoint it corresponds to), or from the first fact if none has
-been taken. Facts are kept per type for `retention_days` (`NULL`: for ever). A monthly partition is dropped only when every
-fact in it is past its type's retention, every projector's checkpoint is past every number in it, and every projector
-reading its streams has a replay snapshot newer than it. A maintenance job creates partitions at least two months ahead
-every day and alarms if the catch-all partition holds a row.
+Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot: one whose `last_fact_id` is below or
+at the first fact still retained after it; the newest usable one is chosen, or the log's first fact if none is needed.
+Facts are kept per type for `retention_days` (`NULL`: for ever). A monthly partition is dropped only when every fact in it
+is past its type's retention, every projector's checkpoint is past its last id, and every projector reading its families
+has a usable snapshot whose `last_fact_id` is at or beyond that last id; snapshots made unusable by the drop are retired
+in the same maintenance run. The maintenance job creates partitions at least two months ahead every day and alarms if the
+catch-all partition holds a row.
 
 ### 4.6 Lag
 
-A projector's lag is the age of the oldest fact committed to one of its input streams and not yet applied, measured
-from that fact's commit; with nothing waiting, lag is zero. Telemetry buckets are measured separately: a window's
-delay is the time from its end to its row's commit.
+A projector's lag is the age of the oldest committed fact of a family it consumes that it has not yet applied, measured
+from that fact's commit (its batch's `committed_at`); with nothing waiting, lag is zero. A telemetry window's delay is
+measured separately, from its end to its row's commit.
 
 ## 5. Facts of the journal itself
 
 | Fact | Delivery | Fields |
 |---|---|---|
-| `Journal.Gap` | outbox (stream `journal`) | stream, epoch, from, to, refused, reason |
+| `Journal.Gap` | written by the writer into the log | family, epoch, phase, refused (or unknown), logical-time span, reason |
 | `Journal.GapAcknowledged` | outbox | gap, admin, reason |
-| `Journal.ProjectorStopped` | outbox | projector, stream, watermark, cause |
-| `Journal.EpochStarted`, `Journal.EpochEnded` | outbox | epoch, clean |
+| `Journal.ProjectorStopped` | outbox | projector, last fact applied, cause |
+| `Journal.EpochStarted`, `Journal.EpochEnded` | written by the writer | epoch, clean |
 | `Journal.ConfigChanged` | outbox (stream `config`) | module, config version |
 | `Journal.Purged` | outbox | table, before, rows |
 
@@ -273,14 +286,14 @@ delay is the time from its end to its row's commit.
 | Id | Invariant | Checked |
 |---|---|---|
 | FACT-INV01 | `lc_fact` holds no exact coordinate and no expiring datum: no payload field of a registered type is one | by the registry at startup (schema check of every record type) and a property test over every type |
-| FACT-INV02 | per stream and epoch, `stream_seq` is unique; every missing number is a recorded hole or lies after the last committed number of an epoch that did not end cleanly | by every projector as it reads; by a full pass at startup |
-| FACT-INV03 | an outbox fact exists if and only if the change it records committed | by construction (same transaction); by the owner module's invariants |
-| FACT-INV04 | no projector checkpoint is ahead of its stream's head | at every checkpoint write |
+| FACT-INV02 | the log's ids grow in commit order: no committed batch holds an id below one of an earlier committed batch | by construction (one writer, one session); by the writer at each commit (its first id exceeds the last batch's last id) |
+| FACT-INV03 | a staged outbox fact exists if and only if the change it records committed; it is relayed into the log exactly once | by construction (same transaction; relay inserts and deletes in one transaction); at startup, no staged row is also in the log |
+| FACT-INV04 | no projector checkpoint is ahead of the last committed fact | at every checkpoint write |
 | FACT-INV05 | every expiring row is gone by `expires_at` + purge interval, including after a restore | by the purge job, which counts what it purged and alarms on what it found late |
-| FACT-INV06 | every telemetry add is counted in exactly one window | by construction (§3.3); by a property test that compares adds with written sums |
+| FACT-INV06 | every telemetry add is counted in exactly one window, or its window is flagged `stalled` | by construction (§3.3-§3.4); by a property test that compares adds with written sums |
 | FACT-INV07 | every fact's type is registered with the schema version it was written with | at insert (the writer refuses an unregistered type) |
-| FACT-INV08 | every `PENDING` effect becomes `DONE` or `FAILED`; no application id is executed with two different payloads | by the dispatcher; at startup |
-| FACT-INV09 | no batch id is committed twice | by its primary key |
+| FACT-INV08 | effects of one projector become `DONE` in (fact id, effect index) order, and no application id is executed with two payloads | by the dispatcher; at startup |
+| FACT-INV09 | every capture taken before a committed frontier is in the log or covered by a gap record at or before that frontier's batch | by construction (§3.3); by the capture property test |
 
 A violation stops the projector or freezes the module, alarms and keeps the evidence; it never rewrites a fact.
 
@@ -288,15 +301,15 @@ A violation stops the projector or freezes the module, alarms and keeps the evid
 
 | Fault | End state |
 |---|---|
-| queue full | the capture is refused and counted; its number is a hole; a `QUEUE_FULL` gap row follows; the game is not slowed |
-| store down | outbox writes fail with their transaction (the module's operation aborts; financial operations pause, 04 §8); the writer retries its batch with the same id; refusals meanwhile are holes and a `STORE_DOWN` gap |
-| deadlock between Living Chronicle transactions | prevented by the row-lock order; a victim retries, then aborts (§3.1) |
-| batch commit uncertain | resolved by a locking read of its batch id: never written twice, never written with new numbers |
-| writer thread dies | restarted; its batch is resolved as above |
-| JVM killed | outbox facts as committed; captured facts in the queue lost; the epoch is not clean; projectors stop at the boundary until acknowledged |
-| projector reducer throws | that projector stops with its watermark; gameplay and other projectors go on |
-| crash between a projector's checkpoint and an effect's execution | the effect is `PENDING` and runs after restart, once |
-| replay | an isolated store is rebuilt; no effect is written |
+| ring full | the capture is refused and counted; at the phase's close a `QUEUE_FULL` gap record enters the log; the game is not slowed |
+| store down | staging fails with its transaction (the module's operation aborts; financial operations pause, 04 §8); the writer retries its batch; the ring fills and refusals become gap records when the store returns |
+| deadlock or lock-wait timeout between Living Chronicle transactions | prevented by the row-lock order; a victim is retried, then fails (§3.1) |
+| relay or batch commit uncertain | resolved by a locking read (staged rows gone; batch row present) before anything else: never written twice |
+| a producer stuck inside a phase | a `STALLED` gap after `PhaseDrainMillis`; the writer goes on |
+| JVM killed | staged outbox facts survive and are relayed after restart; the ring's captures are lost; a `RESTART` gap enters the log; projectors stop at it until acknowledged |
+| projector reducer throws | that projector stops; gameplay and other projectors go on |
+| crash between a projector's checkpoint and an effect's execution | the effect is `PENDING`, executed after restart once, its idempotence asked first |
+| replay | an isolated store is rebuilt from a usable snapshot; no effect is written |
 | restore from backup | expiring rows past their expiry are deleted before the server starts |
 
 ## 8. Configuration and access
@@ -305,10 +318,12 @@ A violation stops the projector or freezes the module, alarms and keeps the evid
 
 | Key | Range | Default | truth / dev / sim / hobby / live | Test |
 |---|---|---|---|---|
-| `CaptureQueueCapacity` | 1024–1048576 | 65536 | 65536 everywhere | AT-FACT-04 |
+| `CaptureRingSlots` | 1024–1048576 | 65536 | 65536 everywhere | AT-FACT-04 |
 | `WriterBatchMax` | 1–2000 | 500 | 500 everywhere | AT-FACT-05 |
-| `WriterBatchMillisMax` | 1–1000 | 50 | 50 everywhere | AT-FACT-05 |
+| `RelayMillis` | 10–1000 | 50 | 50 everywhere | AT-FACT-01 |
 | `HeartbeatMillis` | 100–10000 | 1000 | 1000 everywhere | AT-FACT-15 |
+| `PhaseDrainMillis` | 10–10000 | 500 | 500 everywhere | AT-FACT-06 |
+| `LockWaitMillis` | 50–10000 | 1000 | 1000 everywhere | AT-FACT-02 |
 | `DeadlockRetries` | 0–10 | 3 | 3 everywhere | AT-FACT-02 |
 | `TelemetryWindowSeconds` | 10–3600 | 60 | 60 / 60 / 10 / 60 / 60 | AT-FACT-06 |
 | `MaxParticipantsPerFact` | 10–1000 | 200 | 200 everywhere | AT-FACT-03 |
@@ -318,56 +333,58 @@ A violation stops the projector or freezes the module, alarms and keeps the evid
 | `PurgeIntervalMinutes` | 1–1440 | 15 | 15 everywhere | AT-FACT-08 |
 | `EffectAttempts` | 1–100 | 10 | 10 everywhere | AT-FACT-16 |
 
-Database users: the game server may `INSERT` and `SELECT` `lc_fact` (no `UPDATE`, no `DELETE`) and may read neither expiring
-table; the Intel Service and forensics read the expiring tables; the maintenance job alone deletes expiring rows and
-drops partitions; publication reads only `lc_pub_*` (04 §4).
+Database users: the game server may `INSERT` and `SELECT` `lc_fact` (no `UPDATE`, no `DELETE`), may insert and the writer
+may delete `lc_fact_outbox`, and may read neither expiring table; the Intel Service and forensics read the expiring tables;
+the maintenance job alone deletes expiring rows, drops partitions and retires snapshots; publication reads only `lc_pub_*`
+(04 §4).
 
 ## 9. Interface
 
-None for players. Admin: `lc why <fact>` (04 §6) prints a fact with its stream neighbours, its producing operation and the
+None for players. Admin: `lc why <fact>` (04 §6) prints a fact with its log neighbours, its producing operation and the
 projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; `lc journal effects`.
 
 ## 10. Requirements
 
 | Id | Requirement | Proven by |
 |---|---|---|
-| FACT-R01 | A durable fact recording a state change MUST be written in the same transaction as the change. | AT-FACT-01 |
-| FACT-R02 | Within a stream and epoch, numbers MUST be unique, and every missing number MUST be a visible hole at the place of the loss. | AT-FACT-02 |
+| FACT-R01 | A durable fact recording a state change MUST be staged in the same transaction as the change and relayed into the log exactly once. | AT-FACT-01 |
+| FACT-R02 | The log MUST have one order, assigned by one writer, the same live and on replay. | AT-FACT-02, AT-FACT-15 |
 | FACT-R03 | A hot-path capture MUST take at most 2 µs at p99, never block, never do I/O and never allocate; a bulk fact MUST stay within `BulkCaptureMicros` with at most `MaxParticipantsPerFact` participants per fact. | AT-FACT-03 |
-| FACT-R04 | A capture the journal cannot take MUST leave a hole and a recorded gap, never vanish silently. | AT-FACT-04 |
-| FACT-R05 | A batch MUST commit once with the numbers it was given, even across an uncertain commit; a crash MUST leave every affected epoch marked not clean. | AT-FACT-05 |
-| FACT-R06 | Telemetry MUST be aggregated in memory, each add counted in exactly one window, written once per window and cell. | AT-FACT-06 |
+| FACT-R04 | A capture the journal cannot take MUST be counted and become a gap record in the log, at or before the batch whose frontier passes it. | AT-FACT-04 |
+| FACT-R05 | A batch MUST commit once; a crash MUST leave a `RESTART` gap in the log. | AT-FACT-05 |
+| FACT-R06 | Telemetry MUST be aggregated in memory, each add counted in exactly one window (or the window flagged stalled), written once per window and cell. | AT-FACT-06 |
 | FACT-R07 | Exact coordinates and expiring data MUST NOT be stored in `lc_fact`, and MUST be readable only by the Intel Service and forensics. | AT-FACT-07 |
 | FACT-R08 | Expiring rows MUST be deleted at expiry, in backups by bounded backup life and at restore. | AT-FACT-08 |
-| FACT-R09 | A projector MUST be deterministic and checkpointed in the transaction of its derived writes and effect intents. | AT-FACT-09 |
-| FACT-R10 | A projector MUST stop at a hole, a gap or an unclean epoch boundary, and freeze its module's effects until acknowledged. | AT-FACT-10 |
-| FACT-R11 | Replay MUST rebuild an isolated store and MUST NOT write any effect. | AT-FACT-11 |
+| FACT-R09 | A projector MUST be deterministic, apply facts in log order, and checkpoint in the transaction of its derived writes and effect intents. | AT-FACT-09 |
+| FACT-R10 | A projector MUST stop at a gap record of a family it consumes and at an unclean epoch boundary, and freeze its module's effects until acknowledged. | AT-FACT-10 |
+| FACT-R11 | Replay MUST rebuild an isolated store from a usable snapshot and MUST NOT write any effect. | AT-FACT-11 |
 | FACT-R12 | Every fact type MUST be registered and versioned; stored facts MUST never be updated or deleted except by dropping a partition under §4.5. | AT-FACT-12 |
 | FACT-R13 | Capture MUST copy primitives at the owning operation, read locations coherently or flag them torn, and hold no reference to a live game object. | AT-FACT-03, AT-FACT-13 |
 | FACT-R14 | Projector lag, as §4.6 defines it, MUST stay within 5 s at p99 under the 800-citizen siege benchmark. | AT-FACT-14 |
-| FACT-R15 | A projector combining streams MUST apply facts in the total order of §4.2, never past a stream's frontier. | AT-FACT-15 |
-| FACT-R16 | Every effect a projector decides MUST be executed exactly once, through the effect outbox. | AT-FACT-16 |
-| FACT-R17 | Living Chronicle transactions MUST take database row locks in the global order of §3.1. | AT-FACT-02 |
+| FACT-R15 | A decision on the absence of a captured fact MUST wait for the frontier to pass it and fail closed on an overlapping gap. | AT-FACT-15 |
+| FACT-R16 | Every effect a projector decides MUST be executed exactly once, in order, through the effect outbox, with actuators idempotent by application id. | AT-FACT-16 |
+| FACT-R17 | Living Chronicle transactions MUST take database row locks in the global order of §3.1, with a bounded lock wait. | AT-FACT-02 |
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-FACT-00 | integration | the journal's migration applies; monthly partitions have exact month boundaries, contiguous, ending in a catch-all; keys and checks reject what this spec forbids |
-| AT-FACT-01 | integration, fault | an outbox fact and its change commit together or not at all, under faults at each statement |
-| AT-FACT-02 | integration | concurrent outbox writers to one stream and Asset operations over several streams, custodies and characters: unique numbers, no deadlock outside the retry path; a forced hole is found by a projector and the startup pass |
-| AT-FACT-03 | unit | hot-path capture benchmark at full load: p99 within 2 µs, zero allocation, never blocks; bulk facts within budget and chunked at the cap; locations read during movement and teleport are coherent or flagged torn |
-| AT-FACT-04 | integration | a full queue: refused captures leave holes at the right numbers and become a `QUEUE_FULL` gap; game threads unaffected |
-| AT-FACT-05 | fault, restart | writer killed mid-batch, commit cut after it was sent (committed and not), JVM killed with a full queue: no batch twice, none renumbered; epochs not clean |
-| AT-FACT-06 | unit | telemetry under concurrent adds across many window swaps: every add in exactly one window; sums exact |
+| AT-FACT-00 | integration | the journal's migration applies; monthly partitions start exactly at midnight UTC on the first of each month, contiguous, ending in a catch-all; keys and checks reject what this spec forbids |
+| AT-FACT-01 | integration, fault | a staged fact and its change commit together or not at all, under faults at each statement; relaying, with its commit cut both ways, puts each staged fact into the log exactly once |
+| AT-FACT-02 | integration | Asset operations over several characters, custodies, items, mail and streams, concurrently, with outbox writers to shared streams: no deadlock outside the retry path, no wait past `LockWaitMillis`; the log's ids grow in commit order |
+| AT-FACT-03 | unit | hot-path capture benchmark at full load: p99 within 2 µs, zero allocation (first use of every family included), never blocks; bulk facts within budget and chunked at the cap; locations read during movement, teleport and two concurrent writers are coherent or flagged torn |
+| AT-FACT-04 | integration | a full ring: refused captures counted per family, and the gap record is in the log at or before the batch whose frontier passes them; game threads unaffected |
+| AT-FACT-05 | fault, restart | the writer killed mid-batch, a batch commit cut after it was sent (committed and not), the JVM killed with a full ring: no batch twice; a `RESTART` gap |
+| AT-FACT-06 | unit | telemetry under concurrent adds across many window swaps, with a producer stuck in a phase: every add in exactly one window, or the window flagged stalled; the writer never waits past `PhaseDrainMillis` |
 | AT-FACT-07 | integration | every registered type has no coordinate or expiring field; the game server's user cannot read the expiring tables |
 | AT-FACT-08 | integration | expiring rows deleted on time; a restore deletes rows already expired before the server starts; backups of the expiring tables older than their life are refused |
 | AT-FACT-09 | integration | a projector run twice, and with a crash between derived write and checkpoint: identical derived state and intents |
-| AT-FACT-10 | integration | a hole, a gap row and an unclean epoch boundary each stop a projector and freeze its effects; acknowledgement resumes it |
-| AT-FACT-11 | integration | replay into an isolated schema: equal derived state; no effect written |
+| AT-FACT-10 | integration | a gap record and an unclean epoch boundary each stop a projector and freeze its effects; acknowledgement resumes it |
+| AT-FACT-11 | integration | replay into an isolated schema after partitions were dropped under §4.5: equal derived state from the newest usable snapshot; no effect written |
 | AT-FACT-12 | unit, integration | an upcaster chain reads every stored version; an unregistered type is refused; the game server's user cannot update or delete `lc_fact` |
 | AT-FACT-13 | unit | every capture record holds only primitives and immutable snapshots (reflection over the sealed hierarchy) |
 | AT-FACT-14 | sim | 800-citizen siege benchmark: lag p99 within 5 s; a caught-up projector reports zero |
-| AT-FACT-15 | integration | a projector over a captured and an outbox stream, live and replayed, with idle streams and long outbox transactions: the same order both times, nothing applied past a frontier |
-| AT-FACT-16 | fault, restart | crash between checkpoint and execution, and an effect that fails: executed once after restart; `FAILED` freezes the module |
+| AT-FACT-15 | integration | a projector combining captured and outbox facts, live and replayed: the same order; an absence decided before the frontier passed is refused; a gap overlapping it fails closed |
+| AT-FACT-16 | fault, restart | crash between checkpoint and execution, an Asset effect refunded twice then committed, an actuator crashing after acting before `DONE`, effects out of order on restart: each executed once, in order; `FAILED` freezes the module |
+| AT-FACT-17 | integration | the maintenance job: partitions two months ahead after a run; a catch-all row alarms; a partition with an unretired dependency is kept |
 
 ## 11. Upstream constraints
 
@@ -385,11 +402,25 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 6. **Hot paths run on several pools** (packets, `commons/network/packet/PacketExecutor.java:52`; hits and casts on the
    scheduled pool; movement on the high-priority pool). → capture is lock-free (§3.2, §3.3).
 7. **Locations tear**: five independently written volatile fields (`entity/Location.java:36-40`), written one after
-   another (`WorldObject.java:760-762`). Core patch: a version counter on `Location`, odd during a write (§3.2).
+   another (`WorldObject.java:760-762`), possibly by more than one thread. Core patch: a version on `Location` that a
+   writer takes from even to odd by compare-and-set, so writers exclude one another and readers see whole writes (§3.2).
 8. **Map regions are sparse `locId`s** (`MapRegionData.java:350`; e.g. 2189). → a dense index fixed at startup and
    recorded (§2.3).
 
 ## 12. Review record
+
+- Round 2 (Codex), NO SIGN-OFF: 3 round-one findings fixed, most others partly; 14 new, showing that numbering captures
+  per stream cannot be made sound (a number taken then lost to an exception; numbers offered out of order; frontiers that
+  cannot be computed across in-flight captures; outbox frontier registration too late; timestamp order against sequence
+  order), plus effect ordering and refunded attempts, actuator idempotence, a stranded telemetry counter, an incomplete
+  row-lock order, replay snapshots chosen by age rather than coverage, and a location version that did not exclude
+  writers. Revision 3 replaces streams-with-frontiers by **one log with one sequencer**: outbox facts staged in the
+  module's transaction and relayed by the writer, captures drained by the same writer, so log order is the only order;
+  **capture phases** (striped in-flight counters closed by the writer) make every capture accounted for at each frontier
+  and close telemetry windows, with a bounded drain and a `STALLED` gap; effects dispatched per projector in order, with
+  a new attempt id after a refunded Asset attempt and actuators idempotent by application id; a complete row-lock order
+  with lock-wait budget and retries; snapshots chosen by the log position they cover; and a location version that
+  writers take by compare-and-set.
 
 - Round 1 (Codex, different model family), NO SIGN-OFF, 16 findings. Revision 2: two kinds of stream that never mix
   (outbox, ordered under the head lock; captured, numbered at capture), so the batch writer takes no outbox head and a

@@ -19,6 +19,7 @@ cd "$work"
 
 # The check must hold in a locale that orders paths differently from C; where none is installed it runs in the caller's.
 collating=$(locale -a 2>/dev/null | grep -im1 '^en_US\.utf-\?8$' || true)
+[[ -n $collating ]] || echo "test-check-core-ledger: no en_US.UTF-8 here; the C-locale comparison is not exercised" >&2
 
 g() { git -c user.name=test -c user.email=test@invalid -c commit.gpgsign=false "$@"; }
 expect() { # expect pass|fail <what>

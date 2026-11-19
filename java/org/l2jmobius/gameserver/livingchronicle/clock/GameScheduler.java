@@ -66,7 +66,8 @@ public final class GameScheduler
 	private static final Set<SimThread> SIM_THREADS = ConcurrentHashMap.newKeySet();
 
 	/** Cooperative threads that have queued their first wake: from then on they run only when the event loop wakes them. */
-	private static final Set<String> READY = ConcurrentHashMap.newKeySet();
+	/** Cooperative threads whose first wake is queued; only those of the session controlling now count, so a thread of a released session that adds itself late counts for nothing. */
+	private static final Set<SimThread> READY = ConcurrentHashMap.newKeySet();
 
 	/** How long releasing control waits, in real time, for the scheduler threads of the session it ends to finish. */
 	private static final long RELEASE_WAIT_MILLIS = 10_000;
@@ -265,7 +266,7 @@ public final class GameScheduler
 		if (joining)
 		{
 			// Only now, with its wake queued, does the thread run only when the event loop wakes it.
-			READY.add(self._name);
+			READY.add(self);
 		}
 		if (holdsBaton)
 		{
@@ -435,7 +436,13 @@ public final class GameScheduler
 		while (true)
 		{
 			final Set<String> missing = new java.util.TreeSet<>(_cooperativeThreads);
-			missing.removeAll(READY);
+			for (SimThread ready : READY)
+			{
+				if (ready._session == _currentSession)
+				{
+					missing.remove(ready._name);
+				}
+			}
 			if (missing.isEmpty())
 			{
 				return;
@@ -806,10 +813,13 @@ public final class GameScheduler
 
 	/**
 	 * For this class's own tests: how long an advance waits in real time before it gives up.
+	 * @return the wait it replaces, for the test to put back.
 	 */
-	static void stuckAfterMillis(long millis)
+	static long stuckAfterMillis(long millis)
 	{
+		final long previous = _stuckAfterMillis;
 		_stuckAfterMillis = millis;
+		return previous;
 	}
 
 	/**

@@ -569,7 +569,7 @@ class GameSchedulerTest
 			}
 			ended.countDown();
 		}, 0);
-		GameScheduler.stuckAfterMillis(300);
+		final long stuckAfter = GameScheduler.stuckAfterMillis(300);
 		try
 		{
 			assertThrows(IllegalStateException.class, () -> GameScheduler.advance(10));
@@ -578,7 +578,7 @@ class GameSchedulerTest
 		}
 		finally
 		{
-			GameScheduler.stuckAfterMillis(TimeUnit.MINUTES.toMillis(10));
+			GameScheduler.stuckAfterMillis(stuckAfter);
 			unblock.countDown();
 			assertTrue(ended.await(10, TimeUnit.SECONDS));
 			GameScheduler.forgetFailure();

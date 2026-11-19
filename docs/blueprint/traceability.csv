@@ -144,12 +144,12 @@ TR-black-ledger-legendary-hunts,90 §2,Black Ledger: legendary hunts,16 §1–§
 TR-murder-market-price,90 §2,murder market price,16 §6,,,,,,,,blueprint
 TR-hunter-mythology,90 §2,hunter mythology,16 §6,black-ledger.md,BL-R10;BL-R12,,,,AT-BL-10;AT-BL-12,,reviewed
 TR-profession-definition,90 §2,profession definition (App. F),16 §6,,,,,,,,blueprint
-TR-retail-truth-statuses,90 §2,Retail Truth: statuses,11,,,,,,,,blueprint
-TR-retail-truth-evidence-cases,90 §2,Retail Truth: evidence cases,11,,,,,,,,blueprint
+TR-retail-truth-statuses,90 §2,Retail Truth: statuses,11,retail-truth.md,RT-R01;RT-R03,truth/cases,,,AT-RT-00;AT-RT-02,,specified
+TR-retail-truth-evidence-cases,90 §2,Retail Truth: evidence cases,11,retail-truth.md,RT-R01;RT-R05,truth/cases;truth/evidence,,,AT-RT-00;AT-RT-04,,specified
 TR-retail-truth-clean-profile,90 §2,Retail Truth: clean profile,11,profiles.md,PRO-R03;PRO-R09,,,,AT-PRO-03;AT-PRO-07,,specified
-TR-retail-truth-regression-gates,90 §2,Retail Truth: regression gates,11,,,,,,,,blueprint
-TR-retail-truth-automated-tests,90 §2,Retail Truth: automated tests,11,,,,,,,,blueprint
-TR-retail-truth-ai-combat-economy-world-validation,90 §2,Retail Truth: AI/combat/economy/world validation,11,,,,,,,,blueprint
+TR-retail-truth-regression-gates,90 §2,Retail Truth: regression gates,11,retail-truth.md,RT-R03;RT-R04,test/lock;truth/overrides,,,AT-RT-02;AT-RT-03,,specified
+TR-retail-truth-automated-tests,90 §2,Retail Truth: automated tests,11,retail-truth.md,RT-R02;RT-R06,truth/cases,,,AT-RT-01;AT-RT-05,,specified
+TR-retail-truth-ai-combat-economy-world-validation,90 §2,Retail Truth: AI/combat/economy/world validation,11,retail-truth.md,RT-R01;RT-R02,truth/coverage.csv,,,AT-RT-00;AT-RT-01,,specified
 TR-kamael-scope-clarification,90 §3,Kamael scope clarification,replaced by H5 baseline: 03 §1,,,,,,,,blueprint
 TR-java-25,90 §3,Java 25,Java 27 (upstream requirement): 03 §1–§2,,,,,,,,blueprint
 TR-ant,90 §3,Ant,"03 §2, §9",,,,,,,,blueprint
@@ -161,9 +161,9 @@ TR-no-gpu-requirement,90 §3,no GPU requirement,authoritative systems need none;
 TR-client-on-workstation,90 §3,client on workstation,03 §6 (client package),,,,,,,,blueprint
 TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R03;ACTOR-R04;ACTOR-R05;ACTOR-R06;ACTOR-R09;ACTOR-R10,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-03;AT-ACTOR-04;AT-ACTOR-05;AT-ACTOR-06;AT-ACTOR-09;AT-ACTOR-10,,reviewed
 TR-fake-player-classification,90 §3,fake-player classification,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R07,lc_actor_policy,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-07,,reviewed
-TR-missing-quests,90 §3,missing quests,"H5 content inventory: 03 §5, 11 §1.5",,,,,,,,blueprint
-TR-npc-ai-fidelity,90 §3,NPC AI fidelity,11 §1.4,,,,,,,,blueprint
-TR-formula-trigger-edge-cases,90 §3,formula/trigger edge cases,11 §1.4,,,,,,,,blueprint
+TR-missing-quests,90 §3,missing quests,"H5 content inventory: 03 §5, 11 §1.5",retail-truth.md,RT-R07,truth/inventory,,,AT-RT-06,,specified
+TR-npc-ai-fidelity,90 §3,NPC AI fidelity,11 §1.4,retail-truth.md,RT-R01;RT-R02,truth/coverage.csv,,,AT-RT-00;AT-RT-01,,specified
+TR-formula-trigger-edge-cases,90 §3,formula/trigger edge cases,11 §1.4,retail-truth.md,RT-R01;RT-R05,truth/coverage.csv,,,AT-RT-00;AT-RT-04,,specified
 TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,,,,,,,,blueprint
 TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, §6; 10 §5.2",,,,,,,,blueprint
 TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
@@ -182,12 +182,12 @@ TR-caravans,90 §4,caravans,12 §8,asset-service.md;aden-remembers.md,ASSET-R14;
 TR-caravan-escort-and-treaty-contracts,90 §4,Caravan Escort and Treaty contracts,15 §2,pact.md,PACT-R07,,,,AT-PACT-07,,specified
 TR-cursed-weapon-writs,90 §4,cursed-weapon writs,16 §2,black-ledger.md,BL-R03,,,,AT-BL-03,,reviewed
 TR-citizen-bounties,90 §4,citizen bounties,16 §2,,,,,,,,blueprint
-TR-wanted-boards,90 §4,wanted boards,16 §2,,,,,,,,blueprint
+TR-wanted-boards,90 §4,wanted boards,16 §2,chronicle.md,CHR-R01,lc_pub_visible,,,AT-CHR-01,,specified
 TR-aden-gazette,90 §4,Aden Gazette,17 §2–§3,chronicle.md,CHR-R05;CHR-R09,lc_chr_issue;lc_chr_issue_entry;lc_chr_letter,"the Gazette (§4.3, §4.5)",DailyResetManager day seam,AT-CHR-05;AT-CHR-09,,specified
 TR-bards,90 §4,bards,17 §2–§3,chronicle.md,CHR-R01;CHR-R04,lc_pub_row;lc_chr_prose,bards (§4.2),,AT-CHR-01;AT-CHR-04,,specified
 TR-town-criers,90 §4,town criers,17 §2–§3,chronicle.md,CHR-R07,lc_chr_crier_log,criers (§4.2),Npc.broadcastSay,AT-CHR-07,,specified
 TR-saga-replays,90 §4,saga replays,17 §5,chronicle.md,CHR-R02;CHR-R10,lc_chr_battle;lc_chr_battle_sample;lc_chr_battle_mark,battles and replays (§4.7),battle sampler; Door.doDie,AT-CHR-02,,specified
-TR-public-truth-report,90 §4,public Truth Report,11 §5,,,,,,,,blueprint
+TR-public-truth-report,90 §4,public Truth Report,11 §5,retail-truth.md,RT-R08,truth/,,,AT-RT-07,,specified
 TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
 TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,reviewed
 TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint

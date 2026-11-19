@@ -388,10 +388,11 @@ invariant over its custodies holds.
 
 ## 5. Facts
 
-All durable (04 §1.1), written in the operation's transaction, `op_id` set. A custody its owner module opens as
-**confidential** (the Black Ledger's, black-ledger.md §2.2) has the holder and receiver fields of its facts written as
-expiring data (fact-journal.md §2.4: `lc_fact_expiring`, with the life the owner module gives) and its facts' actor
-snapshot set to `SYSTEM`; the postings (§2.2) still name the holders, as admin-only financial audit.
+All durable (04 §1.1), written in the operation's transaction, `op_id` set. An operation its module runs as
+**confidential** (the Black Ledger's secret operations, black-ledger.md §2.2: every operation on its contracts' custodies,
+and its fee charges, bribes, sighting and alias-link payments) has the holder and receiver fields of its facts written as
+expiring data (fact-journal.md §2.4: `lc_fact_expiring`, with the life the module gives) and its facts' actor snapshot set
+to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name the holders, as admin-only financial audit.
 
 | Fact | Fields |
 |---|---|
@@ -619,7 +620,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 ## 12. Review record
 
 - Revision 9 (after the revision-8 sign-off): the Black Ledger needs the `LEDGER_SEAL` source and the `FEE_BRIBE` sink;
-  `issue` covers both representation items; confidential custodies keep holders out of fact payloads (§5). Under review
+  `issue` covers both representation items; confidential operations keep holders out of fact payloads (§5). Under review
   with black-ledger.md.
 
 - Revision 8 (after the round-7 sign-off): PACT (pact.md) needs four posting codes and three operations: a contractual

@@ -251,9 +251,11 @@ needs a fact exactly once makes it an outbox fact in its own transaction.
 (§3.3), the producer adds into its cell of the current window's buffer: `events`, the two sums and the distinct-actor
 sketch register (an atomic max). At a window's end the writer swaps in a fresh buffer, and once the phases that could
 still add to the old one have drained, writes one row per non-empty cell; a buffer whose phase stalled is written with
-`stalled` set. An add is therefore counted in exactly one window, whole. Once a window's rows have committed, the
-writer writes a captured fact `Journal.WindowWritten` (window start, length, stalled) in the next batch, so a projector
-that reads telemetry binds each step to the log: at fact *F* it reads exactly the windows whose `WindowWritten` precedes
+`stalled` set. An add is therefore counted in exactly one window, whole. The window's rows and its
+`Journal.WindowWritten` fact (window start, length, stalled, row count) are written **in one transaction**, the fact as an
+outbox fact of that transaction relayed like any other (§3.1, FACT-R01), so a window is never visible without its
+marker nor its marker without its rows, and a crash after the commit loses neither. A projector that reads telemetry binds
+each step to the log: at fact *F* it reads exactly the windows whose `WindowWritten` precedes
 *F*, the same live and on replay (aden-remembers.md §4.12).
 
 ### 3.5 Where capture happens
@@ -315,6 +317,13 @@ A projector never calls the Asset Service or an actuator directly. It writes eac
   effect.
 
 ### 4.5 Replay and retention
+
+**Telemetry buckets a projector reads are protected like log partitions**: maintenance deletes a family's buckets of a
+window only when its `WindowWritten` fact is at or below every consuming projector's checkpoint and the newest usable
+snapshot of each, and no replay lease of the family has read below it; the same exclusive lock on the family's
+`lc_journal_retention` row serialises the deletion with admission (below), and a replay re-reads the watermark of the
+buckets it needs at each batch. A projector's declared bucket retention (aden-remembers.md §4.12) is a minimum on top of
+this, never a replacement.
 
 Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot. **Admission** is one transaction
 that reads the `lc_journal_retention` rows of the projector's families with a shared lock, chooses the newest snapshot
@@ -495,6 +504,9 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Amendment round 1 (Codex) on revision 9, NO SIGN-OFF: the window marker could be lost in a crash after the rows
+  committed, and telemetry buckets had no retention protection. Fixed: rows and marker in one transaction (the marker an
+  outbox fact); buckets protected like partitions by checkpoints, snapshots and leases.
 - Revision 9 (after the revision-8 sign-off): telemetry families declare their region dimension and may be registered as
   a module's id range; the writer records `Journal.WindowWritten` after a window's rows commit. Accepted in
   aden-remembers.md's review; this revision is to be reviewed on its own.

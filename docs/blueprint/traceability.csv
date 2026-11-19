@@ -106,43 +106,43 @@ TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote draf
 TR-notarius-public-registration,90 §2,Notarius: public registration,"15 §3, §4, §8",pact.md,PACT-R08,,,,AT-PACT-08,,specified
 TR-notarius-escrow,90 §2,Notarius: escrow,"15 §3, §4, §8",asset-service.md;pact.md,ASSET-R01;ASSET-R02;ASSET-R03;ASSET-R04;ASSET-R07;ASSET-R08;ASSET-R09;ASSET-R10;ASSET-R11;ASSET-R20;ASSET-R22;ASSET-R16;ASSET-R27;PACT-R02,"lc_custody;lc_asset_op;lc_ledger_posting;lc_settlement_key;lc_mail_delivery;items(ESCROW,MAIL)",service mail claim (asset-service.md §9),ItemLocation.ESCROW;retired items;MailManager adoption,AT-ASSET-00;AT-ASSET-01;AT-ASSET-02;AT-ASSET-03;AT-ASSET-04;AT-ASSET-07;AT-ASSET-08;AT-ASSET-09;AT-ASSET-10;AT-ASSET-11;AT-ASSET-22;AT-ASSET-16;AT-ASSET-29;AT-ASSET-20;AT-ASSET-26;AT-ASSET-18;AT-PACT-02,,specified
 TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
-TR-black-ledger-writ,90 §2,Black Ledger: Writ,16 §1–§14,black-ledger.md,BL-R01;BL-R03,,,,AT-BL-00;AT-BL-01;AT-BL-03,,specified
-TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard Captain,16 §1–§14,black-ledger.md,BL-R03,,,,AT-BL-03,,specified
-TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,black-ledger.md,BL-R01;BL-R02,,,,AT-BL-00;AT-BL-01;AT-BL-02,,specified
-TR-black-ledger-broker-shadow-broker,90 §2,Black Ledger: Broker/Shadow Broker,16 §1–§14,black-ledger.md,BL-R02,,,,AT-BL-02,,specified
-TR-black-ledger-dossiers,90 §2,Black Ledger: dossiers,16 §1–§14,black-ledger.md,BL-R05;BL-R10,,,,AT-BL-05;AT-BL-10,,specified
-TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R04;INTEL-R10;INTEL-R14;BL-R05,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-10;AT-INTEL-11;AT-BL-05,,specified
-TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R04;INTEL-R09;BL-R05,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-09;AT-BL-05,,specified
-TR-black-ledger-clan-hall-constraints,90 §2,Black Ledger: clan-hall constraints,16 §1–§14,black-ledger.md,BL-R07;BL-R05,,,,AT-BL-07;AT-BL-05,,specified
-TR-black-ledger-tavern-rumors,90 §2,Black Ledger: tavern rumors,16 §1–§14,black-ledger.md;intel-service.md,BL-R05;BL-R07;INTEL-R15,,,,AT-BL-05;AT-BL-07;AT-INTEL-15,,specified
-TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R03;BL-R10,lc_trace;lc_intel,,,AT-INTEL-03;AT-BL-10,,specified
+TR-black-ledger-writ,90 §2,Black Ledger: Writ,16 §1–§14,black-ledger.md,BL-R01;BL-R03,,,,AT-BL-00;AT-BL-01;AT-BL-03,,reviewed
+TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard Captain,16 §1–§14,black-ledger.md,BL-R03,,,,AT-BL-03,,reviewed
+TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,black-ledger.md,BL-R01;BL-R02,,,,AT-BL-00;AT-BL-01;AT-BL-02,,reviewed
+TR-black-ledger-broker-shadow-broker,90 §2,Black Ledger: Broker/Shadow Broker,16 §1–§14,black-ledger.md,BL-R02,,,,AT-BL-02,,reviewed
+TR-black-ledger-dossiers,90 §2,Black Ledger: dossiers,16 §1–§14,black-ledger.md,BL-R05;BL-R10,,,,AT-BL-05;AT-BL-10,,reviewed
+TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R04;INTEL-R10;INTEL-R14;BL-R05,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-10;AT-INTEL-11;AT-BL-05,,reviewed
+TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R04;INTEL-R09;BL-R05,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-09;AT-BL-05,,reviewed
+TR-black-ledger-clan-hall-constraints,90 §2,Black Ledger: clan-hall constraints,16 §1–§14,black-ledger.md,BL-R07;BL-R05,,,,AT-BL-07;AT-BL-05,,reviewed
+TR-black-ledger-tavern-rumors,90 §2,Black Ledger: tavern rumors,16 §1–§14,black-ledger.md;intel-service.md,BL-R05;BL-R07;INTEL-R15,,,,AT-BL-05;AT-BL-07;AT-INTEL-15,,reviewed
+TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R03;BL-R10,lc_trace;lc_intel,,,AT-INTEL-03;AT-BL-10,,reviewed
 TR-black-ledger-no-offline-gps,90 §2,Black Ledger: no offline GPS,16 §1–§14,fact-journal.md;intel-service.md;black-ledger.md,FACT-R07;FACT-R08;INTEL-R01;BL-R04;BL-R10,lc_fact_precise;lc_trace;lc_intel,,,AT-FACT-07;AT-FACT-08;AT-INTEL-01;AT-BL-04;AT-BL-10,storage side only; disclosure is the Intel Service,specified
-TR-black-ledger-informants,90 §2,Black Ledger: informants,16 §1–§14,black-ledger.md,BL-R05,,,,AT-BL-05,,specified
-TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R02;INTEL-R05;INTEL-R11;INTEL-R12;BL-R05;BL-R11,lc_trace;lc_intel,,,AT-INTEL-02;AT-INTEL-05;AT-INTEL-14;AT-INTEL-12;AT-BL-05;AT-BL-11,,specified
-TR-black-ledger-counter-intelligence,90 §2,Black Ledger: counter-intelligence,16 §1–§14,black-ledger.md,BL-R07,,,,AT-BL-07,,specified
-TR-black-ledger-you-feel-watched,90 §2,"Black Ledger: ""you feel watched""",16 §1–§14,black-ledger.md,BL-R07,,,,AT-BL-07,,specified
-TR-black-ledger-trail-manipulation,90 §2,Black Ledger: trail manipulation,16 §1–§14,black-ledger.md,BL-R13,,,,AT-BL-13,,specified
-TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R08;BL-R07;INTEL-R15,lc_trace;lc_intel,,,AT-INTEL-08;AT-BL-07;AT-INTEL-15,,specified
-TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R10;BL-R07;INTEL-R15,lc_trace;lc_intel,,,AT-INTEL-10;AT-BL-07;AT-INTEL-15,,specified
-TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R10;BL-R05,lc_trace;lc_intel,,,AT-INTEL-10;AT-BL-05,,specified
-TR-black-ledger-hunter-ranks,90 §2,Black Ledger: hunter ranks,16 §1–§14,black-ledger.md,BL-R05,,,,AT-BL-05,,specified
-TR-black-ledger-information-only-progression,90 §2,Black Ledger: information-only progression,16 §1–§14,black-ledger.md,BL-R09,,,,AT-BL-09,,specified
-TR-black-ledger-conditional-contracts,90 §2,Black Ledger: conditional contracts,16 §1–§14,black-ledger.md,BL-R04,,,,AT-BL-04,,specified
-TR-black-ledger-public-execution,90 §2,Black Ledger: public execution,16 §1–§14,black-ledger.md,BL-R04,,,,AT-BL-04,,specified
-TR-black-ledger-target-victory,90 §2,Black Ledger: target victory,16 §1–§14,black-ledger.md,BL-R08,,,,AT-BL-08,,specified
-TR-black-ledger-torn-black-seal,90 §2,Black Ledger: Torn Black Seal,16 §1–§14,black-ledger.md,BL-R08,,,,AT-BL-08,,specified
-TR-black-ledger-reverse-hunt,90 §2,Black Ledger: reverse hunt,16 §1–§14,black-ledger.md;intel-service.md,BL-R08;INTEL-R16,,,,AT-BL-08;AT-INTEL-16,,specified
-TR-black-ledger-calling-cards,90 §2,Black Ledger: calling cards,16 §1–§14,black-ledger.md,BL-R10,,,,AT-BL-10,,specified
-TR-black-ledger-nom-de-guerre,90 §2,Black Ledger: nom de guerre,16 §1–§14,black-ledger.md,BL-R10,,,,AT-BL-10,,specified
-TR-black-ledger-alias-intel-market,90 §2,Black Ledger: alias intel market,16 §1–§14,black-ledger.md;intel-service.md,BL-R10;INTEL-R16,,,,AT-BL-10;AT-INTEL-16,,specified
-TR-black-ledger-public-bounties,90 §2,Black Ledger: public bounties,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,specified
+TR-black-ledger-informants,90 §2,Black Ledger: informants,16 §1–§14,black-ledger.md,BL-R05,,,,AT-BL-05,,reviewed
+TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R02;INTEL-R05;INTEL-R11;INTEL-R12;BL-R05;BL-R11,lc_trace;lc_intel,,,AT-INTEL-02;AT-INTEL-05;AT-INTEL-14;AT-INTEL-12;AT-BL-05;AT-BL-11,,reviewed
+TR-black-ledger-counter-intelligence,90 §2,Black Ledger: counter-intelligence,16 §1–§14,black-ledger.md,BL-R07,,,,AT-BL-07,,reviewed
+TR-black-ledger-you-feel-watched,90 §2,"Black Ledger: ""you feel watched""",16 §1–§14,black-ledger.md,BL-R07,,,,AT-BL-07,,reviewed
+TR-black-ledger-trail-manipulation,90 §2,Black Ledger: trail manipulation,16 §1–§14,black-ledger.md,BL-R13,,,,AT-BL-13,,reviewed
+TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R08;BL-R07;INTEL-R15,lc_trace;lc_intel,,,AT-INTEL-08;AT-BL-07;AT-INTEL-15,,reviewed
+TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R10;BL-R07;INTEL-R15,lc_trace;lc_intel,,,AT-INTEL-10;AT-BL-07;AT-INTEL-15,,reviewed
+TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,intel-service.md;black-ledger.md,INTEL-R10;BL-R05,lc_trace;lc_intel,,,AT-INTEL-10;AT-BL-05,,reviewed
+TR-black-ledger-hunter-ranks,90 §2,Black Ledger: hunter ranks,16 §1–§14,black-ledger.md,BL-R05,,,,AT-BL-05,,reviewed
+TR-black-ledger-information-only-progression,90 §2,Black Ledger: information-only progression,16 §1–§14,black-ledger.md,BL-R09,,,,AT-BL-09,,reviewed
+TR-black-ledger-conditional-contracts,90 §2,Black Ledger: conditional contracts,16 §1–§14,black-ledger.md,BL-R04,,,,AT-BL-04,,reviewed
+TR-black-ledger-public-execution,90 §2,Black Ledger: public execution,16 §1–§14,black-ledger.md,BL-R04,,,,AT-BL-04,,reviewed
+TR-black-ledger-target-victory,90 §2,Black Ledger: target victory,16 §1–§14,black-ledger.md,BL-R08,,,,AT-BL-08,,reviewed
+TR-black-ledger-torn-black-seal,90 §2,Black Ledger: Torn Black Seal,16 §1–§14,black-ledger.md,BL-R08,,,,AT-BL-08,,reviewed
+TR-black-ledger-reverse-hunt,90 §2,Black Ledger: reverse hunt,16 §1–§14,black-ledger.md;intel-service.md,BL-R08;INTEL-R16,,,,AT-BL-08;AT-INTEL-16,,reviewed
+TR-black-ledger-calling-cards,90 §2,Black Ledger: calling cards,16 §1–§14,black-ledger.md,BL-R10,,,,AT-BL-10,,reviewed
+TR-black-ledger-nom-de-guerre,90 §2,Black Ledger: nom de guerre,16 §1–§14,black-ledger.md,BL-R10,,,,AT-BL-10,,reviewed
+TR-black-ledger-alias-intel-market,90 §2,Black Ledger: alias intel market,16 §1–§14,black-ledger.md;intel-service.md,BL-R10;INTEL-R16,,,,AT-BL-10;AT-INTEL-16,,reviewed
+TR-black-ledger-public-bounties,90 §2,Black Ledger: public bounties,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,reviewed
 TR-black-ledger-zero-minting,90 §2,Black Ledger: zero minting,16 §1–§14,asset-service.md;black-ledger.md,ASSET-R14;BL-R11,lc_ledger_posting,,,AT-ASSET-14;AT-BL-11,,specified
 TR-black-ledger-sinks,90 §2,Black Ledger: sinks,16 §1–§14,asset-service.md;black-ledger.md,ASSET-R14;BL-R11,lc_ledger_posting(SINK codes),,,AT-ASSET-14;AT-ASSET-01;AT-BL-11,,specified
-TR-black-ledger-anti-farm,90 §2,Black Ledger: anti-farm,16 §1–§14,black-ledger.md,BL-R06;BL-R14,,,,AT-BL-06;AT-BL-14,,specified
-TR-black-ledger-anti-harassment,90 §2,Black Ledger: anti-harassment,16 §1–§14,black-ledger.md,BL-R02,,,,AT-BL-02,,specified
-TR-black-ledger-legendary-hunts,90 §2,Black Ledger: legendary hunts,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,specified
+TR-black-ledger-anti-farm,90 §2,Black Ledger: anti-farm,16 §1–§14,black-ledger.md,BL-R06;BL-R14,,,,AT-BL-06;AT-BL-14,,reviewed
+TR-black-ledger-anti-harassment,90 §2,Black Ledger: anti-harassment,16 §1–§14,black-ledger.md,BL-R02,,,,AT-BL-02,,reviewed
+TR-black-ledger-legendary-hunts,90 §2,Black Ledger: legendary hunts,16 §1–§14,black-ledger.md,BL-R12,,,,AT-BL-12,,reviewed
 TR-murder-market-price,90 §2,murder market price,16 §6,,,,,,,,blueprint
-TR-hunter-mythology,90 §2,hunter mythology,16 §6,black-ledger.md,BL-R10;BL-R12,,,,AT-BL-10;AT-BL-12,,specified
+TR-hunter-mythology,90 §2,hunter mythology,16 §6,black-ledger.md,BL-R10;BL-R12,,,,AT-BL-10;AT-BL-12,,reviewed
 TR-profession-definition,90 §2,profession definition (App. F),16 §6,,,,,,,,blueprint
 TR-retail-truth-statuses,90 §2,Retail Truth: statuses,11,,,,,,,,blueprint
 TR-retail-truth-evidence-cases,90 §2,Retail Truth: evidence cases,11,,,,,,,,blueprint
@@ -180,7 +180,7 @@ TR-relationship-ledger,90 §4,relationship ledger,10 §7,,,,,,,,blueprint
 TR-crown-law,90 §4,Crown Law,12 §6.2,asset-service.md;aden-remembers.md,ASSET-R05;ASSET-R13;AR-R07,lc_custody(POOL);castle.treasury;lc_law,Crown Law (§4.5),Chamberlain crown_law; Castle.setTaxPercent clamp; teleport levy,AT-ASSET-05;AT-ASSET-13;AT-AR-07,treasury commitments only; laws themselves are Aden Remembers,specified
 TR-caravans,90 §4,caravans,12 §8,asset-service.md;aden-remembers.md,ASSET-R14;ASSET-R25;AR-R04;AR-R05,"lc_custody(MANIFEST);lc_ledger_posting(TOWN_SUPPLY,RAID_SHARE,ROAD_LOSS);lc_caravan;lc_caravan_route;lc_caravan_escort;lc_guild_town",Guild and caravans (§4.6),WalkingManager routes,AT-ASSET-14;AT-ASSET-27;AT-AR-04;AT-AR-05,manifest custody only; routes and escorts are Aden Remembers and PACT,specified
 TR-caravan-escort-and-treaty-contracts,90 §4,Caravan Escort and Treaty contracts,15 §2,pact.md,PACT-R07,,,,AT-PACT-07,,specified
-TR-cursed-weapon-writs,90 §4,cursed-weapon writs,16 §2,black-ledger.md,BL-R03,,,,AT-BL-03,,specified
+TR-cursed-weapon-writs,90 §4,cursed-weapon writs,16 §2,black-ledger.md,BL-R03,,,,AT-BL-03,,reviewed
 TR-citizen-bounties,90 §4,citizen bounties,16 §2,,,,,,,,blueprint
 TR-wanted-boards,90 §4,wanted boards,16 §2,,,,,,,,blueprint
 TR-aden-gazette,90 §4,Aden Gazette,17 §2–§3,chronicle.md,CHR-R05;CHR-R09,lc_chr_issue;lc_chr_issue_entry;lc_chr_letter,"the Gazette (§4.3, §4.5)",DailyResetManager day seam,AT-CHR-05;AT-CHR-09,,specified

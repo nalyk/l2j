@@ -411,8 +411,8 @@ retail's own UI never leaves; it is ledgered as a retail bug fix.
 
 **Selling to the Guild** (at a town's Guild Master, a new NPC on an existing model): a player sells family items at the
 town's buy price, in one Asset `exchange` (player items → warehouse, pool Adena → player; an amendment, §11); refused when
-the pool cannot pay. **Orders** are PACT delivery contracts the Guild issues (issuer `MERCHANT_GUILD`, receiver the
-warehouse custody; amendments to pact.md), with payment escrowed from the pool at posting and refunded to it on expiry,
+the pool cannot pay. **Orders** are PACT Purchase Orders whose buyer is the `MERCHANT_GUILD` institution (pact.md §4.1a), filled into the
+warehouse custody, with the maximum spend moved from the pool when issued and the remainder returned to it on expiry,
 for the catch-in items of a `SHORTAGE` or the supplies of `BOSS_ECOLOGY` and `FRONTIER`: a newcomer's spoils become what a
 town needs (12 §5.2).
 

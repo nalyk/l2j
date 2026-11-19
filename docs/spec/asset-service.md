@@ -19,8 +19,7 @@ The Asset Service is the one path by which Living Chronicle code moves or holds 
   (04 §3.6), against a reviewed classification of every place quantity changes (§2.7).
 
 It does not own: contract terms and states (PACT, Black Ledger, Crown Law own theirs and answer a holding predicate,
-INV05), the Fact Journal tables (it writes durable facts into them inside its transaction), town supply budgets (Aden
-Remembers), Mobius's own transfers (trade, private store, mail, warehouse, NPC shops, auctions: they stay retail and are
+INV05), the Fact Journal tables (it writes durable facts into them inside its transaction), Mobius's own transfers (trade, private store, mail, warehouse, NPC shops, auctions: they stay retail and are
 *observed* by the monitor), and anything in combat or drop rates (02 §1).
 
 Depends on: Fact Journal (outbox facts), Actor Identity (actor snapshots), the core patches of §11.
@@ -86,6 +85,7 @@ lc_mail_delivery(message_id INT PK, op_id BINARY(16) → lc_asset_op, receiver_c
 lc_asset_pending(char_id INT, op_id BINARY(16), since TIMESTAMP(3), PRIMARY KEY(char_id, op_id))
 lc_settlement_key(scope VARCHAR(16), skey VARCHAR(96), op_id BINARY(16) → lc_asset_op, PRIMARY KEY(scope, skey))
 lc_item_lifecycle(lifecycle_id BIGINT PK auto, object_id INT, item_id INT, parent_lifecycle_id BIGINT NULL, began_op BINARY(16) NULL,
+                  began_kind {OPERATION|TRACKED},
                   began_at TIMESTAMP(3), ended_at TIMESTAMP(3) NULL, end_reason {DESTROYED|MERGED|SPLIT_REMAINDER_GONE} NULL,
                   merged_into BIGINT NULL, UNIQUE(object_id while ended_at IS NULL))
 lc_economy_bucket(window_start TIMESTAMP, item_id INT, site VARCHAR(48), class {SOURCE|SINK|MOVE_OUT|MOVE_IN},
@@ -358,9 +358,9 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `commit(treasury, custody, amount)` / `return(custody, treasury, amount)` | castle treasury ↔ custody (Crown Law, 12 §6.2) | `Asset.TreasuryCommitted`, `Asset.TreasuryReturned` |
 | `move(from, to, assets)` | custody → custody, both owned by one module (a warehouse → a caravan manifest and back, a manifest → a destination warehouse; aden-remembers.md §3.4), under the caller's settlement key | `Asset.CustodyMoved` |
 | `exchange(character, gives, into, pays, from)` | one operation: the character's `gives` (items or Adena, debited in memory, §3.3) → custody `into`; custody `from`'s `pays` → service mail to the character; refused whole if either side cannot be met (the Guild's buying and selling, aden-remembers.md §4.6) | `Asset.Exchanged` |
-| `relocate(custody, drops)` | `RELOCATED_DROP` source → the destination warehouse custody, exactly the kill's selected items; one operation per kill, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
+| `relocate(drops)` | `RELOCATED_DROP` source → for each selected item its own destination warehouse custody (a kill's families may go to different towns), exactly the kill's selected items; one operation per kill, whole or nothing, under the kill key, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
 | `recycle(pool, amount, day)` | `SINK_RECYCLE` source → the pool, once per (pool, day), refused above the recorded share | `Asset.SinkRecycled` |
-| `track(objectId)` | no legs: if the live object has no live lifecycle, one is begun (`began_op` null, kind `TRACKED`), under the object's stack lock like any operation that reads it (§3.3); idempotent; ended by the existing end sites (chronicle.md §4.6, under review) | `Asset.LifecycleTracked` |
+| `track(objectId)` | no legs: if the live object has no live lifecycle, one is begun (`began_op` null, `began_kind` `TRACKED`), under the object's stack lock like any operation that reads it (§3.3); idempotent; ended by the existing end sites (chronicle.md §4.6, under review) | `Asset.LifecycleTracked` |
 | `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
@@ -408,7 +408,12 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | `Asset.Crafted` | contract, attempt, input legs, output legs (none on failure) |
 | `Asset.LootRouted` | charter, kill (npc object id and incarnation), source legs, receivers and their mails |
 | `Asset.ParchmentIssued`, `Asset.SealIssued` | contract, character, mail, lifecycle id |
-| `Asset.SupplyEntered`, `Asset.SupplyArrived`, `Asset.ManifestRaided` | custody, code, reference, legs |
+| `Asset.ManifestRaided` | custody, code, reference, legs |
+| `Asset.CustodyMoved` | operation, settlement key, from custody, to custody, legs (item id, lifecycle id, qty) |
+| `Asset.Exchanged` | operation, character, custody in, legs given, custody out, legs paid, the service mail |
+| `Asset.DropRelocated` | kill key, source legs, each leg's destination custody |
+| `Asset.SinkRecycled` | pool custody, day, amount, the recorded sink it was bounded by |
+| `Asset.LifecycleTracked` | lifecycle id, object id, item id, the holder it was in |
 | `Asset.Refunded` | aborted op, receiver and mail, legs (written by the refund transaction) |
 | `Asset.CustodyClosed`, `Asset.CustodyFrozen` | custody, reason |
 | `Asset.AdminCorrection` | admin, violation fact, reason, before, after |
@@ -624,6 +629,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Amendment round 1 (Codex) on revision 10, NO SIGN-OFF: `relocate` allowed one destination; the new facts had no
+  fields and `TRACKED` no column; `CROWN_UPKEEP` had no site; the withdrawn supply facts and budget mention remained.
+  Fixed: per-item destinations, the five fact schemas, `began_kind`, the site row, the remnants removed.
 - Revision 10 (after the revision-9 sign-off): `TOWN_SUPPLY` withdrawn (caravans move custody to custody); the `move`,
   `exchange`, `relocate`, `recycle` and `track` operations; the `RELOCATED_DROP` and `SINK_RECYCLE` sources and the
   `CROWN_UPKEEP` sink; ASSET-R14 and AT-ASSET-14 follow. Amendments accepted in aden-remembers.md's review (`track` in

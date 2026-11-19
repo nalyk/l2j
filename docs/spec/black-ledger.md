@@ -1,6 +1,6 @@
 # SPEC-BL — The Black Ledger
 
-- Status: draft (revision 7: the Amnesty predicate for aden-remembers.md, reviewed; revision 6 was signed off; record in §12)
+- Status: reviewed (revision 7; its Amnesty amendment signed off by Codex in amendment round 1; record in §12)
 - Blueprint: 16 (the Black Ledger); 03 §4.4 (`ON_CURSED_WEAPON_ACQUIRE`), §4.5 (`canWitness`); 04 §3 (Asset Service), §4
   (Intel Service), §5 (Codex), §7 (keyed randomness); 10 §7 (citizen houses); 12 §6.2 (Crown Law Bounty Endowments);
   17 (publication); consensus §6.
@@ -529,6 +529,7 @@ granted intel with confidence and age band, offers, payments under review, the r
 
 ## 12. Review record
 
+- Amendment round 1 (Codex): revision 7 **SIGN-OFF**.
 - Revision 7 (after the revision-6 sign-off): the Amnesty predicate at a `KARMA` opening (§4.3), accepted in
   aden-remembers.md's review; to be reviewed on its own.
 

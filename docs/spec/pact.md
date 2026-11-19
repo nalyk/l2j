@@ -38,12 +38,12 @@ lc_pact_contract(contract_id BIGINT PK auto, type {CRAFTING_PACT|CRAFT_ORDER|PUR
                  deadline TIMESTAMP(3), terms JSON, terms_hash BINARY(32) = SHA-256(terms), value_adena BIGINT,
                  fee_adena BIGINT, fee_payer TINYINT, review_reason VARCHAR(128) NULL)
 lc_pact_party(contract_id, party_no TINYINT, role {CLIENT|CONTRACTOR|LENDER|BORROWER|BUYER|SELLER|DELIVERER|EMPLOYER|
-              MERCENARY|SIGNATORY|LEADER|MEMBER}, kind {CHAR|CLAN|ALLIANCE}, char_id INT NULL, clan_id INT NULL,
-              ally_id INT NULL, signed_terms_version INT NULL, signed_at TIMESTAMP(3) NULL, signed_token BINARY(16) NULL,
+              MERCENARY|SIGNATORY|LEADER|MEMBER}, kind {CHAR|CLAN|ALLIANCE|INSTITUTION}, char_id INT NULL, clan_id INT NULL,
+              ally_id INT NULL, institution {MERCHANT_GUILD|CARAVAN_GUILD} NULL, institution_custody INT NULL, signed_terms_version INT NULL, signed_at TIMESTAMP(3) NULL, signed_token BINARY(16) NULL,
               PRIMARY KEY(contract_id, party_no))
 lc_pact_clause(contract_id, clause_no SMALLINT, kind {DELIVER_ITEMS|PAY_ADENA|CRAFT_ATTEMPT|DEADLINE|PARTICIPATION|
                REGISTRATION|LOOT_POLICY|COLLATERAL|REPAY|FORFEIT|CANCEL_CONDITION}, params JSON, PRIMARY KEY(contract_id, clause_no))
-lc_pact_custody(contract_id, purpose {FUNDING|COLLATERAL|OUTPUT|CHARTER|FORFEIT}, party_no TINYINT NULL, custody_id INT → lc_custody)
+lc_pact_custody(contract_id, purpose {FUNDING|COLLATERAL|OUTPUT|CHARTER|FORFEIT|FEE_SUBSIDY}, party_no TINYINT NULL, custody_id INT → lc_custody)
 lc_pact_unit(contract_id, clause_no, unit INT, parent_unit INT NULL, state {OPEN|PAID|RETURNED|FORFEITED|NONE|SPLIT}, owed JSON,
              skey VARCHAR(96) NULL
              → lc_settlement_key, op_id BINARY(16) NULL, at TIMESTAMP(3) NULL, PRIMARY KEY(contract_id, clause_no, unit))
@@ -92,12 +92,16 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
   disabled, aden-remembers.md §3.3), + `SealingFeeAdena` if `visibility = PARTIES` (sealed terms).
   It is part of the terms, so every signer saw it. The **fee payer** is the party the terms name (the drafter by
   default); it is charged as a `FEE_NOTARIUS` sink (asset-service.md §2.5) in the operation of the last signature, which
-  fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`). Under a Market Charter the charter's custody pays,
-  in the same operation, the rest of the unreduced fee into `FEE_NOTARIUS`, so the sink receives the full fee; if the
-  custody cannot, the factor is 1 for that contract (aden-remembers.md §4.5).
+  fails if the payer cannot pay (the contract stays `PARTIALLY_SIGNED`). **Market Charter**: the factor is fixed when the
+  terms are proposed, and only if the charter's custody can **reserve** the subsidy (the unreduced fee minus the reduced
+  one) at that moment: the subsidy is moved (Asset `move`) into the contract's `FEE_SUBSIDY` custody in the `propose`
+  operation, otherwise the factor is 1 in those terms. At the last signature the payer pays the reduced fee and the
+  subsidy custody the rest, both into `FEE_NOTARIUS`, so the sink receives the full fee; a later suspension or exhaustion
+  of the charter cannot change signed or proposed terms. A counter-proposal, withdrawal or expiry returns the reserved
+  subsidy to the charter's custody (and a counter-proposal reserves anew for its terms) (aden-remembers.md §4.5).
 - A contract with `value_adena` ≥ `RoyalThresholdAdena`, a clan or alliance party, or of type Treaty needs a Royal
   Notarius; Mercenary contracts the Castle Notarius of the castle concerned; Caravan Escorts the Caravan Guild (15 §8);
-  Guild Orders the Merchant Guild, which issues them itself (no signature but the deliverer's acceptance).
+  Guild Orders the Guild Master (tier `TOWN` of the Guild's town).
   The tier's Notarius binds the **last signature** to its presence (`NpcRef`, codex-ui.md §2).
 
 ### 2.3 Identities
@@ -174,6 +178,16 @@ Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (T
 - Settlements caused by facts run as projector effects (fact-journal.md §4.4): applied once by their application id, and
   replay writes nothing.
 
+### 4.1a Institutional parties
+
+An `INSTITUTION` party (the Merchant Guild or the Caravan Guild of a town, aden-remembers.md §4.6) is a party whose
+owner module acts for it. Its **signature** is the owner module's issuing operation (one transaction: the contract
+inserted already `PROPOSED`, the institution's signature on the current terms version recorded, and, when the institution
+is the only funding party, its funding moved from `institution_custody`'s pool by Asset `move` at the `SIGNED` → `FUNDED`
+step of §3.1, so funding still follows every signature: for a Guild Order the institution is the only party until a fill,
+and a fill is the seller's acceptance, not a signature of the terms). An institution never signs through the Codex, never
+counter-proposes, and its contracts are `PUBLIC`. Received items go into `institution_custody`, never to service mail.
+
 ### 4.2 Contract types
 
 | Type | Funding (funding keys) | Units and settlement | Expiry, failure |
@@ -181,12 +195,12 @@ Charter), a mercenary party (Mercenary), a (violating signatory, window) pair (T
 | Crafting Pact | client: materials for *n* attempts + fee per attempt | per attempt (§4.3): the attempt's fee to the contractor whatever the outcome; product, if any, to the client; materials consumed per retail | unattempted attempts' materials and fees returned |
 | Craft Order | client: materials and fee per batch, a unit per attempt of the batch | per attempt under §4.3, as for a Crafting Pact; a batch is the funding group of its attempts, so a partial batch is the attempts made so far | unattempted attempts' units returned |
 | Purchase Order | buyer: maximum spend (the budget unit) | per fill: a seller hands items to a Notarius (in person) or, if the order allows, through the Codex; in one operation the items go to the buyer, the budget unit is split (§2.1) into the fill's price × quantity `PAID` to the seller and the remainder `OPEN` | the remainder unit `RETURNED` |
+| (Guild Order) | a Purchase Order whose buyer is the `MERCHANT_GUILD` institution (§4.1a): its maximum spend moved from the Guild pool (Asset `move`) | as a Purchase Order, filled at the Guild Master; the fill's items go into the buyer's warehouse custody (`institution_custody`) instead of service mail | the remainder `RETURNED` to the pool |
 | Delivery Order | client: payment | the delivery: the deliverer hands the named items at the named Notarius before the deadline; items to the receiver, payment to the deliverer | payment returned |
-| Guild Order | the Merchant Guild (issuer `MERCHANT_GUILD`): payment escrowed from a Guild pool at posting | a Delivery Order whose receiver is the Guild's warehouse custody, filled at the Guild Master: each fill moves the items into that custody and pays the deliverer, in one operation (aden-remembers.md §4.6) | the remaining payment returned to the pool |
 | Loan | lender: principal (unit *P*); borrower: collateral (unit *C*) | activation settles *P* (`PAID` to the borrower); repayment is a request that creates unit *R* (the repayment, funded from the borrower) and in the same operation settles *R* (`PAID` to the lender) and *C* (`RETURNED` to the borrower) | at the deadline, unrepaid: *C* `FORFEITED` to the lender, never more |
 | Loot Charter | bidders' bids, during an auction | per routed lot (§4.5) | an unfinished auction's lot to the charter's fallback receiver |
 | Mercenary | employer: payment per mercenary party | per mercenary party, on the battle's end (§4.6) | payment returned for parties that did not qualify; all of it if the battle did not happen |
-| Caravan Escort | the Caravan Guild: payment escrowed from a Guild pool (plus a Caravan Protection law's custody) at dispatch | on the caravan's arrival, the escrow split among escorts by the participation shares Aden Remembers computes (aden-remembers.md §4.6) | refunded to the pool on a raid or a recall, and the unqualified remainder on arrival |
+| Caravan Escort | the `CARAVAN_GUILD` institution (§4.1a) as employer: payment moved from a Guild pool (plus a Caravan Protection law's custody) at dispatch | on the caravan's arrival, the escrow split among escorts by the participation shares Aden Remembers computes (aden-remembers.md §4.6) | refunded to the pool on a raid or a recall, and the unqualified remainder on arrival |
 | Treaty | each signatory: its forfeit | per (violating signatory, window): at the first violation (§4.7) in the window, that signatory's forfeit goes to the victim's side; later violations in the window are facts only | at the end of the window, every **unspent** forfeit returned to its signatory |
 
 ### 4.3 Craft for contract
@@ -420,7 +434,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | AT-PACT-05 | integration | raids and kills with charters and without; the charter's leader disbanding and forming a new party (the new party's kills retail); a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
 | AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, hits on an invulnerable or offline-protected target (no activity), damage transferred to a caster's CP leaving no residual HP damage (activity), expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
 | AT-PACT-07 | integration | fees: values and fees computed independently from the terms, charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
-| AT-PACT-08 | integration | publication rows of both types for every visibility; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
+| AT-PACT-08 | integration | publication rows of the three types for every visibility: a `PUBLIC` and `publishable` completion writes `pact_completed_terms` and no `pact_completed`; a `PUBLIC` contract that is not `publishable` and a `PARTIES` one write `pact_completed` only, with no clause kind or total; a `PRIVATE` one writes nothing; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
 | AT-PACT-09 | integration | acts outside contracts (attacking a treaty party, keeping a lent weapon outside a loan, leaving a party) stay possible; a clan member without the leader's authority cannot sign or fund, and with `ACCESS_WAREHOUSE` can fund only when `AltMembersCanWithdrawFromClanWH` is on |
 
 ## 11. Upstream constraints
@@ -440,6 +454,10 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Amendment round 1 (Codex) on revision 6, NO SIGN-OFF: the Guild Order fit none of the enums or the machine, the
+  charter fallback could change a fee after signing, and AT-PACT-08 tested two types. Fixed: the `INSTITUTION` party kind
+  (§4.1a), the Guild Order as an institutional Purchase Order, the Caravan Escort's employer an institution; the charter
+  subsidy reserved at proposal into a `FEE_SUBSIDY` custody; AT-PACT-08 with the three types and the boundary cases.
 - Revision 6 (after the round-4 sign-off): `pact_completed` split into `pact_completed` and `pact_completed_terms`, so
   the publication registry itself refuses clause kinds and totals on any row but a `PUBLIC` and `publishable`
   contract's (found by Chronicle's first review); the Guild Order type, Caravan Escort's funding, shares and refunds, and

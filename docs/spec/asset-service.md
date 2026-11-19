@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
+- Status: draft (revision 7, answering six adversarial review rounds; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -58,9 +58,12 @@ mail**, written as rows in the operation's transaction and claimed by the charac
   MessageDeletionTaskManager.java:80-110 never touches it). Its life: *sent* (in the operation's transaction) →
   *claimed* (by retail mail, which checks room; RequestPostAttachment.java:191-232). The receiver cannot delete it while
   it has attachments (RequestDeleteReceivedPost.java:83), and a character with unclaimed service mail cannot be deleted
-  (core patch §11.21). Writing service mail locks the receiver's `characters` row (`SELECT … FOR UPDATE`) and requires
-it to exist and not be marked for deletion; marking a character for deletion takes the same row lock and refuses while it
-has unclaimed service mail, so a payout and a deletion are serialised. A release whose receiver is gone or marked aborts
+  (core patch §11.21). Writing service mail, and writing a pending mark (§2.4), lock the character's `characters` row
+(`SELECT … FOR UPDATE`) and require it to exist and not be marked for deletion. Every deletion of a character first runs
+the **deletion guard**: one transaction that locks the same row, refuses while the character has unclaimed service mail
+or a pending mark, and otherwise marks it (`deletetime`); only then may Mobius delete it, at once or later. So a payout,
+a debit with the refund it may need, and a deletion are serialised: a character being deleted is never debited, and is
+never owed a refund that could not be mailed. A release whose receiver is gone or marked aborts
 with the reason `RECEIVER_GONE`; the custody stays as it was and its owner module decides. Claiming records `claimed_at`
 in `lc_mail_delivery` (core patch §11.23), right after retail clears the message's attachments. It counts toward the
 receiver's inbox like any mail; it is not refused by the 240-message check,
@@ -484,7 +487,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R24 | Mobius MUST release an object id only after its row is deleted. | AT-ASSET-09 |
 | ASSET-R25 | A raided share MUST be dropped at most once, after commit. | AT-ASSET-27 |
 | ASSET-R26 | A character's login MUST wait while an operation that took its items is pending. | AT-ASSET-28 |
-| ASSET-R27 | A character with unclaimed service mail MUST NOT be markable for deletion, and service mail MUST NOT be written to a character that is gone or marked; the two are serialised on the character's row. | AT-ASSET-29 |
+| ASSET-R27 | A character MUST NOT be marked for deletion, or deleted at once, while it has unclaimed service mail or a pending mark; neither service mail nor a pending mark MUST be written for a character that is gone or marked; all are serialised on the character's row. | AT-ASSET-29 |
 | ASSET-R28 | An attempt that was refunded MUST NOT run again under its id. | AT-ASSET-02 |
 
 | Test | Kind | What it does |
@@ -516,7 +519,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-26 | restart | `DatabaseCleanUp = True` with escrow and service mail rows of every kind |
 | AT-ASSET-27 | fault, restart | a raid dies after commit, before or after the drop, with and without a restart: dropped at most once |
 | AT-ASSET-28 | integration | logout and re-login racing a whole-object fund, both outcomes: no second live `Item`, the row restored is the committed one |
-| AT-ASSET-29 | integration | marking a character with unclaimed service mail for deletion is refused, after the claim allowed; a payout racing the marking either commits first (marking then refused) or aborts with `RECEIVER_GONE` |
+| AT-ASSET-29 | integration | both deletion paths (marking, and immediate with `DeleteDays = 0`): refused with unclaimed service mail or a pending mark, allowed after; a payout, and a debit that aborts and must be refunded, racing a deletion: either the operation and its refund complete first and the deletion is refused, or the deletion wins and the operation aborts with `RECEIVER_GONE` before taking anything |
 | AT-ASSET-30 | sim | capacity benchmark: commit p99 within budget |
 
 ## 11. Upstream constraints (for N3 design and N4 implementation)
@@ -584,9 +587,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 20. **Retired items**: `Item.updateDatabase` does nothing for a retired item, and Mobius's item operations (container add,
     transfer, destroy, drop, equip, use) refuse one (core patch). → §3.3.
 21. **Character deletion** removes the character's own items (GameClient.java:439-451) and leaves owner -1 rows, so
-    service mail to a deleted character could never be claimed. Core patch: marking a character for deletion locks its
-    row and is refused while it has unclaimed service mail; service mail is written under the same row lock (§2.1).
-    → ASSET-R27.
+    service mail to a deleted character could never be claimed. A deletion either marks the character (`deletetime`)
+    for later, or, with `DeleteDays = 0`, deletes it at once (GameClient.java:293) on other connections. Core patch: both
+    paths first run the deletion guard (§2.1), which locks the row, refuses while unclaimed service mail or a pending mark
+    exists, and marks the character, committed before any deleting statement; service mail and pending marks are written
+    under the same row lock. → ASSET-R27.
 23. **Claims of service mail** clear the message's attachments (RequestPostAttachment.java:191-232) and say nothing to the
     service. Core patch: after clearing a service message's attachments, the claim sets `claimed_at` on its delivery; the
     census repairs a claim whose patch step did not run.
@@ -595,6 +600,13 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Round 6 (Codex), NO SIGN-OFF: confirmed the stack-monitor rule (no cycle found between item monitors, write locks and the
+  inventory monitor in the paths examined), retire-first under item then container, refund finality and treasury
+  compensation after commit, the narrowed restart guarantee, and the claim record; accepted the seed table, `PENDING`
+  rows and fault coverage as named N4 obligations. Found that immediate deletion (`DeleteDays = 0`) bypassed the guard
+  and that deletion did not protect a pending refund. Revision 7: one deletion guard before both deletion paths,
+  refusing while service mail or a pending mark exists; pending marks written under the same row lock; and the
+  traceability test made to check that a row's tests cover its requirements' and that its blueprint references exist.
 - Round 5 (Codex), NO SIGN-OFF: confirmed the lock cycles gone (no further cycle found in store, autosave, transfer,
   warehouse, mail, pet, clan warehouse or shutdown paths), the pending mark, refunds as operations, the mail flags and
   lifecycle; found that a stack decrease without the monitor can fall between a retail transfer's decision and its

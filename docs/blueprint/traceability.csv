@@ -46,7 +46,7 @@ TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (K
 TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",,,,,,,,blueprint
 TR-aden-remembers,90 §2,Aden Remembers,12; 04 §1 (Fact Journal),,,,,,,,blueprint
 TR-living-world-director,90 §2,Living World Director,12; 04 §1 (Fact Journal),,,,,,,,blueprint
-TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13,,specified
+TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13;AT-FACT-03,,specified
 TR-regional-state-engine,90 §2,regional state engine,"12 §1, §6",,,,,,,,blueprint
 TR-political-economic-graph,90 §2,political/economic graph,"12 §1, §6",,,,,,,,blueprint
 TR-resource-pressure,90 §2,resource pressure,"12 §4, §5.1",,,,,,,,blueprint
@@ -104,7 +104,7 @@ TR-notarius-town-royal-castle,90 §2,Notarius: Town / Royal / Castle,"15 §3, §
 TR-notarius-parchment-item,90 §2,Notarius: parchment item,"15 §3, §4, §8",,,,,,,,blueprint
 TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote drafting + physical high-value signing,"15 §3, §4, §8",,,,,,,,blueprint
 TR-notarius-public-registration,90 §2,Notarius: public registration,"15 §3, §4, §8",,,,,,,,blueprint
-TR-notarius-escrow,90 §2,Notarius: escrow,"15 §3, §4, §8",asset-service.md,ASSET-R01;ASSET-R02;ASSET-R03;ASSET-R04;ASSET-R07;ASSET-R08;ASSET-R09;ASSET-R10;ASSET-R11;ASSET-R20;ASSET-R22;ASSET-R16;ASSET-R27,"lc_custody;lc_asset_op;lc_ledger_posting;lc_settlement_key;lc_mail_delivery;items(ESCROW,MAIL)",service mail claim (asset-service.md §9),ItemLocation.ESCROW;retired items;MailManager adoption,AT-ASSET-00;AT-ASSET-01;AT-ASSET-02;AT-ASSET-03;AT-ASSET-04;AT-ASSET-07;AT-ASSET-08;AT-ASSET-09;AT-ASSET-10;AT-ASSET-11;AT-ASSET-22;AT-ASSET-16;AT-ASSET-29,,specified
+TR-notarius-escrow,90 §2,Notarius: escrow,"15 §3, §4, §8",asset-service.md,ASSET-R01;ASSET-R02;ASSET-R03;ASSET-R04;ASSET-R07;ASSET-R08;ASSET-R09;ASSET-R10;ASSET-R11;ASSET-R20;ASSET-R22;ASSET-R16;ASSET-R27,"lc_custody;lc_asset_op;lc_ledger_posting;lc_settlement_key;lc_mail_delivery;items(ESCROW,MAIL)",service mail claim (asset-service.md §9),ItemLocation.ESCROW;retired items;MailManager adoption,AT-ASSET-00;AT-ASSET-01;AT-ASSET-02;AT-ASSET-03;AT-ASSET-04;AT-ASSET-07;AT-ASSET-08;AT-ASSET-09;AT-ASSET-10;AT-ASSET-11;AT-ASSET-22;AT-ASSET-16;AT-ASSET-29;AT-ASSET-20;AT-ASSET-26;AT-ASSET-18,,specified
 TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",,,,,,,,blueprint
 TR-black-ledger-writ,90 §2,Black Ledger: Writ,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard Captain,16 §1–§14,,,,,,,,blueprint
@@ -171,8 +171,8 @@ TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,,,,,,,,bluep
 TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10,,specified
 TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
 TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,specified
-TR-persistence,90 §3,persistence,04 §9,asset-service.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28,,specified
-TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00,AssetSchemaTest,specified
+TR-persistence,90 §3,persistence,04 §9,asset-service.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28;AT-ASSET-01;AT-ASSET-09;AT-ASSET-02,,specified
+TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00;AT-ASSET-08;AT-ASSET-26;AT-ASSET-09,AssetSchemaTest,specified
 TR-safe-failure-modes,90 §3,safe failure modes,04 §8,asset-service.md,ASSET-R15;ASSET-R17;ASSET-R22,lc_module_state,,,AT-ASSET-15;AT-ASSET-21;AT-ASSET-22,,specified
 TR-performance-aggregation,90 §3,performance aggregation,02 §6; 04 §1,asset-service.md;fact-journal.md,ASSET-R12;ASSET-R21;FACT-R03;FACT-R06;FACT-R14,lc_economy_bucket;lc_economy_census;lc_economy_counter;lc_telemetry_bucket,,,AT-ASSET-12;AT-ASSET-30;AT-FACT-03;AT-FACT-06;AT-FACT-14,economy telemetry only; the Fact Journal spec owns the rest,specified
 TR-citizens-of-aden-and-the-genesis-epoch,90 §4,Citizens of Aden and the Genesis Epoch,10,,,,,,,,blueprint
@@ -198,7 +198,7 @@ TR-remembers-ledger-big-campaigns-and-notorious-bou,20 §1,Remembers ↔ Ledger:
 TR-remembers-crown-law-ledger-bounty-endowments-fun,20 §1,Remembers ↔ Crown Law ↔ Ledger: Bounty Endowments fund Writs; Amnesty stops new Writs; Caravan Protection funds escorts,20 §1,,,,,,,,blueprint
 TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,,,,,,,,blueprint
 TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,,,,,,,,blueprint
-TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md,ASSET-R01;ASSET-R03;ASSET-R14,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14,,specified
+TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md,ASSET-R01;ASSET-R03;ASSET-R14,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00,,specified
 TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,,,,,,,,blueprint
 TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,,,,,,,,blueprint
 TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,,,,,,,,blueprint

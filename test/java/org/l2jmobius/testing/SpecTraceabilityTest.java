@@ -22,7 +22,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * The N1 specs and the traceability matrix stay consistent (docs/spec/README.md, blueprint 30 §3, 02 §9): every MUST names the acceptance tests that prove it, every acceptance test it names is defined, every requirement is reached from a blueprint sub-feature, and the matrix cites only what exists.
+ * The N1 specs and the traceability matrix stay consistent (docs/spec/README.md, blueprint 30 §3, 02 §9): every MUST names the acceptance tests that prove it, every acceptance test it names is defined, every requirement is reached from a blueprint sub-feature, a row lists every test its requirements name, and the matrix cites only requirements, tests, specs and blueprint documents that exist.
  */
 class SpecTraceabilityTest
 {
@@ -31,6 +31,10 @@ class SpecTraceabilityTest
 	private static final Pattern TEST_ID = Pattern.compile("AT-[A-Z]+-\\d+");
 	private static final Set<String> KINDS = Set.of("unit", "integration", "fault", "restart", "sim", "human");
 	private static final Set<String> STATUSES = Set.of("blueprint", "specified", "reviewed", "implemented");
+	/** A blueprint section reference: a two-digit document number followed by a section sign, as in "12 §8" or "90 §2". */
+	private static final Pattern BLUEPRINT_REFERENCE = Pattern.compile("\\b(\\d\\d) §");
+	/** The two-digit numbers of the blueprint's documents. */
+	private static final Set<String> BLUEPRINT_DOCUMENTS = new HashSet<>();
 
 	/** Requirement id → the acceptance tests it names. */
 	private static final Map<String, List<String>> REQUIREMENTS = new LinkedHashMap<>();
@@ -70,6 +74,11 @@ class SpecTraceabilityTest
 					}
 				}
 			}
+		}
+
+		try (Stream<Path> documents = Files.list(docs.resolve("blueprint")))
+		{
+			documents.map(d -> d.getFileName().toString()).filter(n -> n.matches("\\d\\d-.*\\.md")).forEach(n -> BLUEPRINT_DOCUMENTS.add(n.substring(0, 2)));
 		}
 
 		final List<String> lines = Files.readAllLines(docs.resolve("blueprint/traceability.csv"));
@@ -123,9 +132,19 @@ class SpecTraceabilityTest
 			final String id = row.get("id");
 			assertTrue(ids.add(id), "matrix row id twice: " + id);
 			assertTrue(STATUSES.contains(row.get("status")), id + " has an unknown status: " + row.get("status"));
+			final List<String> rowTests = split(row.get("tests"));
 			for (String requirement : split(row.get("requirements")))
 			{
 				assertTrue(REQUIREMENTS.containsKey(requirement), id + " cites " + requirement + ", which no spec defines");
+				for (String test : REQUIREMENTS.get(requirement))
+				{
+					assertTrue(rowTests.contains(test), id + " cites " + requirement + " but not " + test + ", which proves it");
+				}
+			}
+			final Matcher document = BLUEPRINT_REFERENCE.matcher(row.get("blueprint") + " " + row.get("source"));
+			while (document.find())
+			{
+				assertTrue(BLUEPRINT_DOCUMENTS.contains(document.group(1)), id + " refers to blueprint " + document.group(1) + ", which does not exist");
 			}
 			for (String test : split(row.get("tests")))
 			{

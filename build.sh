@@ -32,6 +32,7 @@ fi
 
 # The fork's delta against upstream must be fully accounted for in CORE_PATCHES.md.
 if git rev-parse -q --verify refs/heads/upstream >/dev/null 2>&1; then
+	tools/intake/test-check-core-ledger.sh >/dev/null
 	tools/intake/check-core-ledger.sh
 else
 	echo "build.sh: no local 'upstream' branch here, core ledger not checked" >&2

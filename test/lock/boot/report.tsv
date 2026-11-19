@@ -211,7 +211,7 @@ INFO	ActionShiftHandler: Loaded 6 handlers.
 INFO	AdminCommandHandler: Loaded 481 handlers.
 INFO	BypassHandler: Loaded 53 handlers.
 INFO	ChatHandler: Loaded 14 handlers.
-INFO	CommunityBoardHandler: Loaded 24 handlers.
+INFO	CommunityBoardHandler: Loaded 18 handlers.
 INFO	ItemHandler: Loaded 30 handlers.
 INFO	PunishmentHandler: Loaded 3 handlers.
 INFO	UserCommandHandler: Loaded 17 handlers.

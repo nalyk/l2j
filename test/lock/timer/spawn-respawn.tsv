@@ -1,5 +1,5 @@
 # LOCK-TIMER-0002: every datapack spawn of attackable NPCs that respawn, its NPCs removed at 0 ms as a decaying corpse is, on a stream of the spawn's own (1, "lock.timer.respawn <npc> <place>", occurrence),
-# then the world run until all are back or 3600000 ms have passed, on (1, "lock.timer.respawn", 0). A respawn delay's random part is drawn at the removal, so one spawn's change moves no other spawn's line.
+# then the world run until all are back or 3600000 ms have passed, on (1, "lock.timer.respawn", 0). The delay's random part is drawn at the removal and the respawn itself on the same stream, so one spawn's change moves no other spawn's line.
 # place is the spawn's territory or the spot the datapack gives it; delay its respawn delay in ms, min..max when it has a random part. back is <ms> for each NPC of the spawn back where it belongs (inside its territory,
 # or on its spot give or take the random spawn system's offset, which the truth profile switches off), <ms>@<x>,<y>,<z> for one back anywhere else, - for one still away at the end.
 npc	name	place	delay	group	back
@@ -28410,14 +28410,14 @@ npc	name	place	delay	group	back
 22320	Junior Watchman	-16028,234191,-2745	59000..61000	-	60000
 22320	Junior Watchman	-16754,234598,-2700	59000..61000	-	61000
 22320	Junior Watchman	-16920,235757,-2890	59000..61000	-	61000
-22320	Junior Watchman	-17064,238966,-3277	59000..61000	-	60000
+22320	Junior Watchman	-17064,238966,-3277	59000..61000	-	61000
 22320	Junior Watchman	-17143,236092,-3045	59000..61000	-	60000
 22320	Junior Watchman	-17319,238629,-3330	59000..61000	-	61000
 22320	Junior Watchman	-17662,238847,-3334	59000..61000	-	60000
 22320	Junior Watchman	-17699,239775,-3306	59000..61000	-	60000
 22320	Junior Watchman	-17866,236108,-2800	59000..61000	-	60000
 22320	Junior Watchman	-17955,239631,-3360	59000..61000	-	60000
-22320	Junior Watchman	-18415,239743,-3327	59000..61000	-	61000
+22320	Junior Watchman	-18415,239743,-3327	59000..61000	-	60000
 22320	Junior Watchman	-19622,238589,-2835	59000..61000	-	61000
 22320	Junior Watchman	-19828,238816,-2835	59000..61000	-	61000
 22320	Junior Watchman	-20011,238017,-2733	59000..61000	-	60000

@@ -178,7 +178,7 @@ class TimerLockTest
 
 		final List<String> lines = new ArrayList<>();
 		lines.add("# LOCK-TIMER-0002: every datapack spawn of attackable NPCs that respawn, its NPCs removed at 0 ms as a decaying corpse is, on a stream of the spawn's own (" + SEED + ", \"lock.timer.respawn <npc> <place>\", occurrence),");
-		lines.add("# then the world run until all are back or " + RESPAWN_LIMIT_MILLIS + " ms have passed, on (" + SEED + ", \"lock.timer.respawn\", 0). A respawn delay's random part is drawn at the removal, so one spawn's change moves no other spawn's line.");
+		lines.add("# then the world run until all are back or " + RESPAWN_LIMIT_MILLIS + " ms have passed, on (" + SEED + ", \"lock.timer.respawn\", 0). The delay's random part is drawn at the removal and the respawn itself on the same stream, so one spawn's change moves no other spawn's line.");
 		lines.add("# place is the spawn's territory or the spot the datapack gives it; delay its respawn delay in ms, min..max when it has a random part. back is <ms> for each NPC of the spawn back where it belongs (inside its territory,");
 		lines.add("# or on its spot give or take the random spawn system's offset, which the truth profile switches off), <ms>@<x>,<y>,<z> for one back anywhere else, - for one still away at the end.");
 		lines.add("npc\tname\tplace\tdelay\tgroup\tback");

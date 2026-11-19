@@ -58,12 +58,24 @@ public class RandomAnimationTaskManager implements Runnable
 			if (currentTime > entry.getValue().longValue())
 			{
 				final Npc npc = entry.getKey();
+				if (!npc.isSpawned() || !npc.isInActiveRegion())
+				{
+					// Left on the list by a race between threads (it decayed, or its region fell asleep, while another thread put it on): dropped, nothing drawn for it.
+					// Checked again once it is off: a region that woke meanwhile found it still on and left it, so it goes back as it was.
+					if (PENDING_ANIMATIONS.remove(npc, entry.getValue()) && npc.isSpawned() && npc.isInActiveRegion())
+					{
+						PENDING_ANIMATIONS.putIfAbsent(npc, entry.getValue());
+					}
+					continue;
+				}
+				
 				if (npc.isInActiveRegion() && !npc.isDead() && !npc.isInCombat() && !npc.isMoving() && !npc.isStunned() && !npc.isSleeping() && !npc.isParalyzed())
 				{
 					npc.onRandomAnimation(Rnd.get(2, 3));
 				}
 				
-				PENDING_ANIMATIONS.put(npc, currentTime + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000));
+				// Only if it is still there: an NPC taken off the list meanwhile (it left an awake region, decayed) stays off.
+				PENDING_ANIMATIONS.replace(npc, entry.getValue(), currentTime + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000));
 			}
 		}
 		
@@ -74,7 +86,12 @@ public class RandomAnimationTaskManager implements Runnable
 	{
 		if (npc.hasRandomAnimation())
 		{
-			PENDING_ANIMATIONS.putIfAbsent(npc, System.currentTimeMillis() + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000));
+			final Long due = System.currentTimeMillis() + (Rnd.get((npc.isAttackable() ? GeneralConfig.MIN_MONSTER_ANIMATION : GeneralConfig.MIN_NPC_ANIMATION), (npc.isAttackable() ? GeneralConfig.MAX_MONSTER_ANIMATION : GeneralConfig.MAX_NPC_ANIMATION)) * 1000);
+			// Checked after it is on: a caller holding the NPC from before it left the world (a region waking) does not put it back for good.
+			if ((PENDING_ANIMATIONS.putIfAbsent(npc, due) == null) && !npc.isSpawned())
+			{
+				PENDING_ANIMATIONS.remove(npc, due);
+			}
 		}
 	}
 	

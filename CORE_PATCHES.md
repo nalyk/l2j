@@ -1,8 +1,8 @@
 # Core patches
 
 Every file that exists upstream and differs in this fork is listed here, with the reason it had to change, the invariant the
-change protects and the test that proves it. Upstream intake (blueprint 03 §3) replays this ledger: after merging `upstream`,
-each patch must still apply, still be needed, and still pass its proof.
+change protects and the test that proves it. Upstream intake (blueprint 03 §3, `tools/intake/intake.sh`) replays this ledger:
+after merging `upstream`, each patch must still apply, still be needed, and still pass its proof.
 
 Rules (blueprint 02 §5):
 
@@ -85,8 +85,10 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   spawn asks for no particular heading faces a random way. That way is drawn, so the boot draws more than before and every
   random choice after it (which slot of a spawn group fills, for one) falls differently: the world goldens moved, the
   isolated case goldens (skills, auto-attacks) did not.
-- Proof: `TimerLockTest.territoryNpcsComeBackFacingAnyWay` (before the patch every one faced due east),
-  `TimerLockTest.everySpawnRespawnsAsRecorded` (no territory NPC comes back outside its territory).
+- Proof: `TimerLockTest.territoryNpcsComeBackFacingAnyWay` (before the patch every one faced due east);
+  `WorldProofTest.cp0005RandomSpawnsMoveFixedSpotsAndLeaveTerritoriesAlone`, with the random spawn system on as upstream
+  ships it (the truth profile switches it off): a territory no wider than the system's offset keeps all 50 of its NPCs
+  inside, NPCs on a fixed spot are still moved within the range and face any way.
 
 ## CP-0006 A creature's place in its spawn territory is judged at its own height
 
@@ -101,19 +103,29 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   going home, straying) use it. `isInsideZone(x, y)` is left as it was for any other caller.
 - Invariant: an NPC a territory placed is inside that territory for its AI; outside a height-banded ban nothing changes.
 - Proof: `NpcSpawnTerritoryTest` (the swamp territory and its ban: a Splinter Stakato where the respawn lock saw one come
-  back holds the territory, the flat test turned it out), `TimerLockTest.everySpawnRespawnsAsRecorded` (every NPC a
-  territory placed holds it).
+  back holds the territory, the flat test turned it out); through the AI itself, each of its three tests on an NPC over a
+  height-banded ban, `WorldProofTest.cp0006AnNpcOverABanIsNotWokenAsStrayed`, `cp0006AnNpcOverABanIsNotSentHome` and
+  `cp0006AFightingNpcOverABanHasNotStrayed`, each failing with its call site reverted.
 
 ## CP-0007 An NPC turns idly exactly while it stands in an awake region
 
-- Files: `java/org/l2jmobius/gameserver/entity/actor/Npc.java`
+- Files: `java/org/l2jmobius/gameserver/entity/actor/Npc.java`, `java/org/l2jmobius/gameserver/taskmanagers/RandomAnimationTaskManager.java`
 - Reason: the idle-animation list (`RandomAnimationTaskManager`) is filled only when a region wakes, with the NPCs it holds
   then, and emptied only when it falls asleep. An NPC that spawns into a region already awake, or walks into one, never
   turns idly there; one deleted while its region is awake stays on the list for good, and the list keeps drawing for it
   each time it falls due. In a town that never sleeps, every NPC a script or event ever spawned and removed piles up.
 - Change: `Npc` puts itself on the list when it is placed in or walks into an awake region, takes itself off when it walks
-  into a sleeping one or leaves the world, and when it decays. Regions waking and sleeping work as before.
-- Invariant: an NPC is on the idle-animation list exactly while it is spawned in an awake region; what it does once there
-  is unchanged.
+  into a sleeping one or leaves the world, and when it decays. Regions waking and sleeping work as before. On a server's
+  threads these can race, so the list heals itself: the manager reschedules an NPC's turn only if its entry is still the
+  one it read; a caller putting on an NPC that has left the world meanwhile takes it off again; and an entry for an NPC no
+  longer standing in an awake region is dropped when it falls due, before anything is drawn for it, and put back as it was
+  if the NPC's region woke meanwhile.
+- Invariant: an NPC is on the idle-animation list exactly while it is spawned in an awake region (a race between threads
+  can leave an entry until it next falls due, never longer, and nothing is drawn for it); what it does once there is
+  unchanged.
 - Proof: `TimerLockTest.anNpcTurnsIdlyExactlyWhileItStandsInAnAwakeRegion` (spawned into the awake arena: on the list;
-  walked into a sleeping region: off; walked back: on; deleted: off, where before it stayed on).
+  walked into a sleeping region: off; walked back: on; deleted: off, where before it stayed on);
+  `WorldProofTest.cp0007AnNpcTakenOffMidTurnStaysOff` (an NPC that takes itself off from inside its own turn, the moment
+  another thread could, stays off), `cp0007AGoneNpcPutOnLateDoesNotStay` (a late caller holding a deleted NPC),
+  `cp0007AStaleEntryIsDroppedWhenItFallsDue` (an entry left by any race), `cp0007AnNpcWhoseRegionWokeMeanwhileStaysOn`
+  (the region waking while the manager drops the entry).

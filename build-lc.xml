@@ -67,7 +67,11 @@
 
 	<target name="stage" description="Stage a pristine copy of the game runtime for tests to boot from.">
 		<!-- The server writes logs and state into its working directory; the checkout is read-only. -->
-		<sync todir="${runtime.game}">
+		<!--
+			Every file is copied again, whatever its date: a test changes files of the staged copy in place (the truth
+			profile, the database address), and a plain sync keeps a changed file that is newer than its source.
+		-->
+		<sync todir="${runtime.game}" overwrite="true">
 			<fileset dir="${datapack}/game" />
 		</sync>
 	</target>

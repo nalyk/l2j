@@ -2,6 +2,11 @@ package org.l2jmobius.gameserver;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -15,6 +20,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import org.l2jmobius.gameserver.config.custom.PrivateStoreRangeConfig;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
 import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
@@ -141,6 +147,38 @@ class PausedWorldTest
 	void noScheduledTaskFailed()
 	{
 		assertEquals(List.of(), GameScheduler.failures());
+	}
+
+	/**
+	 * The world the locks are recorded in is in the truth profile as the server loaded it, not only as the files say: every switch of every custom module is off but the races allowed, and private stores may stand anywhere (TruthProfile).
+	 */
+	@Test
+	@Order(1)
+	void theTruthProfileIsInForce() throws IOException, ReflectiveOperationException
+	{
+		final Path configClasses = Path.of(System.getProperty("lc.classes.dir"), "org", "l2jmobius", "gameserver", "config", "custom");
+		final List<String> on = new ArrayList<>();
+		try (var files = Files.list(configClasses))
+		{
+			for (Path file : files.filter(path -> path.toString().endsWith(".class") && !path.getFileName().toString().contains("$")).sorted().toList())
+			{
+				final String name = "org.l2jmobius.gameserver.config.custom." + file.getFileName().toString().replace(".class", "");
+				if (name.endsWith(".AllowedPlayerRacesConfig"))
+				{
+					continue;
+				}
+				for (Field field : Class.forName(name).getFields())
+				{
+					if (Modifier.isStatic(field.getModifiers()) && (field.getType() == boolean.class) && field.getBoolean(null))
+					{
+						on.add(name + "." + field.getName());
+					}
+				}
+			}
+		}
+		assertEquals(List.of(), on);
+		assertEquals(0, PrivateStoreRangeConfig.SHOP_MIN_RANGE_FROM_NPC);
+		assertEquals(0, PrivateStoreRangeConfig.SHOP_MIN_RANGE_FROM_PLAYER);
 	}
 
 	/**

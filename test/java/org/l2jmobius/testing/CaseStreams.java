@@ -1,7 +1,9 @@
 package org.l2jmobius.testing;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.random.RandomGenerator;
 
@@ -14,7 +16,7 @@ import org.l2jmobius.gameserver.livingchronicle.clock.GameScheduler;
  * A task draws on the stream of whatever scheduled it, so the hits, casts and effects a case starts draw on the case's stream however late they land, while the world's own timers (doors, script events, spawns) draw on the world's stream even when they fall due inside a case. Neither then moves the other: a change to some script elsewhere in the world does not change a case's draws, and a case does not change the world's.
  * </p>
  * <p>
- * The server's task managers serve the whole world, and run on the world's stream whoever made them. Inside the two that serve many actors in one loop and draw for them, moving and thinking, each actor's turn draws on the stream of the case it belongs to: an actor in the {@link Arena} while a case is open is that case's, any other is the world's (the arena is open sea far from every spawn, so the world's actors are never there). The test agent hands those turns to {@link ActorStreams}. A few more managers serve every actor of their kind and draw nothing with no player near (following, combat stance, seeing, automation, flagging); whatever they draw while a case is open is the case's actors', so they run on the open case's stream then. Decay and idle animation stay on the world's: scripts kill NPCs with no player near, and idle animation keeps every NPC it has seen, deleted ones too, drawing when each next turns; what it draws for is cosmetic.
+ * The server's task managers serve the whole world, and run on the world's stream whoever made them. Inside the ones that serve many actors in one loop and draw for them (moving, thinking, decaying, respawning), each actor's turn draws on the stream it belongs to: a dead NPC decayed by the decay manager and brought back by the respawn manager on the stream its death was on ({@link #own}); otherwise an actor in the {@link Arena} while a case is open is that case's, any other is the world's (the arena is open sea far from every spawn, so the world's actors are never there). The test agent hands those turns to {@link ActorStreams}. A few more managers serve every actor of their kind and draw nothing with no player near (following, combat stance, seeing, automation, flagging); whatever they draw while a case is open is the case's actors', so they run on the open case's stream then. Idle animation stays on the world's: what it draws for is cosmetic, and the cases' NPCs are on its list only while they stand in the arena.
  * </p>
  */
 final class CaseStreams implements GameScheduler.TaskContext
@@ -36,6 +38,9 @@ final class CaseStreams implements GameScheduler.TaskContext
 	private final SimulationRandom _random;
 	private final RandomGenerator _world;
 	private volatile RandomGenerator _case;
+
+	/** Actors whose next turn belongs to a stream other than the one the loop would choose, by object id. */
+	private final Map<Integer, RandomGenerator> _owners = new ConcurrentHashMap<>();
 
 	/**
 	 * @param random the generator every simulation thread is bound to, drawing on the world's stream.
@@ -90,6 +95,58 @@ final class CaseStreams implements GameScheduler.TaskContext
 		final RandomGenerator open = _case;
 		final RandomGenerator previous = _random.source();
 		_random.use(((open != null) && Arena.contains(actor)) ? open : _world);
+		try
+		{
+			return call.get();
+		}
+		finally
+		{
+			_random.use(previous);
+		}
+	}
+
+	/**
+	 * Records that {@code actor} belongs to the stream drawn on now, until {@link #asOwner} takes it: a spawn putting its dead NPC on the respawn list does this, so that the NPC comes back on the stream its death was on, however much the world has drawn meanwhile.
+	 */
+	void own(WorldObject actor)
+	{
+		_owners.put(actor.getObjectId(), _random.source());
+	}
+
+	/**
+	 * Does {@code call} on the stream {@code actor} was recorded as belonging to, and forgets the record; on the stream {@link #asActor} would choose if there is none.
+	 */
+	<T> T asOwner(WorldObject actor, Supplier<T> call)
+	{
+		final RandomGenerator owner = _owners.remove(actor.getObjectId());
+		if (owner == null)
+		{
+			return asActor(actor, call);
+		}
+		final RandomGenerator previous = _random.source();
+		_random.use(owner);
+		try
+		{
+			return call.get();
+		}
+		finally
+		{
+			_random.use(previous);
+		}
+	}
+
+	/**
+	 * Does {@code call} on the stream {@code actor} was recorded as belonging to, and forgets the record; on the stream drawn on now if there is none.
+	 */
+	<T> T asOwnerIfAny(WorldObject actor, Supplier<T> call)
+	{
+		final RandomGenerator owner = _owners.remove(actor.getObjectId());
+		if (owner == null)
+		{
+			return call.get();
+		}
+		final RandomGenerator previous = _random.source();
+		_random.use(owner);
 		try
 		{
 			return call.get();

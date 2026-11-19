@@ -1,5 +1,7 @@
 package org.l2jmobius.gameserver;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -74,6 +76,34 @@ class ConfigLockTest
 			}
 		}
 		Golden.repository().assertMatches("config/settings.tsv", lines);
+	}
+
+	/**
+	 * Nothing custom is left switched on: in the staged files, a setting of a custom module is true only where on is retail.
+	 */
+	@Test
+	void noCustomSwitchIsLeftOn() throws IOException
+	{
+		TruthProfile.apply(Path.of(""));
+		final List<String> on = new ArrayList<>();
+		try (var files = Files.list(Path.of("config", "Custom")))
+		{
+			for (Path file : files.filter(path -> path.toString().endsWith(".ini")).sorted().toList())
+			{
+				if (file.getFileName().toString().equals("AllowedPlayerRaces.ini"))
+				{
+					continue;
+				}
+				for (String line : Files.readAllLines(file, StandardCharsets.UTF_8))
+				{
+					if (!line.strip().startsWith("#") && line.matches("(?i)^\\s*[A-Za-z0-9_]+\\s*=\\s*true\\s*$"))
+					{
+						on.add(file.getFileName() + ": " + line.strip());
+					}
+				}
+			}
+		}
+		assertEquals(List.of(), on);
 	}
 
 	private static String setting(String file, String line)

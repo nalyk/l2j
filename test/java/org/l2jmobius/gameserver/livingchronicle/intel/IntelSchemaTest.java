@@ -44,7 +44,7 @@ class IntelSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(trace(4, "3", "NOW(3) + INTERVAL 5 MINUTE", "NOW(3) + INTERVAL 1 MINUTE")), "expiring before it is disclosable");
 
 			// Intel is never exact; one item per trace; an item never outlives its trace.
-			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'EXACT_INTERNAL'", "NOW(3) + INTERVAL 30 MINUTE")));
+			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'EXACT_INTERNAL'", TRACE_1_EXPIRY)), "an exact precision, with an otherwise valid row");
 			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'REGION'", "NOW(3) + INTERVAL 2 HOUR")), "an item outliving its trace");
 			assertThrows(SQLException.class, () -> statement.execute(intel(1, "'REGION'", "NOW(3) + INTERVAL 30 MINUTE")), "an item expiring before its trace, which could be purged and replaced");
 			statement.execute(intel(1, "'REGION'", TRACE_1_EXPIRY));

@@ -46,7 +46,7 @@ TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (K
 TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",,,,,,,,blueprint
 TR-aden-remembers,90 §2,Aden Remembers,12; 04 §1 (Fact Journal),,,,,,,,blueprint
 TR-living-world-director,90 §2,Living World Director,12; 04 §1 (Fact Journal),,,,,,,,blueprint
-TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13;FACT-R15;FACT-R16;FACT-R17,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13;AT-FACT-03;AT-FACT-15;AT-FACT-16;AT-FACT-06;AT-FACT-18,,specified
+TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13;FACT-R15;FACT-R16;FACT-R17,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13;AT-FACT-03;AT-FACT-15;AT-FACT-16;AT-FACT-06;AT-FACT-18,,reviewed
 TR-regional-state-engine,90 §2,regional state engine,"12 §1, §6",,,,,,,,blueprint
 TR-political-economic-graph,90 §2,political/economic graph,"12 §1, §6",,,,,,,,blueprint
 TR-resource-pressure,90 §2,resource pressure,"12 §4, §5.1",,,,,,,,blueprint
@@ -57,14 +57,14 @@ TR-boss-ecology-context,90 §2,boss ecology/context (incl. Sea of Spores / Orfen
 TR-anti-zerg-complexity-cost,90 §2,anti-zerg complexity cost,"12 §6.1, §6.3",,,,,,,,blueprint
 TR-dominance-benefits-and-obligations,90 §2,dominance benefits and obligations (App. E.1–E.2),"12 §6.1, §6.3",,,,,,,,blueprint
 TR-newcomer-catch-in,90 §2,newcomer catch-in,12 §5.2; 10 §8,,,,,,,,blueprint
-TR-imperfect-information,90 §2,imperfect information,12 §7; 01 §2.5,intel-service.md,INTEL-R01;INTEL-R02;INTEL-R11;INTEL-R12,lc_trace;lc_intel,,,AT-INTEL-01;AT-INTEL-02;AT-INTEL-14;AT-INTEL-12,,specified
+TR-imperfect-information,90 §2,imperfect information,12 §7; 01 §2.5,intel-service.md,INTEL-R01;INTEL-R02;INTEL-R11;INTEL-R12,lc_trace;lc_intel,,,AT-INTEL-01;AT-INTEL-02;AT-INTEL-14;AT-INTEL-12,,reviewed
 TR-npc-rumors,90 §2,NPC rumors,12 §7; 01 §2.5,,,,,,,,blueprint
 TR-public-living-chronicle,90 §2,public Living Chronicle,17; 12 §9,,,,,,,,blueprint
 TR-persistent-historical-graph,90 §2,persistent historical graph,17; 12 §9,,,,,,,,blueprint
 TR-item-crafter-provenance,90 §2,"item/crafter provenance (item biography, App. E.5)",17 §4,asset-service.md,ASSET-R07,lc_item_lifecycle,,,AT-ASSET-07,,reviewed
 TR-historical-monument,90 §2,historical monument,17 §2,,,,,,,,blueprint
 TR-npc-historical-reference,90 §2,NPC historical reference (App. E.5),17 §2,,,,,,,,blueprint
-TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,intel-service.md,INTEL-R07,lc_trace;lc_intel,,,AT-INTEL-07,,specified
+TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,intel-service.md,INTEL-R07,lc_trace;lc_intel,,,AT-INTEL-07,,reviewed
 TR-deterministic-engine-optional-llm-narration,90 §2,deterministic engine + optional LLM narration,01 §2.6; 17 §6,,,,,,,,blueprint
 TR-npc-reactions-smuggling,90 §2,NPC reactions: smuggling,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
 TR-npc-reactions-corruption,90 §2,NPC reactions: corruption,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
@@ -73,7 +73,7 @@ TR-npc-reactions-banditry,90 §2,NPC reactions: banditry,"12 §5 (situations), �
 TR-npc-reactions-shortages,90 §2,NPC reactions: shortages,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
 TR-npc-reactions-migration,90 §2,NPC reactions: migration,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
 TR-npc-reactions-opportunity,90 §2,NPC reactions: opportunity (App. E.3),"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
-TR-aden-signal-intent-broadcasting,90 §2,Aden Signal: intent broadcasting,13 §1–§5,intel-service.md,INTEL-R13,,,,AT-INTEL-13,,specified
+TR-aden-signal-intent-broadcasting,90 §2,Aden Signal: intent broadcasting,13 §1–§5,intel-service.md,INTEL-R13,,,,AT-INTEL-13,,reviewed
 TR-aden-signal-objective-role-time-language-travel,90 §2,Aden Signal: objective/role/time/language/travel/pace matching,13 §1–§5,,,,,,,,blueprint
 TR-aden-signal-latent-party,90 §2,Aden Signal: latent party,13 §1–§5,,,,,,,,blueprint
 TR-aden-signal-future-sessions,90 §2,Aden Signal: future sessions,13 §1–§5,,,,,,,,blueprint
@@ -82,7 +82,7 @@ TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class pres
 TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,,,,,,,,blueprint
-TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,intel-service.md,INTEL-R03;INTEL-R06,lc_trace;lc_intel,,,AT-INTEL-03;AT-INTEL-06,,specified
+TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,intel-service.md,INTEL-R03;INTEL-R06,lc_trace;lc_intel,,,AT-INTEL-03;AT-INTEL-06,,reviewed
 TR-wayfarer-s-memory-projects-notes,90 §2,Wayfarer's Memory: projects/notes,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observations,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,,,,,,,,blueprint
@@ -111,20 +111,20 @@ TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard C
 TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-broker-shadow-broker,90 §2,Black Ledger: Broker/Shadow Broker,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-dossiers,90 §2,Black Ledger: dossiers,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,intel-service.md,INTEL-R04;INTEL-R10;INTEL-R14,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-10;AT-INTEL-11,,specified
-TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,intel-service.md,INTEL-R04;INTEL-R09,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-09,,specified
+TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,intel-service.md,INTEL-R04;INTEL-R10;INTEL-R14,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-10;AT-INTEL-11,,reviewed
+TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,intel-service.md,INTEL-R04;INTEL-R09,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-09,,reviewed
 TR-black-ledger-clan-hall-constraints,90 §2,Black Ledger: clan-hall constraints,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-tavern-rumors,90 §2,Black Ledger: tavern rumors,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,intel-service.md,INTEL-R03,lc_trace;lc_intel,,,AT-INTEL-03,,specified
-TR-black-ledger-no-offline-gps,90 §2,Black Ledger: no offline GPS,16 §1–§14,fact-journal.md;intel-service.md,FACT-R07;FACT-R08;INTEL-R01,lc_fact_precise;lc_trace;lc_intel,,,AT-FACT-07;AT-FACT-08;AT-INTEL-01,storage side only; disclosure is the Intel Service,specified
+TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,intel-service.md,INTEL-R03,lc_trace;lc_intel,,,AT-INTEL-03,,reviewed
+TR-black-ledger-no-offline-gps,90 §2,Black Ledger: no offline GPS,16 §1–§14,fact-journal.md;intel-service.md,FACT-R07;FACT-R08;INTEL-R01,lc_fact_precise;lc_trace;lc_intel,,,AT-FACT-07;AT-FACT-08;AT-INTEL-01,storage side only; disclosure is the Intel Service,reviewed
 TR-black-ledger-informants,90 §2,Black Ledger: informants,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,intel-service.md,INTEL-R02;INTEL-R05;INTEL-R11;INTEL-R12,lc_trace;lc_intel,,,AT-INTEL-02;AT-INTEL-05;AT-INTEL-14;AT-INTEL-12,,specified
+TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,intel-service.md,INTEL-R02;INTEL-R05;INTEL-R11;INTEL-R12,lc_trace;lc_intel,,,AT-INTEL-02;AT-INTEL-05;AT-INTEL-14;AT-INTEL-12,,reviewed
 TR-black-ledger-counter-intelligence,90 §2,Black Ledger: counter-intelligence,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-you-feel-watched,90 §2,"Black Ledger: ""you feel watched""",16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-trail-manipulation,90 §2,Black Ledger: trail manipulation,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,intel-service.md,INTEL-R08,lc_trace;lc_intel,,,AT-INTEL-08,,specified
-TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,intel-service.md,INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-10,,specified
-TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,intel-service.md,INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-10,,specified
+TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,intel-service.md,INTEL-R08,lc_trace;lc_intel,,,AT-INTEL-08,,reviewed
+TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,intel-service.md,INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-10,,reviewed
+TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,intel-service.md,INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-10,,reviewed
 TR-black-ledger-hunter-ranks,90 §2,Black Ledger: hunter ranks,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-information-only-progression,90 §2,Black Ledger: information-only progression,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-conditional-contracts,90 §2,Black Ledger: conditional contracts,16 §1–§14,,,,,,,,blueprint
@@ -168,13 +168,13 @@ TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,,,,,,
 TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, §6; 10 §5.2",,,,,,,,blueprint
 TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
 TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02;ACTOR-R10,lc_account,,,AT-ACTOR-02;AT-ACTOR-00;AT-ACTOR-10,,reviewed
-TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10;AT-FACT-06,,specified
+TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10;AT-FACT-06,,reviewed
 TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
 TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,reviewed
-TR-persistence,90 §3,persistence,04 §9,asset-service.md;fact-journal.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28;FACT-R17,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28;AT-ASSET-01;AT-ASSET-09;AT-ASSET-02;AT-FACT-02,,specified
+TR-persistence,90 §3,persistence,04 §9,asset-service.md;fact-journal.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28;FACT-R17,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28;AT-ASSET-01;AT-ASSET-09;AT-ASSET-02;AT-FACT-02,,reviewed
 TR-migrations,90 §3,migrations,04 §9,asset-service.md,ASSET-R08;ASSET-R09,sql/migrations/V010__lc_asset.sql,,,AT-ASSET-00;AT-ASSET-08;AT-ASSET-26;AT-ASSET-09,AssetSchemaTest,reviewed
-TR-safe-failure-modes,90 §3,safe failure modes,04 §8,asset-service.md;fact-journal.md,ASSET-R15;ASSET-R17;ASSET-R22;FACT-R16,lc_module_state,,,AT-ASSET-15;AT-ASSET-21;AT-ASSET-22;AT-FACT-16,,specified
-TR-performance-aggregation,90 §3,performance aggregation,02 §6; 04 §1,asset-service.md;fact-journal.md,ASSET-R12;ASSET-R21;FACT-R03;FACT-R06;FACT-R14,lc_economy_bucket;lc_economy_census;lc_economy_counter;lc_telemetry_bucket,,,AT-ASSET-12;AT-ASSET-30;AT-FACT-03;AT-FACT-06;AT-FACT-14,economy telemetry only; the Fact Journal spec owns the rest,specified
+TR-safe-failure-modes,90 §3,safe failure modes,04 §8,asset-service.md;fact-journal.md,ASSET-R15;ASSET-R17;ASSET-R22;FACT-R16,lc_module_state,,,AT-ASSET-15;AT-ASSET-21;AT-ASSET-22;AT-FACT-16,,reviewed
+TR-performance-aggregation,90 §3,performance aggregation,02 §6; 04 §1,asset-service.md;fact-journal.md,ASSET-R12;ASSET-R21;FACT-R03;FACT-R06;FACT-R14,lc_economy_bucket;lc_economy_census;lc_economy_counter;lc_telemetry_bucket,,,AT-ASSET-12;AT-ASSET-30;AT-FACT-03;AT-FACT-06;AT-FACT-14,economy telemetry only; the Fact Journal spec owns the rest,reviewed
 TR-citizens-of-aden-and-the-genesis-epoch,90 §4,Citizens of Aden and the Genesis Epoch,10,actor-identity.md,ACTOR-R08,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-08,,reviewed
 TR-relationship-ledger,90 §4,relationship ledger,10 §7,,,,,,,,blueprint
 TR-crown-law,90 §4,Crown Law,12 §6.2,asset-service.md,ASSET-R05;ASSET-R13,lc_custody(POOL);castle.treasury,,,AT-ASSET-05;AT-ASSET-13,treasury commitments only; laws themselves are Aden Remembers,reviewed

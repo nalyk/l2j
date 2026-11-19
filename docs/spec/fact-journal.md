@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 8, answering seven adversarial review rounds; record in §12)
+- Status: reviewed (revision 8; signed off by Codex, a different model family, in round 8; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -487,6 +487,8 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Round 8 (Codex), **SIGN-OFF**. Remaining are named implementation obligations: allocation behaviour, memory ordering,
+  slot retirement, actuator reconstruction, supervisor recovery and measured latency, each with its acceptance test.
 - Round 7 (Codex), NO SIGN-OFF: one open, the lease scan ran before maintenance held the retention rows, so a lease
   inserted during the scan escaped it. Revision 8: maintenance takes the retention rows exclusively first and holds them
   through the watermark update, then scans the leases.

@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: reviewed (revision 5; signed off with one test fix by Codex, a different model family, in round 5; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -338,6 +338,10 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Round 5 (Codex), **SIGN-OFF WITH FIXES**: one test fix, made (the exact-precision assertion now uses an otherwise
+  valid row, so only the precision can fail it). Remaining are named implementation obligations: authorisation,
+  grant-preserving Wayfarer reads, payload validation, the copy scan, purge and restore, publication validation and the
+  sampling benchmark, each with its acceptance test.
 - Round 4 (Codex), NO SIGN-OFF: one open, an item expiring before its trace could be purged and replaced by a finer one.
   Revision 5: an item expires exactly with its trace (trigger); shorter lives are the grants'.
 - Round 3 (Codex), NO SIGN-OFF: open were Wayfarer recall able to create a grant wider than the one it came from,

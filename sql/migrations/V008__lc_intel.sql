@@ -8,7 +8,7 @@
 CREATE TABLE lc_trace (
 	trace_id BIGINT NOT NULL AUTO_INCREMENT,
 	subject_char INT NOT NULL,
-	kind ENUM('SIGHTING', 'GATEKEEPER', 'WAREHOUSE', 'MERCHANT', 'LOGIN', 'KILL', 'INFORMANT', 'OTHER') NOT NULL,
+	kind ENUM('SIGHTING', 'GATEKEEPER', 'WAREHOUSE', 'MERCHANT', 'LOGIN', 'KILL', 'INFORMANT', 'OTHER', 'RUMOR', 'IDENTITY') NOT NULL,
 	witness_ref VARCHAR(32) NOT NULL,
 	zone_id INT NULL,
 	region_id SMALLINT NOT NULL,
@@ -70,8 +70,9 @@ CREATE TABLE lc_intel (
 
 CREATE TRIGGER lc_trace_evidence_within_trace BEFORE INSERT ON lc_trace_evidence FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND NEW.expires_at = expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: evidence expires exactly with its trace'; END IF;
 
--- An item expires exactly with its trace, so it is never purged and replaced while its trace lives (spec §4.5).
-CREATE TRIGGER lc_intel_within_trace BEFORE INSERT ON lc_intel FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND expires_at = NEW.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an item expires exactly with its trace'; END IF;
+-- An item expires exactly with its trace, so it is never purged and replaced while its trace lives (spec §4.5). An item of a
+-- planted rumor is always RUMOR; an item of identity evidence never carries an area (spec §4.8).
+CREATE TRIGGER lc_intel_within_trace BEFORE INSERT ON lc_intel FOR EACH ROW BEGIN DECLARE trace_kind VARCHAR(16); SELECT kind INTO trace_kind FROM lc_trace WHERE trace_id = NEW.trace_id AND expires_at = NEW.expires_at; IF trace_kind IS NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an item expires exactly with its trace'; END IF; IF trace_kind = 'RUMOR' AND NEW.confidence <> 'RUMOR' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: a rumor is only ever a rumor'; END IF; IF trace_kind = 'IDENTITY' AND NEW.precision_level <> 'NONE' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: identity evidence never discloses an area'; END IF; END;
 
 CREATE TABLE lc_intel_grant (
 	intel_id BIGINT NOT NULL,

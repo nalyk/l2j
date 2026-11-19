@@ -96,6 +96,13 @@ class IntelSchemaTest
 				assertEquals(0, result.getInt(1));
 			}
 
+			// A planted rumor yields only rumors; identity evidence never an area.
+			statement.execute("INSERT INTO lc_trace (trace_id, subject_char, kind, witness_ref, region_id, occurred_at, disclosable_at, expires_at, sensitivity) VALUES (8, 268477000, 'RUMOR', 'rumor:7', 12, NOW(3), NOW(3) + INTERVAL 5 MINUTE, NOW(3) + INTERVAL 1 HOUR, 1), (9, 268477000, 'IDENTITY', 'broker:giran', 12, NOW(3), NOW(3) + INTERVAL 5 MINUTE, NOW(3) + INTERVAL 1 HOUR, 3)");
+			assertThrows(SQLException.class, () -> statement.execute(intelOf(8, "'TERRITORY'", "'WITNESS'")), "a rumor disclosed as a witness's");
+			statement.execute(intelOf(8, "'TERRITORY'", "'RUMOR'"));
+			assertThrows(SQLException.class, () -> statement.execute(intelOf(9, "'REGION'", "'CONFIRMED'")), "identity evidence with an area");
+			statement.execute(intelOf(9, "'NONE'", "'CONFIRMED'"));
+
 			// The journal's expiring tables are in the registry too.
 			try (ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM lc_expiring_table WHERE table_name IN ('lc_fact_precise', 'lc_fact_expiring', 'lc_trace', 'lc_trace_evidence', 'lc_intel', 'lc_intel_grant', 'lc_intel_copy', 'lc_disclosure', 'lc_disclosure_cell', 'lc_signal_presence')"))
 			{
@@ -120,6 +127,11 @@ class IntelSchemaTest
 	private static String grant(long intelId, String audience, String precision, String expires)
 	{
 		return "INSERT INTO lc_intel_grant (intel_id, audience_kind, audience_id, purpose, granted_at, view_precision, expires_at) VALUES (" + intelId + ", " + audience + ", NOW(3), " + precision + ", " + expires + ")";
+	}
+
+	private static String intelOf(long trace, String precision, String confidence)
+	{
+		return "INSERT INTO lc_intel (trace_id, kind, subject_char, precision_level, confidence, payload_type, payload, age_band, created_at, expires_at, shareable, publishable) VALUES (" + trace + ", 'OTHER', 268477000, " + precision + ", " + confidence + ", 'Typed', '{}', 'FRESH', NOW(3), (SELECT expires_at FROM lc_trace WHERE trace_id = " + trace + "), TRUE, FALSE)";
 	}
 
 	private static String copy(String rowKey, long intelId, String expires)

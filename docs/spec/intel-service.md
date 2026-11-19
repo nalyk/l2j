@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: reviewed (revision 5; signed off with one test fix by Codex, a different model family, in round 5; record in §12)
+- Status: draft (revision 6: the Black Ledger's operations added after the round-5 sign-off; under review with black-ledger.md; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -45,7 +45,7 @@ Confidence: `CONFIRMED`, `WITNESS`, `INFERRED`, `RUMOR` (unverified; false trail
 ### 2.2 Tables
 
 ```text
-lc_trace(trace_id BIGINT PK auto, subject_char INT, kind {SIGHTING|GATEKEEPER|WAREHOUSE|MERCHANT|LOGIN|KILL|INFORMANT|OTHER},
+lc_trace(trace_id BIGINT PK auto, subject_char INT, kind {SIGHTING|GATEKEEPER|WAREHOUSE|MERCHANT|LOGIN|KILL|INFORMANT|OTHER|RUMOR|IDENTITY},
          witness_ref VARCHAR(32), zone_id INT NULL, region_id SMALLINT, territory_id SMALLINT NULL, coarse_dir TINYINT NULL,
          occurred_at TIMESTAMP(3), disclosable_at TIMESTAMP(3), expires_at TIMESTAMP(3), sensitivity TINYINT)
 lc_trace_evidence(trace_id BIGINT PK, x INT, y INT, z INT, instance_id INT, observer_x INT, observer_y INT, observed_ms INT,
@@ -135,6 +135,9 @@ when submitted in person to the Broker; the Black Ledger's linkage rules (16 §8
 ```java
 Disclosure  intel.disclose(Requester requester, Purpose purpose, WitnessRef witness, int subjectChar, Precision asked);
 Optional<IntelView> intel.read(long intelId, Requester reader);
+void        intel.suppress(Connection tx, WitnessRef witness, int subjectChar, Instant until, long bribeFactId);
+long        intel.plantRumor(Connection tx, int subjectChar, int territoryId, Duration life, long payerFactId);
+long        intel.recordIdentity(Connection tx, int subjectChar, IdentityKind kind, WitnessRef witness, IdentityPayload payload, Duration life);
 void        intel.registerCopies(Connection tx, String module, String table, String rowKey, long... intelIds);
 PublicationDecision intel.publishable(PubRow row);
 ```
@@ -187,7 +190,10 @@ service's answers; what players learn by other means (seeing the subject themsel
 
 | Purpose | Ceiling | Lifetime | Other rules |
 |---|---|---|---|
-| Ledger questioning | the witness kind's | the trace's | requester in person; a contract naming the subject |
+| Ledger questioning (`LEDGER_QUESTIONING`) | the witness kind's, and the hunter's rank's (black-ledger.md §4.1) | the trace's | requester in person; an active acceptance or a Writ naming the subject |
+| Ledger rumors (`LEDGER_RUMOR`) | `TERRITORY`, confidence always `RUMOR` | the trace's | requester in person at an information NPC; any registered hunter; real traces of the subject and planted `RUMOR` traces alike |
+| Ledger sightings (`LEDGER_INFORMANT`) | the informant witness kind's | the trace's | requester in person at a Broker; an active acceptance naming the subject; only `INFORMANT` traces |
+| Ledger identity (`LEDGER_IDENTITY`, `LEDGER_REVERSE`) | `NONE` | the evidence's | §4.8 |
 | Signal location | `REGION` | `SignalLocationTtlMinutes` | only characters who opted in (`lc_signal_presence`), are `INTERACTIVE` (actor-identity.md §2.3), have not blocked the requester, and whose Signal visibility (13 §4: everyone, alliance, clan, nobody) includes the requester; offline actors never; checked at disclosure and again at every read |
 | Wayfarer recall | the character's existing grant's view | the existing grant's | creates no grant: Wayfarer reads through the character's existing grant, so its view, expiry and every revocation (an opt-out, a block, a membership change) apply unchanged |
 | publication | §4.7 | — | — |
@@ -227,9 +233,31 @@ moment.
 public entity, such as a castle, a clan, a hero; an area at `TERRITORY` or coarser; a day; a count; text taken from a
 fact). An unknown type or field is refused (fail closed). Every type has a minimum delay before a row may be written
 about an event; a **location-related** type (a battle map, a saga replay, a raid, anything naming an area and a time)
-has at least `PublicationTacticalDelayMinutes` (default 1440, 17 §1's "≥24 h"), and the registry refuses a lower one. Sealed contract terms, hidden identities (aliases, informants, marks) and anything
-derived from intel are never publishable. The website and narrator read the `lc_pub_*` tables with a database user that
+has at least `PublicationTacticalDelayMinutes` (default 1440, 17 §1's "≥24 h"), and the registry refuses a lower one. Sealed contract terms, hidden identities (aliases, informants, marks, depositors) and anything
+derived from intel are never publishable, with two registered exceptions, each limited to its type's fields: a Writ's
+mark and open total on `ledger_wanted` (Writs are public by design, 16 §2), and a terminal Black Contract's mark and the
+hunter's alias on `ledger_legend` after the tactical delay (16 §6, §11); a depositor, an informant or an alias's owner is
+never publishable. The website and narrator read the `lc_pub_*` tables with a database user that
 can read nothing else (04 §4).
+
+### 4.8 The Black Ledger's operations
+
+- **Suppression** (`suppress`): a bribe paid by the subject at a witness. Allowed only for witness kinds marked bribable in
+  the witness kinds table (gatekeepers, warehouse keepers, merchants, information NPCs; never guards, Magistrates or
+  clan-hall stewards), for at most the kind's maximum; it writes `lc_witness_suppression` and `Intel.Suppressed`. A
+  suppressed witness answers exactly as one with nothing (INTEL-R08, §4.3); the trace and its audit stay.
+- **Rumors** (`plantRumor`): a `RUMOR` trace of the subject in a territory of the payer's choosing, witnessed by the rumor
+  network (`witness_ref` `rumor:<territory>`), with the payer's life (at most the `RECENT` band's end). Its items have
+  confidence `RUMOR` always (a trigger refuses any other), it is disclosed only under `LEDGER_RUMOR`, and the real traces
+  disclosed there are also shown at `RUMOR` and `TERRITORY`, so a planted rumor and a real one look alike and both are
+  labelled as rumor (16 §4). It never becomes `WITNESS`, `CONFIRMED` or history.
+- **Identity evidence** (`recordIdentity`): an `IDENTITY` trace recorded by the Black Ledger at one of its certified
+  events, with a typed payload and precision `NONE` (no area is ever disclosed from it): `ALIAS_LINK` (alias → character;
+  witness: the victim of an `AT_KILL` calling card, black-ledger.md §4.10), `PATRON_CLAN` and `PATRON_NAME` (the
+  depositor's clan and character, or `OBSCURED` under sealed identity; witness: the Broker of the contract, recorded when a
+  seal is issued, black-ledger.md §4.9). `LEDGER_IDENTITY` discloses an `ALIAS_LINK` to a buyer at a Broker in person;
+  `LEDGER_REVERSE` discloses `PATRON_*` only to the holder of the seal it was recorded for, at a Magistrate in person, in
+  the order of the reverse case's steps. No other module may record identity evidence, and no other purpose may disclose it.
 
 ## 5. Facts
 
@@ -238,6 +266,8 @@ can read nothing else (04 §4).
 | `Intel.Disclosed` | outbox | intel id, requester (char), purpose, precision, units spent, granted (true for a grant of an existing item) |
 | `Intel.Suppressed` | outbox | witness, subject, until, bribe fact |
 | `Intel.Purged` | outbox | counts of traces, items, grants and copies deleted |
+| `Intel.RumorPlanted` | outbox | trace, territory, life, payer fact (the subject only inside the expiring trace) |
+| `Intel.IdentityRecorded` | outbox | trace, kind, witness kind (never the payload) |
 
 No fact names a subject's place, a witness's place or a trace's time.
 
@@ -279,7 +309,7 @@ No fact names a subject's place, a witness's place or a trace's time.
 | `TraceLifeHot/Recent/StaleMinutes` | 1–1440 | 15 / 60 / 360 | as default everywhere | AT-INTEL-03 |
 | `SignalLocationTtlMinutes` | 1–60 | 10 | 10 everywhere | AT-INTEL-13 |
 
-Tables in the same file, with their values reviewed like the spec: witness kinds (range, minimum observation, ceiling);
+Tables in the same file, with their values reviewed like the spec: witness kinds (range, minimum observation, ceiling, bribable, maximum suppression);
 the unit cost of the *n*-th disclosure about a subject from a witness in a window (default 1, 2, 4, 8, …) and the
 precision each cumulative cost allows (default: up to 2 units `ZONE`, up to 6 `REGION`, up to 14 `TERRITORY`, then `NONE`).
 
@@ -307,6 +337,8 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | INTEL-R12 | The implied areas of positive answers about a subject in a window MUST NOT intersect below `MinCombinedCells`, and a refusal MUST be indistinguishable from an absence. | AT-INTEL-12 |
 | INTEL-R13 | Signal locations MUST be at most `REGION`, live `SignalLocationTtlMinutes`, and cover only opted-in, interactive, non-blocking characters whose visibility includes the requester, checked at every read. | AT-INTEL-13 |
 | INTEL-R14 | Every evidence-driven change of an answer (appearance, age band, expiry) MUST happen on the quantum grid. | AT-INTEL-11 |
+| INTEL-R15 | Suppression MUST apply only to bribable witness kinds within their maximum; a planted rumor MUST be disclosed only under `LEDGER_RUMOR`, always at `RUMOR` confidence, alongside real traces shown the same way. | AT-INTEL-15 |
+| INTEL-R16 | Identity evidence MUST be recorded only by the Black Ledger at its certified events, carry precision `NONE`, and be disclosed only under `LEDGER_IDENTITY` and `LEDGER_REVERSE` by their rules. | AT-INTEL-16 |
 
 | Test | Kind | What it does |
 |---|---|---|
@@ -325,6 +357,8 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | AT-INTEL-12 | integration | cooperating requesters asking several witnesses (ranges overlapping, directions given) about one subject: the intersection of the implied cells of their answers never falls below the floor within a window; a refused answer is byte-equal and price-equal to an answer about no trace |
 | AT-INTEL-13 | integration | Signal: a non-opted-in, offline, detached, blocking or not-visible-to-the-requester character is never located; an opted-in one only at `REGION`, for the TTL; an opt-out or block after a grant hides it at the next read |
 | AT-INTEL-14 | integration | a disclosure asked remotely, for another contract, with a forged budget or audience, or by a non-party: refused; a reader who left the clan or contract of a grant reads nothing |
+| AT-INTEL-15 | integration | a bribe at a guard refused, at a gatekeeper beyond the kind's maximum capped; a planted rumor never disclosed under another purpose, never above `RUMOR`; real and planted rumors of one subject indistinguishable in fields |
+| AT-INTEL-16 | integration, unit | identity evidence recorded by another module refused (static scan and a database grant); an `ALIAS_LINK` disclosed only at a Broker in person; `PATRON_*` only to the seal's holder and in step order; no identity item carries an area |
 
 ## 11. Upstream constraints
 
@@ -338,6 +372,9 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Revision 6 (after the round-5 sign-off): the Black Ledger (black-ledger.md) needs suppression, planted rumors and
+  identity evidence as Intel operations, two trace kinds, four purposes and two registered publication exceptions; they
+  are added here and go to review with the Ledger's first round.
 - Round 5 (Codex), **SIGN-OFF WITH FIXES**: one test fix, made (the exact-precision assertion now uses an otherwise
   valid row, so only the precision can fail it). Remaining are named implementation obligations: authorisation,
   grant-preserving Wayfarer reads, payload validation, the copy scan, purge and restore, publication validation and the

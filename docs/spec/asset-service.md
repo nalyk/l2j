@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 8; signed off by Codex in round 7, its revision-8 amendment for PACT reviewed with pact.md through PACT round 4; record in §12)
+- Status: draft (revision 9: the Black Ledger's codes added after the revision-8 sign-off; under review with black-ledger.md; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -155,11 +155,13 @@ change.
 | `CRAFT_OUTPUT` | SOURCE | contract | a contractual craft's product, created exactly as retail creates it in an inventory, and sent straight to the client by system mail (pact.md §4.3) |
 | `LOOT_DROP` | SOURCE | charter | a kill's drops routed by a Loot Charter (pact.md §4.5), the same items and counts the kill made: reserved and rotated ones sent straight to their receiver by system mail, auctioned (custody-eligible) ones into the charter's custody, instead of on the ground or in an inventory |
 | `PACT_PARCHMENT` | SOURCE | contract | the non-tradable Notarized Contract item of a signed contract (pact.md §4.8) |
+| `LEDGER_SEAL` | SOURCE | Ledger contract | the non-tradable, valueless Torn Black Seal given by system mail to a mark who killed a hunter of a Black Contract on them (black-ledger.md §4.9) |
+| `FEE_BRIBE` | SINK | — | a bribe paid to a witness NPC (black-ledger.md §4.7) |
 
 Living Chronicle mints nothing for players: a `TOWN_SUPPLY` source is matched by the supply budget it draws down (owned
 by Aden Remembers); `CRAFT_OUTPUT` and `LOOT_DROP` create exactly what the retail craft or kill would have created at
 that moment, by the same retail code through the crafting and loot seams (03 §4.2-§4.3), only into system mail or a
-custody instead of an inventory or the ground; `PACT_PARCHMENT` is a non-tradable representation with no value; every other source is an
+custody instead of an inventory or the ground; `PACT_PARCHMENT` and `LEDGER_SEAL` are non-tradable representations with no value; every other source is an
 audited correction. Each is a classified site (§2.7).
 
 ### 2.6 The economy monitor
@@ -357,7 +359,7 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
-| `issue(character, parchment)` | `PACT_PARCHMENT` source → system mail | `Asset.ParchmentIssued` |
+| `issue(character, item, code)` | a representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`) source → system mail | `Asset.ParchmentIssued` or `Asset.SealIssued` |
 | `close(custody)` | `OPEN` → `CLOSED`, empty only | `Asset.CustodyClosed` |
 | `correct(...)`, `unfreeze(module)` | admin (§4.5) | `Asset.AdminCorrection` |
 | `recover()` | startup, before any login (§7) | `Asset.RecoveryCompleted` |
@@ -396,7 +398,7 @@ All durable (04 §1.1), written in the operation's transaction, `op_id` set.
 | `Asset.TreasuryCommitted`, `Asset.TreasuryReturned` | castle, custody, amount |
 | `Asset.Crafted` | contract, attempt, input legs, output legs (none on failure) |
 | `Asset.LootRouted` | charter, kill (npc object id and incarnation), source legs, receivers and their mails |
-| `Asset.ParchmentIssued` | contract, character, mail |
+| `Asset.ParchmentIssued`, `Asset.SealIssued` | contract, character, mail, lifecycle id |
 | `Asset.SupplyEntered`, `Asset.SupplyArrived`, `Asset.ManifestRaided` | custody, code, reference, legs |
 | `Asset.Refunded` | aborted op, receiver and mail, legs (written by the refund transaction) |
 | `Asset.CustodyClosed`, `Asset.CustodyFrozen` | custody, reason |
@@ -487,7 +489,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R11 | Service mail MUST be built as §2.1 says (not rejectable, not cash on delivery, never expiring) and MUST keep its attachments until claimed; the claim itself is retail and has retail's guarantees, no more. | AT-ASSET-11 |
 | ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
-| ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget, audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT` and `LOOT_DROP` exactly as the retail craft or kill computed them at the seam, and the valueless `PACT_PARCHMENT`. | AT-ASSET-14 |
+| ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget, audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT` and `LOOT_DROP` exactly as the retail craft or kill computed them at the seam, and the valueless `PACT_PARCHMENT` and `LEDGER_SEAL`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and the custody, write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
 | ASSET-R16 | Nothing credited MUST be visible to anyone before the operation committed. | AT-ASSET-16 |
 | ASSET-R17 | An ambiguous commit MUST be resolved by a locking `OpId` read, and MUST NOT be aborted on a timeout. | AT-ASSET-21 |
@@ -519,7 +521,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-11 | integration | service mail as written: rejecting it, deleting it with attachments, waiting past every expiry run, an offline receiver, a full inventory and a full inbox: its attachments survive until claimed; startup cleanup keeps it (DatabaseIdManager.java:68) |
 | AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row and a stale row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
-| AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except `TOWN_SUPPLY` within budget, audited corrections, `CRAFT_OUTPUT` and `LOOT_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), and `PACT_PARCHMENT` of the parchment item only |
+| AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except `TOWN_SUPPLY` within budget, audited corrections, `CRAFT_OUTPUT` and `LOOT_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), and `PACT_PARCHMENT` and `LEDGER_SEAL` of their items only |
 | AT-ASSET-15 | integration | a forged `ESCROW` row under a closed custody: module and custody frozen, evidence written, rows untouched; only a correction commits |
 | AT-ASSET-16 | integration | no mail, client packet or cache update shows a credit before `COMMITTED` |
 | AT-ASSET-17 | unit | startup with `LazyItemsUpdate = True` refused |
@@ -612,6 +614,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
 
 ## 12. Review record
+
+- Revision 9 (after the revision-8 sign-off): the Black Ledger needs the `LEDGER_SEAL` source and the `FEE_BRIBE` sink;
+  `issue` covers both representation items. Under review with black-ledger.md.
 
 - Revision 8 (after the round-7 sign-off): PACT (pact.md) needs four posting codes and three operations: a contractual
   craft consuming materials from a custody and creating its product into one, a Loot Charter's drops created into a

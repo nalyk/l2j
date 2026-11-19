@@ -79,15 +79,15 @@ TR-aden-signal-latent-party,90 §2,Aden Signal: latent party,13 §1–§5,aden-s
 TR-aden-signal-future-sessions,90 §2,Aden Signal: future sessions,13 §1–§5,aden-signal.md,SIG-R05,,,,AT-SIG-06,,reviewed
 TR-aden-signal-no-rewards,90 §2,Aden Signal: no rewards,13 §1–§5,aden-signal.md,SIG-R08,,,,AT-SIG-09,,reviewed
 TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class preservation,13 §1–§5,aden-signal.md,SIG-R08;SIG-R09,,,,AT-SIG-09;AT-SIG-10,,reviewed
-TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,wayfarers-memory.md,MEM-R07;MEM-R09,,,,AT-MEM-07;AT-MEM-09,,specified
-TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,wayfarers-memory.md,MEM-R01;MEM-R05;MEM-R08;MEM-R11,,,,AT-MEM-01;AT-MEM-05;AT-MEM-08;AT-MEM-11,,specified
-TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,wayfarers-memory.md,MEM-R02,,,,AT-MEM-02,,specified
-TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,intel-service.md;wayfarers-memory.md,INTEL-R03;INTEL-R06;MEM-R03,lc_trace;lc_intel,,,AT-INTEL-03;AT-INTEL-06;AT-MEM-03,,specified
-TR-wayfarer-s-memory-projects-notes,90 §2,Wayfarer's Memory: projects/notes,14 §1–§9,wayfarers-memory.md,MEM-R07,,,,AT-MEM-07,,specified
-TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observations,14 §1–§9,wayfarers-memory.md,MEM-R01,,,,AT-MEM-01,,specified
-TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,wayfarers-memory.md,MEM-R02;MEM-R06,,,,AT-MEM-02;AT-MEM-06,,specified
-TR-wayfarer-s-memory-personal-history,90 §2,Wayfarer's Memory: personal history,14 §1–§9,wayfarers-memory.md,MEM-R07,,,,AT-MEM-07,,specified
-TR-wayfarer-s-memory-no-global-wiki,90 §2,Wayfarer's Memory: no global wiki,14 §1–§9,wayfarers-memory.md,MEM-R04;MEM-R09,,,,AT-MEM-04;AT-MEM-09,,specified
+TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,wayfarers-memory.md,MEM-R07;MEM-R09,,,,AT-MEM-07;AT-MEM-09,,reviewed
+TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,wayfarers-memory.md,MEM-R01;MEM-R05;MEM-R08;MEM-R11,,,,AT-MEM-01;AT-MEM-05;AT-MEM-08;AT-MEM-11,,reviewed
+TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,wayfarers-memory.md,MEM-R02,,,,AT-MEM-02,,reviewed
+TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,intel-service.md;wayfarers-memory.md,INTEL-R03;INTEL-R06;MEM-R03,lc_trace;lc_intel,,,AT-INTEL-03;AT-INTEL-06;AT-MEM-03,,reviewed
+TR-wayfarer-s-memory-projects-notes,90 §2,Wayfarer's Memory: projects/notes,14 §1–§9,wayfarers-memory.md,MEM-R07,,,,AT-MEM-07,,reviewed
+TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observations,14 §1–§9,wayfarers-memory.md,MEM-R01,,,,AT-MEM-01,,reviewed
+TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,wayfarers-memory.md,MEM-R02;MEM-R06,,,,AT-MEM-02;AT-MEM-06,,reviewed
+TR-wayfarer-s-memory-personal-history,90 §2,Wayfarer's Memory: personal history,14 §1–§9,wayfarers-memory.md,MEM-R07,,,,AT-MEM-07,,reviewed
+TR-wayfarer-s-memory-no-global-wiki,90 §2,Wayfarer's Memory: no global wiki,14 §1–§9,wayfarers-memory.md,MEM-R04;MEM-R09,,,,AT-MEM-04;AT-MEM-09,,reviewed
 TR-pact-voluntary-contracts,90 §2,PACT: voluntary contracts,15 §1–§7,pact.md,PACT-R01;PACT-R09,,,,AT-PACT-01;AT-PACT-09;AT-PACT-00,,reviewed
 TR-pact-machine-verifiable-clauses,90 §2,PACT: machine-verifiable clauses,15 §1–§7,pact.md,PACT-R04,,,,AT-PACT-04,,reviewed
 TR-pact-crafting-pact,90 §2,PACT: crafting pact,15 §1–§7,pact.md,PACT-R03,,,,AT-PACT-03,,reviewed
@@ -192,13 +192,13 @@ TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
 TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,reviewed
 TR-engineering-doctrine,90 §4,engineering doctrine,02,,,,,,,,blueprint
 TR-remembers-signal-remembers-reads-aggregate-deman,20 §1,Remembers ↔ Signal: Remembers reads aggregate demand; it never manipulates matches toward Director goals,20 §1,aden-signal.md,SIG-R03;SIG-R06,,,,AT-SIG-03;AT-SIG-07,,reviewed
-TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,wayfarers-memory.md,MEM-R03,,,,AT-MEM-03,,specified
+TR-remembers-wayfarer-world-changes-make-personal-k,20 §1,Remembers ↔ Wayfarer: world changes make personal knowledge stale; that tension is exploration,20 §1,wayfarers-memory.md,MEM-R03,,,,AT-MEM-03,,reviewed
 TR-remembers-pact-public-contracts-treaties-mercena,20 §1,"Remembers ↔ PACT: public contracts, treaties, mercenary deals become high-confidence history (no AI inferring politics from chat)",20 §1,,,,,,,,blueprint
 TR-remembers-ledger-big-campaigns-and-notorious-bou,20 §1,Remembers ↔ Ledger: big campaigns and notorious bounties become history; regional politics shift witness behaviour; never reveal targets,20 §1,,,,,,,,blueprint
 TR-remembers-crown-law-ledger-bounty-endowments-fun,20 §1,Remembers ↔ Crown Law ↔ Ledger: Bounty Endowments fund Writs; Amnesty stops new Writs; Caravan Protection funds escorts,20 §1,,,,,,,,blueprint
-TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,aden-signal.md;wayfarers-memory.md,SIG-R03;MEM-R10,,,,AT-SIG-03;AT-MEM-10,,specified
+TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer: ""you hunted with X three times"" as an opt-in soft signal, never a hidden ranking",20 §1,aden-signal.md;wayfarers-memory.md,SIG-R03;MEM-R10,,,,AT-SIG-03;AT-MEM-10,,reviewed
 TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,aden-signal.md,SIG-R10,,,,AT-SIG-11,,reviewed
 TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md;pact.md,ASSET-R01;ASSET-R03;ASSET-R14;PACT-R02,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00;AT-PACT-02,,reviewed
-TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,wayfarers-memory.md,MEM-R06,,,,AT-MEM-06,,specified
+TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,wayfarers-memory.md,MEM-R06,,,,AT-MEM-06,,reviewed
 TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07;ACTOR-R09,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07;AT-ACTOR-09,,reviewed
 TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,,,,,,,,blueprint

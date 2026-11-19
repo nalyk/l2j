@@ -1,6 +1,6 @@
 # SPEC-PACT — PACT and the Notarius
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: reviewed (revision 5; signed off with one fix by Codex, a different model family, in round 4; record in §12)
 - Blueprint: 15 (PACT and the Notarius); 03 §4.2-§4.4 (loot routing, crafting boundary, new events); 04 §3 (Asset
   Service), §5 (Codex), §7 (keyed randomness); 12 §6.2 (Crown Law Market Charters), §8 (Caravan Escort); 17
   (publication); consensus §4.
@@ -282,8 +282,11 @@ Mercenary contract runs (from its start fact to its end fact; the battle id is t
   `dist/game/data/scripts/handlers/skill/effects/StaticDamage.java:54`), and the received-damage event is asynchronous
   (:7206). So PACT uses the **damage seam**, a core patch in `PlayerStatus.reduceHp`
   (`entity/actor/status/PlayerStatus.java:71`) after its refusals (offline no-damage, :80-83; invulnerability, :85-88), at
-  the points where CP or HP is actually lowered (:224-230, :292), when the lowered amount is positive and the attacker's
-  acting player is another player: a synchronous primitive snapshot (attacker, target, amount, time) handed to PACT's
+  every point where a player's CP or HP is actually lowered on an attacker's account: its own CP and HP (:224-230,
+  :292), and **damage transferred** to a caster's CP from a protected player (:198-208) or a protected summon
+  (`entity/actor/status/SummonStatus.java:76-115`), which reaches the caster through `reduceCp` directly and may leave no
+  residual HP damage. At each, when the lowered amount is positive and the original attacker's acting player is another
+  player: a synchronous primitive snapshot (attacker, target, amount, time) handed to PACT's
   in-memory minute counters, which read both players' sides (the siege's registration, attacker, defender or owner, or
   Territory War's siege side, `TerritoryWarManager.java:1226`), clans and the battle at that moment and mark the minute
   active for both;
@@ -409,7 +412,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | AT-PACT-03 | integration, sim | contractual crafts against retail: the same validation refusals and MP cost; over 10⁶ intents per test recipe, the success frequency within the 99.9 % binomial interval of the recipe's rate; an apply aborted at each step and retried, and a restart between intent and apply, give the same outcome; a configuration change after the intent does not change it |
 | AT-PACT-04 | unit | each clause kind's evaluator against a table of inputs and expected results, including boundaries (a deadline at the same millisecond, a member reaching the minutes exactly); the static scan finds no evaluator reading outside its named inputs |
 | AT-PACT-05 | integration | raids and kills with charters and without; the charter's leader disbanding and forming a new party (the new party's kills retail); a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
-| AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, hits on an invulnerable or offline-protected target (no activity), expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
+| AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, hits on an invulnerable or offline-protected target (no activity), damage transferred to a caster's CP leaving no residual HP damage (activity), expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
 | AT-PACT-07 | integration | fees: values and fees computed independently from the terms, charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
 | AT-PACT-08 | integration | publication rows of both types for every visibility; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
 | AT-PACT-09 | integration | acts outside contracts (attacking a treaty party, keeping a lent weapon outside a loan, leaving a party) stay possible; a clan member without the leader's authority cannot sign or fund, and with `ACCESS_WAREHOUSE` can fund only when `AltMembersCanWithdrawFromClanWH` is on |
@@ -431,6 +434,11 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Round 4 (Codex), **SIGN-OFF WITH FIXES**: one fix, made in revision 5: the damage seam also covers damage transferred
+  to a caster's CP (`PlayerStatus.java:198-208`, `SummonStatus.java:76-115`), which bypasses the CP and HP points, with a
+  zero-residual case in AT-PACT-06. The Asset Service amendment (its revision 8) was reviewed in the same rounds. Remaining
+  are named implementation obligations: the crafting, loot and damage seams, the operations, startup checks and the
+  acceptance suites; the precommit crash loss of routed drops is a stated limit.
 - Round 3 (Codex), NO SIGN-OFF: seventeen fixed or accepted; open were a one-key-per-movement rule that repayments and
   splits contradict, §3.2 not listing split and staged units, the Asset source definitions still saying "into custody",
   the damage event firing for refused damage, the failure table contradicting the crash limit, and review tested from one

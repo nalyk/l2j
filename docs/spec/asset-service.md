@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 8: PACT's posting codes and operations added after the round-7 sign-off; under review; record in §12)
+- Status: reviewed (revision 8; signed off by Codex in round 7, its revision-8 amendment for PACT reviewed with pact.md through PACT round 4; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -619,6 +619,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   PACT's first round. PACT round 1 found ASSET-R14, ASSET-R20 and AT-ASSET-14 still forbidding them and their facts
   missing from §5: R14 and its test now admit exactly these sources, equal to the retail seam's computation; R20 covers
   created items; the three facts are in §5.
+  PACT rounds 3-4 aligned the source definitions with direct mail; PACT round 4 signed off the joint text.
 
 - After sign-off, aligned with the Fact Journal (revision 3): facts are staged in `lc_fact_outbox` in the operation's
   transaction and relayed into the log by the journal's writer; a deadlock victim or lock-wait timeout is retried in the

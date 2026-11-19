@@ -1,6 +1,6 @@
 # SPEC-INTEL — Intel Service
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 04 §4 (Intel Service), §8; 01 §2.5 (imperfect information); 02 §3 (the one mechanism for "telling a player
   something they might not be entitled to know"), §12; 03 §4.5 (`canWitness`); 16 §3 (traces, witnesses, budgets,
   confidence), §4 (counter-intelligence), §8 (information under alts and Discord); 13 §3 (Signal: location ≤ REGION,
@@ -53,8 +53,12 @@ lc_intel(intel_id BIGINT PK auto, trace_id BIGINT, kind VARCHAR(32), subject_cha
          confidence {…}, payload_type VARCHAR(32), payload JSON, age_band {FRESH|RECENT|OLD}, created_at TIMESTAMP(3),
          expires_at TIMESTAMP(3), shareable BOOLEAN, publishable BOOLEAN, UNIQUE(trace_id))
 lc_intel_grant(intel_id BIGINT, audience_kind {CHAR|CONTRACT|CLAN}, audience_id INT, purpose VARCHAR(32), granted_at TIMESTAMP(3),
-               PRIMARY KEY(intel_id, audience_kind, audience_id, purpose))
-lc_disclosure(target_char INT, witness_ref VARCHAR(32), at TIMESTAMP(3), units INT, area_id INT, PRIMARY KEY(target_char, witness_ref, at))
+               view_precision {ZONE|REGION|TERRITORY|NONE}, expires_at TIMESTAMP(3), PRIMARY KEY(intel_id, audience_kind, audience_id, purpose))
+lc_disclosure(target_char INT, witness_ref VARCHAR(32), at TIMESTAMP(3), units INT, implied_cells INT, expires_at TIMESTAMP(3),
+              PRIMARY KEY(target_char, witness_ref, at))
+lc_disclosure_cell(target_char INT, at TIMESTAMP(3), cell INT, expires_at TIMESTAMP(3), PRIMARY KEY(target_char, at, cell))
+lc_pub_type(pub_type VARCHAR(48) PK, min_delay_minutes INT, location_related BOOLEAN)
+lc_pub_field_rule(pub_type VARCHAR(48), field VARCHAR(48), rule {PUBLIC_ENTITY|AREA_TERRITORY|DAY|COUNT|TEXT_FROM_FACT}, PRIMARY KEY(pub_type, field))
 lc_intel_copy(module VARCHAR(16), table_name VARCHAR(64), row_key VARCHAR(64), intel_id BIGINT, expires_at TIMESTAMP(3),
               PRIMARY KEY(module, table_name, row_key, intel_id))
 lc_witness_suppression(witness_ref VARCHAR(32), subject_char INT, suppressed_until TIMESTAMP(3), source_fact_id BIGINT, PRIMARY KEY(witness_ref, subject_char))
@@ -66,11 +70,21 @@ lc_expiring_table(table_name VARCHAR(64) PK, expires_column VARCHAR(32), owner_m
   derived from one, is written to the journal**: the journal's `Intel.Disclosed` fact records an intel id, a requester and
   a purpose, never a subject's place, witness or time beyond the disclosure's own.
 - An **intel item** is the one coarse statement ever made from a trace (`UNIQUE(trace_id)`): the first disclosure fixes its
-  precision; any later request about the same trace, from any audience, at any precision, receives a **grant** of that
-  same item (`lc_intel_grant`), never a refinement. Only new evidence (a new trace) can say more.
-- `lc_disclosure` is the budget's ledger, keyed by target and witness, never by requester, over a **rolling** window, with
-  the area each disclosure named, so the combined bound (§4.3) can be checked.
-- `lc_intel_copy` registers every row any module keeps that depends on intel, one row per dependency.
+  precision; any later request about the same trace, from any audience, for any purpose, receives a **grant** of that
+  same item (`lc_intel_grant`), never a refinement. A grant has its own view: the coarser of the item's precision and the
+  purpose's ceiling, and its own expiry: the earlier of the item's and the purpose's lifetime (§4.4). So a Signal grant of
+  an item first made at `ZONE` for the Ledger shows `REGION` and lives for Signal's TTL; nothing is ever shown finer than
+  the item. Only new evidence (a new trace) can say more.
+- `lc_disclosure` is the budget's ledger, keyed by target and witness, never by requester, and `lc_disclosure_cell` the
+  cells (§4.3) each positive answer implied. Both rows **expire with the window** (`expires_at` = `at` +
+  `DisclosureWindowMinutes`), are in the expiring registry, and are purged like traces, so the ledger never outlives the
+  window it bounds and keeps no trail.
+- `lc_intel_copy` registers every row any module keeps that depends on intel, one row per dependency. A module stores
+  **intel ids, never payloads**: what it shows is fetched through `intel.read` at the time of showing (§4.1), so a copy is
+  only a reference, and expiry or a revoked grant takes effect at once whatever the purge's delay.
+- Expiry columns are **immutable** on every Intel table: rows are created with their expiry and deleted at it, never
+  extended (database triggers).
+- `lc_pub_type` and `lc_pub_field_rule` are the publication registry (§4.7).
 - `lc_expiring_table` lists every table in the database that holds expiring data (this service's, the journal's
   `lc_fact_precise` and `lc_fact_expiring`, and every module table that registers copies), with its expiry column and the
   longest life its rows may have. The purge job, the backup policy and the restore procedure all work from this list
@@ -124,8 +138,14 @@ PublicationDecision intel.publishable(PubRow row);
 ```
 
 `Requester` is built by the service from the authenticated session (the character, its account), never from module
-arguments. No method returns a coordinate, a `Location`, a `WorldObject` or evidence; `IntelView` holds only the item's
-typed coarse fields.
+arguments. No method returns a coordinate, a `Location`, a `WorldObject` or evidence; `IntelView` holds only the grant's
+view of the item's typed coarse fields.
+
+`intel.read` is authorised **at every read**, not only at disclosure: it returns a view only if the item and a grant are
+unexpired and the reader holds that grant now: directly (a `CHAR` grant to the reader), or through a contract or clan the
+reader belongs to at the moment of reading (membership resolved again, never cached), and only if the grant's purpose
+rule still allows the reader (for Signal: §4.4's conditions checked again, so an opt-out, a block or a visibility change
+takes effect at the next read). Otherwise it returns nothing, the same nothing as for an unknown id.
 
 ### 4.2 Disclosure
 
@@ -135,8 +155,8 @@ A disclosure succeeds only if, checked by the service itself:
    contract naming this subject, asked in person: the requester's character within the witness NPC's interaction range at
    the time of asking; Signal: §4.4; Wayfarer: only items already granted to that character).
 2. **Evidence**: the witness holds a non-suppressed trace of the subject, past its `disclosable_at` (§4.6).
-3. **Budget**: the units the disclosure costs are available in the rolling window for (subject, witness), and the combined
-   bound holds (§4.3). The units are spent in `lc_disclosure`, under the subject's row lock, in the same transaction as the
+3. **Budget**: the units already spent in the rolling window for (subject, witness), plus this disclosure's cost, do not
+   exceed `DisclosureBudgetUnits`, and the combined bound holds (§4.3). The units are spent in `lc_disclosure`, under the subject's row lock, in the same transaction as the
    grant, so concurrent requests cannot both spend the last units.
 4. **Precision**: the coarser of the asked precision, the purpose's ceiling, the witness kind's ceiling and what the budget
    still allows (each further disclosure about a subject from a witness in the window costs more units and yields coarser
@@ -148,29 +168,36 @@ written in the same transaction.
 
 ### 4.3 The combined bound
 
-Answers combine. For each subject the service keeps, over the rolling window, the set of areas it has disclosed to anyone,
-for any purpose, from any witness; a new disclosure is allowed at a precision only if the intersection of its area with
-those already disclosed is not smaller than `MinCombinedAreaRegions` map regions; otherwise it is coarsened until it is,
-down to `NONE`. So cooperating accounts, contracts and clans asking several witnesses cannot together pin a subject down
-further than the floor within a window.
+Answers combine, and an answer says more than the area it names: a positive answer from a fixed witness also says the
+subject was within that witness's range, and a direction says which side. So the service computes each positive answer's
+**implied area**: the named area (at the answer's precision) ∩ the witness's observation range (its spawn point and its
+kind's range) ∩ the direction's sector if one is given, as a set of geodata blocks (the "cells", 2048 game units square).
+For each subject it keeps, over the rolling window, the implied cells of every positive answer to anyone, for any
+purpose, from any witness; a new positive answer is given only if the intersection of its implied cells with all of
+those is at least `MinCombinedCells` cells. Otherwise it is coarsened, its direction dropped first; and if even a bare
+"seen" from that witness would imply too little, the witness answers exactly as it does when it has nothing: same words,
+same price, no units spent. So cooperating accounts, contracts and clans asking several witnesses cannot together pin a
+subject below the floor within a window, and a refusal is indistinguishable from an absence. The guarantee is about this
+service's answers; what players learn by other means (seeing the subject themselves) is outside it.
 
 ### 4.4 Purpose ceilings
 
 | Purpose | Ceiling | Lifetime | Other rules |
 |---|---|---|---|
 | Ledger questioning | the witness kind's | the trace's | requester in person; a contract naming the subject |
-| Signal location | `REGION` | `SignalLocationTtlMinutes` | only characters who opted in (`lc_signal_presence`), are `INTERACTIVE` (actor-identity.md §2.3) and have not blocked the requester; offline actors never |
+| Signal location | `REGION` | `SignalLocationTtlMinutes` | only characters who opted in (`lc_signal_presence`), are `INTERACTIVE` (actor-identity.md §2.3), have not blocked the requester, and whose Signal visibility (13 §4: everyone, alliance, clan, nobody) includes the requester; offline actors never; checked at disclosure and again at every read |
 | Wayfarer recall | the granted item's | the item's | only items already granted to the character |
 | publication | §4.7 | — | — |
 
 ### 4.5 Expiry
 
-- An item never outlives its trace: `expires_at` ≤ the trace's. A copy never outlives the items it depends on: its
-  `expires_at` is the earliest of theirs. A grant does not extend an item's life; a new disclosure of an old trace gets the
-  old item and its old expiry.
+- Evidence, items, grants and copies never outlive what they depend on: evidence's and an item's `expires_at` ≤ the
+  trace's, a grant's ≤ its item's, a copy's ≤ the earliest of its items'. A grant does not extend an item's life; a new
+  disclosure of an old trace gets the old item and its old expiry. The database enforces this at insert, and refuses any
+  later change of an expiry (§2.2).
 - At `expires_at` the purge job deletes traces with their evidence, items with their grants, and every row of every
   registered copy (all its dependencies), in one transaction per batch; `intel.read` refuses an expired item even before
-  it is deleted. Copies are registered in the same transaction that writes the payload (`registerCopies` takes the
+  it is deleted. Copies are registered in the same transaction that writes the referring row (`registerCopies` takes the
   module's transaction). No module keeps an intel payload in memory beyond the request that read it.
 - **Backups and restores** work from `lc_expiring_table`: a backup of those tables is kept no longer than their
   `max_life_hours`; a restore deletes every expired row of every listed table before the server starts. A module table
@@ -181,15 +208,20 @@ further than the floor within a window.
 ### 4.6 Timing
 
 Presence of a recent trace is itself information, by design: that is what a hunter pays a witness for. What the service
-bounds is its resolution in time: a trace becomes disclosable only at `disclosable_at`, the next multiple of
-`DisclosureQuantumMinutes` after it occurred, and ages are shown only as bands (`FRESH`, `RECENT`, `OLD`), so watching a
-witness's answer change reveals a visit to within a quantum, never to the moment.
+bounds is its resolution in time. **Every time at which an answer can change is on the quantum grid**: a trace becomes
+disclosable at `disclosable_at`, the next multiple of `DisclosureQuantumMinutes` after it occurred; its age band changes
+and it expires only at multiples of the quantum too (`expires_at` and the band boundaries are computed from
+`disclosable_at` and are whole quanta), and items, grants and copies expire at their trace's grid points or earlier grid
+points. So watching a witness's answers, appearing, aging or vanishing, reveals a visit to within a quantum, never to the
+moment.
 
 ### 4.7 Publication
 
-`lc_pub_*` rows are of registered types only; each field of each type has a rule (a public entity: a castle, a clan, a
-hero; an area at `TERRITORY` or coarser; a time no finer than a day and no fresher than the type's delay). An unknown
-type or field is refused (fail closed). Sealed contract terms, hidden identities (aliases, informants, marks) and anything
+`lc_pub_*` rows are of registered types only (`lc_pub_type`); each field of each type has a rule (`lc_pub_field_rule`: a
+public entity, such as a castle, a clan, a hero; an area at `TERRITORY` or coarser; a day; a count; text taken from a
+fact). An unknown type or field is refused (fail closed). Every type has a minimum delay before a row may be written
+about an event; a **location-related** type (a battle map, a saga replay, a raid, anything naming an area and a time)
+has at least `PublicationTacticalDelayMinutes` (default 1440, 17 §1's "≥24 h"), and the registry refuses a lower one. Sealed contract terms, hidden identities (aliases, informants, marks) and anything
 derived from intel are never publishable. The website and narrator read the `lc_pub_*` tables with a database user that
 can read nothing else (04 §4).
 
@@ -230,12 +262,14 @@ No fact names a subject's place, a witness's place or a trace's time.
 
 | Key | Range | Default | truth / dev / sim / hobby / live | Test |
 |---|---|---|---|---|
+| `DisclosureBudgetUnits` | 1–100 | 14 | 14 everywhere | AT-INTEL-02 |
+| `MinCombinedCells` | 1–400 | 9 | 9 everywhere | AT-INTEL-12 |
+| `PublicationTacticalDelayMinutes` | 1440–10080 | 1440 | 1440 everywhere | AT-INTEL-07 |
 | `SightingSampleMillis` | 250–10000 | 2000 | 2000 / 2000 / 1000 / 2000 / 2000 | AT-INTEL-04 |
 | `MinConsecutiveSamples` | 1–20 | 3 | 3 everywhere | AT-INTEL-04 |
 | `SightingPassMicros` | 100–100000 | 5000 | 5000 everywhere | AT-INTEL-09 |
 | `DisclosureWindowMinutes` | 1–1440 | 60 | 60 everywhere | AT-INTEL-02 |
 | `DisclosureQuantumMinutes` | 1–60 | 5 | 5 everywhere | AT-INTEL-11 |
-| `MinCombinedAreaRegions` | 1–50 | 2 | 2 everywhere | AT-INTEL-12 |
 | `TraceLifeHot/Recent/StaleMinutes` | 1–1440 | 15 / 60 / 360 | as default everywhere | AT-INTEL-03 |
 | `SignalLocationTtlMinutes` | 1–60 | 10 | 10 everywhere | AT-INTEL-13 |
 
@@ -254,37 +288,37 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | Id | Requirement | Proven by |
 |---|---|---|
 | INTEL-R01 | No coordinate, location, world object or evidence MUST leave the service, and no payload MUST hold a field outside its registered coarse type. | AT-INTEL-01 |
-| INTEL-R02 | Disclosure about a subject from a witness MUST be budgeted over a rolling window with diminishing returns that no account, contract or clan resets, and spent atomically. | AT-INTEL-02 |
+| INTEL-R02 | Disclosure about a subject from a witness MUST be budgeted over a rolling window, up to `DisclosureBudgetUnits`, with diminishing returns that no account, contract or clan resets, and spent atomically; the ledger MUST expire with the window. | AT-INTEL-02 |
 | INTEL-R03 | Traces, evidence, items, grants and copies MUST be deleted at expiry, in backups and restores too; no item MUST outlive its trace nor copy its items; nothing expired MUST be readable or rebuilt. | AT-INTEL-03 |
 | INTEL-R04 | A sighting MUST be a trace only if §3 held, with geodata present, for the minimum consecutive samples; any failure MUST reset the observation. | AT-INTEL-04 |
-| INTEL-R05 | A trace MUST yield at most one item; any later request about it MUST receive a grant of that item, never a refinement. | AT-INTEL-05 |
-| INTEL-R06 | Every module table holding intel MUST register its copies with all their dependencies in the writing transaction, and be listed as expiring. | AT-INTEL-06 |
-| INTEL-R07 | Nothing published MUST break its type's field rules; unknown types MUST be refused. | AT-INTEL-07 |
+| INTEL-R05 | A trace MUST yield at most one item; any later request about it MUST receive a grant of that item, viewed no finer than the item or the purpose allows and living no longer than either, never a refinement. | AT-INTEL-05 |
+| INTEL-R06 | Every module table referring to intel MUST hold ids only, read through `intel.read`, register its copies with all their dependencies in the writing transaction, and be listed as expiring. | AT-INTEL-06 |
+| INTEL-R07 | Nothing published MUST break its type's field rules or come sooner than its type's delay; unknown types MUST be refused; location-related types MUST wait at least `PublicationTacticalDelayMinutes`. | AT-INTEL-07 |
 | INTEL-R08 | A suppressed witness MUST disclose nothing about its subject until the suppression ends, and the trace and audit MUST remain. | AT-INTEL-08 |
 | INTEL-R09 | A sampling pass MUST stay within `SightingPassMicros`, deferring witnesses round-robin and resetting their pairs. | AT-INTEL-09 |
 | INTEL-R10 | Every disclosure MUST be recorded as an outbox fact without the subject's place, the witness's place or the trace's time; no trace MUST be journaled. | AT-INTEL-10 |
-| INTEL-R11 | A disclosure MUST be authorised by the service from the authenticated requester, in person where its purpose requires. | AT-INTEL-14 |
-| INTEL-R12 | Combined disclosures about a subject in a window MUST NOT narrow it below `MinCombinedAreaRegions`. | AT-INTEL-12 |
-| INTEL-R13 | Signal locations MUST be at most `REGION`, live `SignalLocationTtlMinutes`, and cover only opted-in, interactive, non-blocking characters. | AT-INTEL-13 |
-| INTEL-R14 | A trace MUST become disclosable only at its quantum, and ages MUST be shown only as bands. | AT-INTEL-11 |
+| INTEL-R11 | A disclosure MUST be authorised by the service from the authenticated requester, in person where its purpose requires, and every read MUST be authorised again against current grants, memberships and purpose rules. | AT-INTEL-14 |
+| INTEL-R12 | The implied areas of positive answers about a subject in a window MUST NOT intersect below `MinCombinedCells`, and a refusal MUST be indistinguishable from an absence. | AT-INTEL-12 |
+| INTEL-R13 | Signal locations MUST be at most `REGION`, live `SignalLocationTtlMinutes`, and cover only opted-in, interactive, non-blocking characters whose visibility includes the requester, checked at every read. | AT-INTEL-13 |
+| INTEL-R14 | Every change of an answer (appearance, age band, expiry) MUST happen on the quantum grid. | AT-INTEL-11 |
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-INTEL-00 | integration | the migration applies; keys and checks reject what this spec forbids (no exact precision value; one item per trace; lifetimes ordered) |
+| AT-INTEL-00 | integration | the migration applies; keys, checks and triggers reject what this spec forbids: no exact precision value; one item per trace; evidence, items, grants and copies outliving their parents at insert; any change of an expiry; a location-related publication type with less than the tactical delay |
 | AT-INTEL-01 | unit, integration | the static scan of the service's public types finds no coordinate, `Location`, world object or evidence; payloads with a planted coordinate, instance, precise time or finer area id under an allowed precision are refused; the game server's user cannot read the evidence table |
-| AT-INTEL-02 | integration | several accounts, contracts and clans asking about one subject from one witness, concurrently and across window boundaries: units charged by the configured table, precision falling by the configured ladder, never past the budget |
+| AT-INTEL-02 | integration | several accounts, contracts and clans asking about one subject from one witness, concurrently and across window boundaries: units charged by the configured table (1, 2, 4, 8), precision by the configured ladder, the fifth request in a window refused at 14 units; after the window the ledger rows are gone |
 | AT-INTEL-03 | integration, restart | items, grants, evidence, traces and every copy (multi-dependency rows included) gone at expiry; an item made just before its trace expires dies with it; a restore of an old backup deletes expired rows before start; a rebuild and a replay after expiry give "expired lead" at most |
 | AT-INTEL-04 | integration | sightings across walls, floors, invisibility, hide, teleport, login, doors, summons, instances, missing and partly loaded geodata, and a target leaving and returning between samples: a trace exactly when §3 held for the consecutive samples |
-| AT-INTEL-05 | integration | one trace asked by two audiences at two precisions: one item, at the first precision, two grants, one cost |
-| AT-INTEL-06 | unit | a module table holding an intel id or payload without registration, or not listed as expiring, fails the scan of migrations and code |
-| AT-INTEL-07 | integration | property test over every publication type: no row breaks its field rules; an unknown type is refused; a hunter given the website plus everything one private account could legitimately learn, and history filtered to humans, locates a mark no better than chance plus public facts (17) |
+| AT-INTEL-05 | integration | one trace asked by two audiences at two precisions: one item, at the first precision, two grants, one cost; a Ledger item at `ZONE` granted to Signal is viewed at `REGION` and expires at Signal's TTL |
+| AT-INTEL-06 | unit | a module table holding an intel payload, or an intel id without registration or not listed as expiring, and module code reading intel other than through `intel.read`, fail the scan of migrations and code |
+| AT-INTEL-07 | integration | property test over every publication type: no row breaks its field rules or its delay; an unknown type is refused; a location-related type registered below the tactical delay is refused; two hunters with the same private knowledge (everything one account could legitimately learn), one also given the website and history filtered to humans, locate a mark equally often within the statistical margin: the publication adds nothing (17) |
 | AT-INTEL-08 | integration | a bribed witness discloses nothing about its subject until the suppression ends; the trace and audit remain |
 | AT-INTEL-09 | sim | 800-citizen siege benchmark: every sampling pass within `SightingPassMicros`; under overload, deferred witnesses served next and no false sighting |
 | AT-INTEL-10 | integration | every disclosure writes its fact in its transaction; no intel fact type has a place, witness place or trace time field; no trace is journaled |
-| AT-INTEL-11 | integration | a visit just after a quantum boundary is disclosable only at the next; ages appear only as bands |
-| AT-INTEL-12 | integration | cooperating requesters asking several witnesses about one subject: the intersection of their answers never falls below the floor within a window |
-| AT-INTEL-13 | integration | Signal: a non-opted-in, offline, detached or blocking character is never located; an opted-in one only at `REGION`, for the TTL |
-| AT-INTEL-14 | integration | a disclosure asked remotely, for another contract, with a forged budget or audience, or by a non-party: refused |
+| AT-INTEL-11 | integration | a visit just after a quantum boundary is disclosable only at the next; a client polling every second sees the answer appear, change band and vanish only at grid points |
+| AT-INTEL-12 | integration | cooperating requesters asking several witnesses (ranges overlapping, directions given) about one subject: the intersection of the implied cells of their answers never falls below the floor within a window; a refused answer is byte-equal and price-equal to an answer about no trace |
+| AT-INTEL-13 | integration | Signal: a non-opted-in, offline, detached, blocking or not-visible-to-the-requester character is never located; an opted-in one only at `REGION`, for the TTL; an opt-out or block after a grant hides it at the next read |
+| AT-INTEL-14 | integration | a disclosure asked remotely, for another contract, with a forged budget or audience, or by a non-party: refused; a reader who left the clan or contract of a grant reads nothing |
 
 ## 11. Upstream constraints
 
@@ -298,6 +332,15 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: most of round 1 fixed or partly; open were a disclosure ledger that kept the trail,
+  grants that had to break Signal's limits, a combined bound blind to witness range and direction, expiry undoing the
+  time quantum, reads and copies not authorised or expiry-checked at read, Signal visibility, expiries changeable after
+  insert, a budget without a capacity, a publication oracle with the wrong baseline, and no tactical delay. Revision 3:
+  the ledger expires with its window and is registered; grants have their own view and expiry, never finer or longer than
+  item and purpose; implied areas in cells, with refusals indistinguishable from absence; every answer change on the
+  grid; reads authorised every time, modules keep ids only; Signal visibility; immutable expiries and evidence bounded by
+  its trace; `DisclosureBudgetUnits`; the oracle compares hunters with equal private knowledge; a publication registry
+  with a tactical-delay floor.
 - Round 1 (Codex, different model family), NO SIGN-OFF, 17 findings: traces journaled as immutable trails; no
   authorisation; deduplication against audience isolation and across precisions and windows; no combined bound; timing
   of answers; Signal's restrictions missing; lifetimes not bounded by evidence; backups of the new tables; copies with one

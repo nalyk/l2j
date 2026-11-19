@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -117,7 +117,9 @@ Both tables are purged at `expires_at` by deleting rows, never by rewriting a fa
 
 - **Backups** of the two expiring tables are kept no longer than the longest expiry they can hold (`PreciseRetentionHours`,
   `ExpiringRetentionHours`), and a restore deletes every row already past its `expires_at` before the server starts.
-  Backups of the rest of the database contain no expiring data, so nothing else needs shredding.
+  Other modules' expiring tables (the Intel Service's, and any table holding intel ids) are listed with these two in one
+  registry, `lc_expiring_table` (intel-service.md §4.5), and the same rule applies to every table in it; tables outside
+  the registry hold no expiring data.
 - **Projectors** may read expiring data only into derived state that expires with it; replay is defined over `lc_fact`
   alone, so a replay after expiry gives the derived state the module would have without the expired data.
 
@@ -201,10 +203,16 @@ current and then watches *p*'s stripes; once they are all zero, no capture can s
 **One phase, one batch, gaps first.** The writer commits captured facts only by closed phase: the batch for phase *p*
 holds, in this order, *p*'s gap records (`Journal.Gap`: family, count, logical-time span, reason `QUEUE_FULL`), then *p*'s
 facts, and records *p* and its **frontier** (the logical time at which *p* was closed). A projector therefore meets a
-phase's gaps before any of its facts, and stops before acting on anything from a phase that lost something. **Latency**, with the store available and no backlog: a captured fact is committed within `HeartbeatMillis` +
-`PhaseDrainMillis` + one batch transaction; a staged fact within `RelayMillis` + one batch transaction. With a backlog, a
-staged fact waits `RelayMillis` more for every `WriterBatchMax` rows staged before it. With the store down, nothing is
-committed and §7 applies. These bounds, not the cadences, are what lag (§4.6) and its tests measure.
+phase's gaps before any of its facts, and stops before acting on anything from a phase that lost something. **Latency.** The writer is one thread committing one batch at a time, so every bound counts the batches committed before
+a fact's own. Let *T* be the longest batch transaction (a measured value: `WriterBatchBudgetMillis`, checked by the
+benchmark, and exceeding it is itself an alarm). With the store available: a captured fact is committed within
+`HeartbeatMillis` + `PhaseDrainMillis` + 2*T* (its phase's batch, and at most one relay batch ahead of it); a staged fact
+with *k* rows staged before it and not yet relayed is committed within `RelayMillis` + 2 × ⌈(*k* + 1) /
+`WriterBatchMax`⌉ × *T*: its own and the preceding relay batches, each of which may be followed by one
+phase batch, because with a backlog the writer relays batch after batch without waiting for the cadence and commits at
+most one closed phase between two relay batches. A batch that fails and is retried (§3.1) adds its retries' time. With
+the store down, nothing is committed and §7 applies. These bounds, not the cadences, are what lag (§4.6) and its tests
+measure; a test that sees a slower batch than *T* fails on the alarm, not on the bound.
 
 **The writer's loop** never blocks on a phase: each iteration relays the outbox if `RelayMillis` has passed, checks the
 closing phase's stripes without waiting, and commits a phase once it has drained. It runs under a supervisor that
@@ -299,7 +307,14 @@ A projector never calls the Asset Service or an actuator directly. It writes eac
 
 ### 4.5 Replay and retention
 
-Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot: for projector *P*, one whose
+Replay rebuilds an isolated store (its own schema) from a **usable** replay snapshot. A running replay holds a **lease**
+(`lc_replay_lease`: its projector, the families it reads, the id it has read up to, a heartbeat), and reads each batch
+of facts in a transaction that holds its lease row with a shared lock and checks the lease is still valid. Maintenance,
+before step (1) below, locks the leases of every family in the partition exclusively: a live lease whose read position is
+below the partition's last id **keeps the partition** (the drop waits for the next run); a lease whose heartbeat is older
+than `ReplayLeaseSeconds` is invalidated in that transaction, and its replay, at its next batch, finds it invalid and
+aborts and starts over from a snapshot usable then. So no replay ever reads past a hole, and none holds retention
+forever. A snapshot is usable for projector *P* if its
 `last_fact_id` is at or beyond the highest `max_dropped_fact_id` of every family *P* consumes, so that every fact *P* needs
 after it is still in the log; the newest usable one is chosen, or the log's first fact if none of *P*'s families ever
 lost a partition.
@@ -370,6 +385,8 @@ A violation stops the projector or freezes the module, alarms and keeps the evid
 | `CaptureRingSlots` | 1024–1048576 | 65536 | 65536 everywhere | AT-FACT-04 |
 | `WriterBatchMax` | 1–2000 | 500 | 500 everywhere | AT-FACT-05 |
 | `RelayMillis` | 10–1000 | 50 | 50 everywhere | AT-FACT-01 |
+| `WriterBatchBudgetMillis` | 10–5000 | 100 | 100 everywhere | AT-FACT-01 |
+| `ReplayLeaseSeconds` | 10–3600 | 120 | 120 everywhere | AT-FACT-17 |
 | `HeartbeatMillis` | 100–10000 | 1000 | 1000 everywhere | AT-FACT-15 |
 | `PhaseDrainMillis` | 10–10000 | 500 | 500 everywhere | AT-FACT-06 |
 | `LockWaitMillis` | 50–10000 | 200 | 200 everywhere | AT-FACT-02 |
@@ -434,7 +451,7 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 | AT-FACT-15 | integration | a projector combining captured and outbox facts, live and replayed: the same order; a phase's gap applied before its facts; an absence decided before the frontier passed is refused; a gap overlapping it fails closed; a configuration change relayed after a fact produced under it: the fact read under its own version |
 | AT-FACT-16 | fault, restart | crash between checkpoint and execution, an Asset effect refunded twice then committed, an actuator crashing after acting before `DONE`, a world object it spawned gone before `DONE` is recorded, two projectors deciding effect 0 of one fact, effects out of order on restart: each executed once, in order; `FAILED` freezes the module |
 | AT-FACT-18 | fault | the writer thread killed while the JVM lives, with a batch unresolved: the supervisor restarts it, the batch is resolved first, the relay resumes |
-| AT-FACT-17 | integration | the maintenance job: partitions two months ahead after a run; a catch-all row alarms; a partition with an unretired dependency is kept |
+| AT-FACT-17 | integration | the maintenance job: partitions two months ahead after a run; a catch-all row alarms; a partition with an unretired dependency is kept; a replay paused mid-way keeps the partition it still needs; a replay whose lease went stale finds it invalid at its next batch and restarts, never reading past a dropped partition |
 
 ## 11. Upstream constraints
 
@@ -459,6 +476,10 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Round 5 (Codex), NO SIGN-OFF: two open. The backlog bound ignored the batches committed before a fact's own; and a
+  replay already running could resume past a partition dropped under it. Revision 6: latency counted in batches of a
+  measured longest transaction, relay and phase batches interleaved; replay leases checked under a shared lock at each
+  read batch, keeping partitions they still need, and invalidated only when stale, which aborts their replay.
 - Round 4 (Codex), NO SIGN-OFF: most of round 3 fixed; open were a global deletion watermark retiring an unrelated
   projector's snapshot, a watermark advanced after the drop (an interruption leaving deleted history behind it), cadences
   presented as deadlines, and ring slots of a stalled producer. Revision 5: watermarks per family and usability per

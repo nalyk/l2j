@@ -231,6 +231,20 @@ CREATE TABLE lc_replay_snapshot (
 	PRIMARY KEY (projector, last_fact_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- A running replay's lease: the partitions it still needs are kept while it is live; a stale one is invalidated and its
+-- replay restarts (spec §4.5).
+CREATE TABLE lc_replay_lease (
+	replay_id BIGINT NOT NULL AUTO_INCREMENT,
+	projector VARCHAR(48) NOT NULL,
+	families VARCHAR(512) NOT NULL,
+	read_through_id BIGINT NOT NULL,
+	heartbeat_at TIMESTAMP(3) NOT NULL,
+	valid BOOLEAN NOT NULL DEFAULT TRUE,
+	PRIMARY KEY (replay_id),
+	KEY idx_lease_projector (projector),
+	CONSTRAINT chk_lease_read CHECK (read_through_id >= 0)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
 -- Per family, the highest fact id ever dropped with a partition: a projector's snapshot is usable only at or beyond the
 -- watermarks of the families it consumes (spec §4.5). Advanced, and committed, before the partition is dropped.
 CREATE TABLE lc_journal_retention (

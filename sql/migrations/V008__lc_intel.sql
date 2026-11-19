@@ -27,7 +27,7 @@ CREATE TABLE lc_trace (
 	CONSTRAINT chk_trace_sensitivity CHECK (sensitivity BETWEEN 0 AND 3)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- A trace's exact evidence: read only by the service and forensics, deleted with the trace.
+-- A trace's exact evidence: read only by the service and forensics, deleted with the trace, never outliving it.
 CREATE TABLE lc_trace_evidence (
 	trace_id BIGINT NOT NULL,
 	x INT NOT NULL,
@@ -66,6 +66,8 @@ CREATE TABLE lc_intel (
 	CONSTRAINT chk_intel_payload CHECK (JSON_VALID(payload))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+CREATE TRIGGER lc_trace_evidence_within_trace BEFORE INSERT ON lc_trace_evidence FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_trace WHERE trace_id = NEW.trace_id AND NEW.expires_at <= expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: evidence never outlives its trace'; END IF;
+
 -- An item never outlives its trace (spec §4.5).
 CREATE TRIGGER lc_intel_within_trace BEFORE INSERT ON lc_intel FOR EACH ROW IF NEW.expires_at > (SELECT expires_at FROM lc_trace WHERE trace_id = NEW.trace_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an item never outlives its trace'; END IF;
 
@@ -75,20 +77,40 @@ CREATE TABLE lc_intel_grant (
 	audience_id INT NOT NULL,
 	purpose VARCHAR(32) NOT NULL,
 	granted_at TIMESTAMP(3) NOT NULL,
+	view_precision ENUM('ZONE', 'REGION', 'TERRITORY', 'NONE') NOT NULL,
+	expires_at TIMESTAMP(3) NOT NULL,
 	PRIMARY KEY (intel_id, audience_kind, audience_id, purpose),
+	KEY idx_grant_expiry (expires_at),
 	CONSTRAINT fk_grant_intel FOREIGN KEY (intel_id) REFERENCES lc_intel (intel_id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- The budget's ledger: per subject and witness, over a rolling window, never per requester; the area each disclosure named.
+-- A grant is viewed no finer than its item and lives no longer (spec §2.2).
+CREATE TRIGGER lc_intel_grant_within_item BEFORE INSERT ON lc_intel_grant FOR EACH ROW IF NOT EXISTS (SELECT 1 FROM lc_intel WHERE intel_id = NEW.intel_id AND NEW.expires_at <= expires_at AND NEW.view_precision + 0 >= precision_level + 0) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_grant: a grant is never finer or longer-lived than its item'; END IF;
+
+-- The budget's ledger: per subject and witness, over a rolling window, never per requester; it expires with the window.
 CREATE TABLE lc_disclosure (
 	target_char INT NOT NULL,
 	witness_ref VARCHAR(32) NOT NULL,
 	at TIMESTAMP(3) NOT NULL,
 	units INT NOT NULL,
-	area_id INT NOT NULL,
+	implied_cells INT NOT NULL,
+	expires_at TIMESTAMP(3) NOT NULL,
 	PRIMARY KEY (target_char, witness_ref, at),
 	KEY idx_disclosure_target (target_char, at),
-	CONSTRAINT chk_disclosure_units CHECK (units > 0)
+	KEY idx_disclosure_expiry (expires_at),
+	CONSTRAINT chk_disclosure_units CHECK (units > 0),
+	CONSTRAINT chk_disclosure_cells CHECK (implied_cells > 0),
+	CONSTRAINT chk_disclosure_life CHECK (expires_at > at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- The cells each positive answer implied, for the combined bound (spec §4.3); expires with the window.
+CREATE TABLE lc_disclosure_cell (
+	target_char INT NOT NULL,
+	at TIMESTAMP(3) NOT NULL,
+	cell INT NOT NULL,
+	expires_at TIMESTAMP(3) NOT NULL,
+	PRIMARY KEY (target_char, at, cell),
+	KEY idx_disclosure_cell_expiry (expires_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- Every module row that depends on intel, one row per dependency (spec §4.5).
@@ -105,6 +127,15 @@ CREATE TABLE lc_intel_copy (
 
 -- A copy never outlives the item it depends on.
 CREATE TRIGGER lc_intel_copy_within_item BEFORE INSERT ON lc_intel_copy FOR EACH ROW IF NEW.expires_at > IFNULL((SELECT expires_at FROM lc_intel WHERE intel_id = NEW.intel_id), TIMESTAMP('1970-01-02')) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_copy: a copy never outlives its item, nor depends on one that does not exist'; END IF;
+
+-- Expiries are immutable: rows are created with them and deleted at them (spec §2.2).
+CREATE TRIGGER lc_trace_expiry_frozen BEFORE UPDATE ON lc_trace FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace: an expiry never changes'; END IF;
+CREATE TRIGGER lc_trace_evidence_expiry_frozen BEFORE UPDATE ON lc_trace_evidence FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_trace_evidence: an expiry never changes'; END IF;
+CREATE TRIGGER lc_intel_expiry_frozen BEFORE UPDATE ON lc_intel FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel: an expiry never changes'; END IF;
+CREATE TRIGGER lc_intel_grant_expiry_frozen BEFORE UPDATE ON lc_intel_grant FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_grant: an expiry never changes'; END IF;
+CREATE TRIGGER lc_intel_copy_expiry_frozen BEFORE UPDATE ON lc_intel_copy FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_intel_copy: an expiry never changes'; END IF;
+CREATE TRIGGER lc_disclosure_expiry_frozen BEFORE UPDATE ON lc_disclosure FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_disclosure: an expiry never changes'; END IF;
+CREATE TRIGGER lc_disclosure_cell_expiry_frozen BEFORE UPDATE ON lc_disclosure_cell FOR EACH ROW IF NOT (NEW.expires_at <=> OLD.expires_at) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_disclosure_cell: an expiry never changes'; END IF;
 
 CREATE TABLE lc_witness_suppression (
 	witness_ref VARCHAR(32) NOT NULL,
@@ -134,4 +165,22 @@ CREATE TABLE lc_expiring_table (
 	CONSTRAINT chk_expiring_life CHECK (max_life_hours > 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_trace', 'expires_at', 'INTEL', 24), ('lc_trace_evidence', 'expires_at', 'INTEL', 24), ('lc_intel', 'expires_at', 'INTEL', 24), ('lc_intel_copy', 'expires_at', 'INTEL', 24), ('lc_signal_presence', 'expires_at', 'INTEL', 1), ('lc_fact_precise', 'expires_at', 'JOURNAL', 72), ('lc_fact_expiring', 'expires_at', 'JOURNAL', 720);
+-- The publication registry (spec §4.7): every lc_pub_* row is of a registered type, every field has a rule, and a
+-- location-related type waits at least the tactical delay (24 h; the configuration may raise it, never lower it).
+CREATE TABLE lc_pub_type (
+	pub_type VARCHAR(48) NOT NULL,
+	min_delay_minutes INT NOT NULL,
+	location_related BOOLEAN NOT NULL,
+	PRIMARY KEY (pub_type),
+	CONSTRAINT chk_pub_delay CHECK (min_delay_minutes >= 0 AND (NOT location_related OR min_delay_minutes >= 1440))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE lc_pub_field_rule (
+	pub_type VARCHAR(48) NOT NULL,
+	field VARCHAR(48) NOT NULL,
+	rule ENUM('PUBLIC_ENTITY', 'AREA_TERRITORY', 'DAY', 'COUNT', 'TEXT_FROM_FACT') NOT NULL,
+	PRIMARY KEY (pub_type, field),
+	CONSTRAINT fk_pub_field_type FOREIGN KEY (pub_type) REFERENCES lc_pub_type (pub_type)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_trace', 'expires_at', 'INTEL', 24), ('lc_trace_evidence', 'expires_at', 'INTEL', 24), ('lc_intel', 'expires_at', 'INTEL', 24), ('lc_intel_grant', 'expires_at', 'INTEL', 24), ('lc_intel_copy', 'expires_at', 'INTEL', 24), ('lc_disclosure', 'expires_at', 'INTEL', 24), ('lc_disclosure_cell', 'expires_at', 'INTEL', 24), ('lc_signal_presence', 'expires_at', 'INTEL', 1), ('lc_fact_precise', 'expires_at', 'JOURNAL', 72), ('lc_fact_expiring', 'expires_at', 'JOURNAL', 720);

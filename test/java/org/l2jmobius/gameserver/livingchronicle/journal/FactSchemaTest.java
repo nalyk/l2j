@@ -89,6 +89,10 @@ class FactSchemaTest
 			statement.execute("INSERT INTO lc_journal_retention (family, max_dropped_fact_id) VALUES ('kill', 0)");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_retention (family, max_dropped_fact_id) VALUES ('kill', 5)"));
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_retention (family, max_dropped_fact_id) VALUES ('asset', -1)"));
+
+			// A replay lease starts valid and never reads below zero.
+			statement.execute("INSERT INTO lc_replay_lease (projector, families, read_through_id, heartbeat_at) VALUES ('history', 'kill,siege', 0, NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_replay_lease (projector, families, read_through_id, heartbeat_at) VALUES ('history', 'kill', -1, NOW(3))"));
 			statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'"));
 
 			// One head per outbox stream, never negative; a staged fact has a positive number, one per stream and number.

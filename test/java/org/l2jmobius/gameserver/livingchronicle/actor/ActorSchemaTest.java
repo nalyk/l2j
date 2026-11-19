@@ -60,6 +60,9 @@ class ActorSchemaTest
 			// A citizen's profile changes only with an unused audit row for that account, field and value, and the next identity version.
 			final String varn = "(SELECT account_id FROM (SELECT account_id FROM lc_account WHERE login = 'varn01') a)";
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY', identity_ver = 1 WHERE login = 'varn01'"), "no audit row");
+			statement.execute("INSERT INTO lc_identity_audit (audit_id, account_id, field, before_value, after_value, admin, reason, at) VALUES (76, " + varn + ", 'SIM_PROFILE', 'TEST', 'SCENARIO_ADVERSARY', 'admin', 'a false transition', NOW(3))");
+			statement.execute("SET @lc_identity_audit = 76");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'SCENARIO_ADVERSARY', identity_ver = 1 WHERE login = 'varn01'"), "an audit row recording another old value");
 			statement.execute("INSERT INTO lc_identity_audit (audit_id, account_id, field, before_value, after_value, admin, reason, at) VALUES (77, " + varn + ", 'SIM_PROFILE', 'RESIDENT', 'SCENARIO_ADVERSARY', 'admin', 'scenario', NOW(3))");
 			statement.execute("SET @lc_identity_audit = 77");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_account SET sim_profile = 'TEST', identity_ver = 1 WHERE login = 'varn01'"), "an audit row for another value");

@@ -68,6 +68,8 @@
    Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
 2. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
    Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
+4. **[2026-11-19] Never wait with `pgrep -f <pattern>` from a shell whose own command line contains the pattern**
+   Do instead: start the jobs with `&`, collect `$!`, and `wait` on those pids; a `while pgrep -f "codex exec …"` loop matches its own wrapper shell and never ends.
 3. **[2026-11-19] `git rev-parse --short` takes one revision**
    Do instead: loop `for r in a b; do git rev-parse --short $r; done`; with two it fails and stops an `&&` chain silently.
 

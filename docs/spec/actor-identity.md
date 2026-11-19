@@ -1,6 +1,6 @@
 # SPEC-ACTOR — Actor Identity
 
-- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
+- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
 - Blueprint: 04 §2 (Actor Identity); 02 §3 (game logic never branches on "is this a citizen"), §12 (never trust the client);
   10 (Citizens of Aden); 13 §… (Signal reports human / synthetic / mixed); 17 (history's humans-only filter); consensus §3.
 - DDL: `sql/migrations/V007__lc_actor.sql` (after the Fact Journal, before the Asset Service).
@@ -23,7 +23,7 @@ runner (N9/N10), nor authentication (the LoginServer, unchanged).
 | `origin` | `HUMAN`, `SYNTHETIC_CITIZEN`, `NPC_FAKE`, `NPC`, `SYSTEM` | players: `lc_account.origin`; NPCs: `Npc.isFakePlayer()` (`entity/actor/Npc.java:2048`, from the template) gives `NPC_FAKE`, any other NPC `NPC`; the server acting on its own: `SYSTEM` | never |
 | `account_id` | int | `lc_character`: the character's binding to its account, made when the character is first seen and never changed (a character's `account_name`, `dist/db_installer/sql/game/characters.sql:2`, must keep naming that account's login) | never for a character |
 | `char_id` / `npc_id` | int | the character's object id / the NPC's template id | never |
-| `activity` | `INTERACTIVE`, `OFFLINE_TRADE`, `OFFLINE_PLAY`, `DISCONNECTED` | derived (§2.3) | by recorded transitions only (`Actor.ActivityChanged`) |
+| `activity` | `INTERACTIVE`, `OFFLINE_TRADE`, `OFFLINE_PLAY`, `DISCONNECTED` | derived (§2.3) | with the live session state; each transition is also recorded (`Actor.ActivityChanged`) |
 | `sim_profile` | `RESIDENT`, `SCENARIO_ADVERSARY`, `TEST`; none for humans | `lc_account.sim_profile` | by an admin, with an audit fact |
 | `principal_id` | int | `lc_account.principal_id`: a synthetic economic principal (a citizen household) for citizens; the account's own principal for humans | by an admin, with an audit fact |
 | `class_id`, `level`, `clan_id`, `ally_id` | ints | the character at the moment of the fact | as the game changes them |
@@ -52,17 +52,25 @@ lc_actor_policy(module VARCHAR(16), rule VARCHAR(48), domain {PARTICIPATION|METR
   `lc_account` lives in the GameServer's schema; the LoginServer, unchanged, never reads it.
 - **Database triggers and keys** refuse: any change of `account_id`, `login` or `origin`; any change of `sim_profile`,
   `principal_id` or `retired` unless the session names an `lc_identity_audit` row for that account and that field, whose
-  `after_value` is the new value and which has not been used (the trigger marks it used, and audit rows are otherwise
+  `before_value` is the current value and `after_value` the new one (null-safe), and which has not been used (the trigger marks it used, and audit rows are otherwise
   immutable and never deleted), and unless `identity_ver` grows by one; `retired` going back to false, ever; any `DELETE`
   of an account or a binding; any change of a binding; any change of a principal's `kind`; a principal of the wrong kind
   for its account. A human's principal is exclusive by a unique key on a stored column (`human_principal_id`), so two
   concurrent inserts cannot share one (INV01, INV02). Nothing the client sends reaches these tables (02 §12). A SQL tool
   can still write an audit row and use it: that change is then audited, which is what the rule requires.
-- **The tables are projections of the log.** Creating an account, binding a character and every audited change are also
-  outbox facts (§5) in the same transaction. At startup the identity tables are compared with what the log's identity
-  facts say, row by row; any difference (a restore of altered rows, a `TRUNCATE`, which fires no trigger, a replica that
-  applied rows without its triggers) stops the module until an admin reconciles it from the log. The game server's
-  database user has no `DROP` or `TRUNCATE` right on any `lc_` table.
+- **The tables are projections of the log.** Creating a principal, creating an account, binding a character and every
+  audited change are also outbox facts (§5) in the same transaction, carrying every validated column: principals (id,
+  kind, name), accounts (id, login, origin, profile, principal, retired, identity version), bindings (character, account,
+  bound at). The `Actor` family's retention is for ever (fact-journal.md §4.5), so the log always holds every identity
+  fact and is the **trusted source**: its rows are never updated, and a backup or replica of it is checked like any other
+  copy. At startup, **after** the journal's own recovery (an unresolved batch resolved, fact-journal.md §3.1) and after the
+  relay has drained every committed outbox row, those columns are compared with what the log's identity facts say; a
+  change that committed just before a crash is therefore in the log by then, never mistaken for corruption. Any
+  difference (a restore of altered rows, a `TRUNCATE`, which fires no trigger, a replica that applied rows without its
+  triggers) stops the module until an admin rebuilds the tables from the log (`lc identity rebuild`, which replays the
+  identity facts into empty tables). A replica is promoted only after this check passes on it. The game server's database
+  user has no `DROP` or `TRUNCATE` right on any `lc_` table. The audit table is not a projection: it is checked only for
+  rows never used (an alarm, not a stop).
 - **A login is never reused.** Mobius's account tool deletes logins directly (`tools/AccountManager.java:1080, 1469`);
   a core patch makes it refuse a login that has an `lc_account` row unless the row is `retired` by `lc citizen retire`,
   and a retired login is refused at the authenticated boundary for ever. So a citizen's login can never become a human's,
@@ -99,8 +107,8 @@ may count them, never reconstruct activity from them alone.
 
 ### 2.4 The snapshot
 
-The snapshot is ten primitives: origin, account id, char id or npc id, activity, sim profile, principal id, class id,
-level, clan id, ally id. On a hot path it is never an object: `snapshot(actor, slot)` writes the ten fields straight into
+The snapshot is eleven primitives: origin, account id, char id or npc id, activity, sim profile, principal id, identity
+version, class id, level, clan id, ally id. On a hot path it is never an object: `snapshot(actor, slot)` writes the eleven fields straight into
 the capture's ring slot (fact-journal.md §3.2); off the hot path (an outbox fact) a record may be built. The cached parts
 (origin, account id, sim profile, principal id) are loaded when a `Player` is loaded, by whatever path
 (`Player.load`, `entity/actor/Player.java:1211`: a login, an offline trader restored at startup,
@@ -108,9 +116,11 @@ the capture's ring slot (fact-journal.md §3.2); off the hot path (an outbox fac
 binding or account row is missing is not loaded. The cached parts are published as one immutable
 record (values with their `identity_ver`) behind a single reference; a capture reads the reference once, so it never
 mixes two versions. After an admin change commits, the service replaces the record only if its version is newer than
-the one cached, so concurrent changes and a concurrent load cannot put an older one back. Facts captured between the
-commit and the replacement name the previous version, and the change's audit fact records the version at which it took
-effect, so the boundary is known. In
+the one cached, so concurrent changes and a concurrent load cannot put an older one back. Every snapshot carries the identity
+version it was read at (key `iv`), so a fact names exactly which version of profile and principal it used, even when a
+value changes away and back. "As it was at the owning operation" (ACTOR-R03) means, for the cached parts, the version
+cached when the capture read the reference: a capture between an admin change's commit and the replacement carries the
+previous version, and that is visible from `iv` and the change fact's version, never ambiguous. In
 `lc_fact.actor_snapshot` it is canonical JSON with fixed keys.
 
 ## 3. Policy, the only place actors are told apart
@@ -147,9 +157,10 @@ humans-only filter use it (AT-ACTOR-09).
 
 | Fact | Delivery | Fields |
 |---|---|---|
+| `Actor.PrincipalCreated` | outbox | principal, kind, name |
 | `Actor.CitizenProvisioned` | outbox | account, login, profile, principal, admin |
 | `Actor.AccountSeen` | outbox | account, login, origin, principal |
-| `Actor.CharacterBound` | outbox | character, account |
+| `Actor.CharacterBound` | outbox | character, account, bound at |
 | `Actor.ActivityChanged` | captured (`cap.activity`) | snapshot, from, to |
 | `Actor.ProfileChanged`, `Actor.PrincipalChanged`, `Actor.AccountRetired` | outbox | account, before, after, identity version, admin, reason |
 | `Actor.PolicyChanged` | outbox (`config`) | module, rules, config version |
@@ -171,7 +182,7 @@ humans-only filter use it (AT-ACTOR-09).
 | database down at login | the login fails as Mobius's own login does without its database; no character enters without its account row |
 | an attempt to change an origin, a binding, an id, or a profile without its audit (admin error, SQL) | refused by the trigger; alarm |
 | triggers missing or altered (a restore, a failover, a hand edit) | the module refuses to start until they are the migration's own again |
-| a login deleted and recreated outside the service | refused by the patched account tool; a retired login refused at login |
+| a login deleted and recreated outside the service (the account tool, or any SQL on Mobius's `accounts`) | refused at login: the login still has its permanent `lc_account` row, retired by the tool's path or not, and a login whose Mobius account is newer than its `lc_account` row is treated as recreated and refused until an admin decides; the patched tool refuses earlier |
 | a character's `account_name` changed outside the service | the character is not loaded; alarm |
 | a policy row missing | not allowed: the module's rule fails closed |
 
@@ -201,7 +212,7 @@ the account row), `lc policy <module>`.
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-ACTOR-00 | integration | the migration applies; the triggers refuse changing an id, origin, login or binding, deleting an account or a binding, a profile, principal or retirement change without a matching unused audit row (and the reuse of one), un-retiring, changing a principal's kind, a principal of the wrong kind; two concurrent inserts sharing a human principal: one fails; startup refuses missing or altered triggers and tables that disagree with the log (a restore of altered rows, a `TRUNCATE`) |
+| AT-ACTOR-00 | integration | the migration applies; the triggers refuse changing an id, origin, login or binding, deleting an account or a binding, a profile, principal or retirement change without a matching unused audit row (and the reuse of one), un-retiring, changing a principal's kind, a principal of the wrong kind, an audit row whose before value is not the current one; two concurrent inserts sharing a human principal: one fails; startup refuses missing or altered triggers and tables that disagree with the log (a restore of altered rows, a `TRUNCATE`); a JVM killed after an identity change commits and before relay: startup drains, compares and starts |
 | AT-ACTOR-01 | integration | an authenticated first login creates a `HUMAN` row; an `AuthLogin` never authenticated creates none; a provisioned citizen logs in as `SYNTHETIC_CITIZEN` |
 | AT-ACTOR-02 | integration | every client packet that names a character or account, fuzzed: no column of §2.2 changes |
 | AT-ACTOR-03 | integration | facts captured at each owning operation carry the snapshot of that moment (class, level and clan changed right after) |
@@ -230,6 +241,12 @@ the account row), `lc policy <module>`.
 
 ## 12. Review record
 
+- Round 3 (Codex), NO SIGN-OFF: audit rows not matched on the old value; the startup comparison racing the relay after a
+  crash; facts that could not rebuild every compared column; the snapshot not carrying its identity version; and wording
+  left from earlier revisions. Revision 4: the before value matched null-safely; comparison after journal recovery and a
+  drained relay; a principal fact, binding times, the validated columns named, `Actor` facts kept for ever and the log
+  named as the trusted source with a rebuild command and a promotion rule; `iv` in every snapshot; the failure table
+  restated for logins recreated by any means.
 - Round 2 (Codex), NO SIGN-OFF: most of round 1 fixed; open were an audit row usable as a reusable token, a mutable
   principal kind, human-principal exclusivity racing, cache updates out of order, new and pre-existing characters
   without a binding path, reversible retirement, policy decisions able to reach mechanics through a helper, triggers that

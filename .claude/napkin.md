@@ -23,6 +23,11 @@
 7. **[2026-11-19] A proof is trusted only after its fix is reverted and it fails**
    Do instead: on ultra, revert each fix (sed on the core line, or the test wrapper), drop any reverted file from CORE_PATCHES.md `Files:` there (or `check-core-ledger` stops the build before tests run), run the class, see every proof fail with its own message, then `scp` the local files back and md5-check them.
 
+8. **[2026-11-19] Intakes run in a separate worktree on ultra, and move `upstream` for every worktree**
+   Do instead: `git worktree add --detach ~/gits/l2j-intake n2-foundation`, run `tools/intake/intake.sh <sha> n2-foundation` there in the background, then fetch `upstream` and `intake/<sha12>` back, push both to origin (the mirror push is a fast-forward), and `git worktree remove` it. Ledger checks compare with `git merge-base HEAD upstream`, never the tip.
+9. **[2026-11-19] A reverted fix that would deadlock is not run**
+   Do instead: when a fix prevents a deadlock (a lock taken from inside the simulation), prove it by the test alone; a hung build container outlives `timeout`.
+
 ## Lock Harness Guardrails
 1. **[2026-11-19] A lock case runs whole on its own stream, aligned, in a woken arena**
    Do instead: `Arena.wake()` once before a sweep; per case `Arena.align()` then `_server.withRandom(KeyedRandom.of(SEED, "<stream>", key), ...)` around setup, run and clean-up.
@@ -60,6 +65,8 @@
    Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
 2. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
    Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
+3. **[2026-11-19] `git rev-parse --short` takes one revision**
+   Do instead: loop `for r in a b; do git rev-parse --short $r; done`; with two it fails and stops an `&&` chain silently.
 
 ## User Directives
 1. **[2026-11-18] Fix bugs and gaps found in scope at once; do not ask**

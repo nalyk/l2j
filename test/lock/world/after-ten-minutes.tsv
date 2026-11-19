@@ -1,0 +1,59 @@
+# LOCK-WORLD-0002: the same world after 600000 ms of game time.
+task-runs-due-at-boot	3682
+task-runs-in-ten-minutes	155481
+pending-tasks	1042
+objects	46424
+kind	Adventurer	76
+kind	AirShip	1
+kind	Artefact	11
+kind	Auctioneer	8
+kind	Boat	5
+kind	BroadcastingTower	25
+kind	CastleDoorman	70
+kind	Chest	131
+kind	ClanHallDoorman	38
+kind	ClanHallManager	43
+kind	DawnPriest	11
+kind	Door	1301
+kind	Doorman	2
+kind	DungeonGatekeeper	28
+kind	DuskPriest	11
+kind	FeedableBeast	300
+kind	Fence	1
+kind	FestivalGuide	10
+kind	Fisherman	23
+kind	FlyTerrainObject	15
+kind	Folk	1847
+kind	FortDoorman	168
+kind	FortLogistics	21
+kind	FortManager	21
+kind	FriendlyMob	59
+kind	GrandBoss	5
+kind	Guard	385
+kind	KrateisCubeManager	1
+kind	KrateisMatchManager	3
+kind	Merchant	210
+kind	Monster	40760
+kind	OlympiadManager	36
+kind	PetManager	13
+kind	RaceManager	1
+kind	RaidBoss	189
+kind	SignsPriest	11
+kind	StaticObject	51
+kind	Teleporter	81
+kind	TerrainObject	22
+kind	Trainer	219
+kind	UCHelper	1
+kind	UCManager	5
+kind	VillageMasterDElf	15
+kind	VillageMasterDwarf	29
+kind	VillageMasterFighter	14
+kind	VillageMasterKamael	25
+kind	VillageMasterMystic	11
+kind	VillageMasterOrc	15
+kind	VillageMasterPriest	14
+kind	Warehouse	82
+digest	population	26c18b9fd2a8f4997320ac2c014647e21d3c96618447d6ccf4181ee60b9c0502
+digest	identity	c15c5fd6a9617c6de9c7e1d0fc98a8ff61fdb4fa98afc4c6a46a3d6ab2d51c88
+digest	placement	94baae0c52fae00f5b9bafb5288b5e1fc3ca389811b6e28a9fd14c236821e1ae
+digest	condition	ee5367f25c9cca37e621622045166b04bf58f067150d11f1eb50af02d8f30902

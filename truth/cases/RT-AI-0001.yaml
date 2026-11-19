@@ -1,0 +1,29 @@
+# Retail Truth case (docs/blueprint/11-RETAIL-TRUTH.md §1.3). Seeded by the behaviour lock, which found the behaviour;
+# what retail does is not established, so the status is UNKNOWN until evidence of the classes in §1.2 is attached.
+id: RT-AI-0001
+feature: monster_reaction_to_an_attack_that_does_no_damage
+chronicle: ct26_highfive
+client_build: null
+evidence: []
+preconditions:
+  attacker: a player
+  defender: a monster that is not aggressive (aggro range 0) and has not acted
+  first_hits: miss, or land for 0 damage
+actions:
+  - the attacker attacks; its first hits miss or deal nothing
+expected: []        # what retail does: to be derived from evidence, not from the server
+observed:
+  # Mobius behaviour (evidence class 5): of current behaviour only, never of correctness.
+  - "A missed hit tells the monster nothing (CreatureAI.notifyActionEvaded does nothing)."
+  - "A hit for 0 damage tells it nothing either (Creature.onHitTimer notifies only damage above 0)."
+  - "The monster reacts at the first hit that lands for damage."
+  - "Locked in LOCK-AI-0001 and LOCK-AI-0002 (test/lock/ai/*): the opponent attacks until a hit lands, for that reason,
+    and the strikes column counts its swings, e.g. a level 34 Knight missing Breka Warlock Pastu (25020) nine times."
+evidence_wanted:
+  - "Captured retail traffic or video of a passive monster attacked with misses only (class 4 or 3)."
+  - "Official guides on aggression (class 2)."
+status: UNKNOWN
+server_commit: null
+notes: >
+  Found while building the AI lock. A retail difference would be a correction to the AI (an evaded attack counting
+  as an attack), recorded against this case with its evidence.

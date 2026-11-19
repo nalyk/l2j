@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Living Chronicle build.
+
+	Upstream's build.xml is imported untouched and stays the only definition of
+	how the server is compiled and packaged. This file adds what upstream does
+	not have: a class fingerprint and the test suite. Run it through ./build.sh.
+-->
+<project name="LivingChronicle" default="gate" basedir=".">
+
+	<!-- Upstream defaults to ../build, outside the checkout. Properties are write-once, so this wins. -->
+	<property name="build" location="build" />
+
+	<import file="build.xml" />
+
+	<property name="test.src" location="test/java" />
+	<property name="test.bin" location="${build}/test-bin" />
+	<property name="test.reports" location="${build}/test-reports" />
+	<property name="test.libs" location="/opt/lc/test-libs" />
+	<property name="runtime.game" location="${build}/runtime/game" />
+	<property name="lock.dir" location="test/lock" />
+	<property name="lock.actual" location="${build}/lock-actual" />
+	<property name="truth.agent" location="${build}/lc-truth-agent.jar" />
+	<!-- Which test classes run. The gate runs them all; ./build.sh test -Dtest.only=AiLockTest runs one while working on it. -->
+	<property name="test.only" value="*Test" />
+
+	<path id="test.classpath">
+		<pathelement location="${test.bin}" />
+		<pathelement location="${build.bin}" />
+		<path refid="classpath" />
+		<fileset dir="${test.libs}" includes="*.jar" />
+	</path>
+
+	<target name="fingerprint" depends="compile" description="Record one digest over every compiled class.">
+		<!--
+			Jar files carry build timestamps, so they are never byte-identical.
+			The classes are. Two clean builds of one commit must print the same digest.
+		-->
+		<checksum algorithm="SHA-256" totalproperty="classes.fingerprint" todir="${build}/checksums">
+			<fileset dir="${build.bin}" />
+		</checksum>
+		<delete dir="${build}/checksums" />
+		<echo file="${build}/classes.sha256" message="${classes.fingerprint}${line.separator}" />
+		<echo message="classes fingerprint: ${classes.fingerprint}" />
+	</target>
+
+	<target name="dist" depends="fingerprint, cleanup" description="Package the server exactly as upstream does." />
+
+	<target name="compile-tests" depends="compile" description="Compile the test suite.">
+		<delete dir="${test.bin}" quiet="true" />
+		<mkdir dir="${test.bin}" />
+		<javac srcdir="${test.src}" destdir="${test.bin}" classpathref="test.classpath" debug="true" includeantruntime="false" release="27" encoding="UTF-8">
+			<compilerarg value="-Xlint:all" />
+			<compilerarg value="-Werror" />
+		</javac>
+		<!--
+			Test JVMs load this agent so that Mobius code reads GameClock where it
+			was written to read the system clock. Production never loads it.
+		-->
+		<jar destfile="${truth.agent}">
+			<fileset dir="${test.bin}" includes="org/l2jmobius/testing/agent/**" excludes="**/*Test*.class" />
+			<manifest>
+				<attribute name="Premain-Class" value="org.l2jmobius.testing.agent.TruthAgent" />
+			</manifest>
+		</jar>
+	</target>
+
+	<target name="stage" description="Stage a pristine copy of the game runtime for tests to boot from.">
+		<!-- The server writes logs and state into its working directory; the checkout is read-only. -->
+		<sync todir="${runtime.game}">
+			<fileset dir="${datapack}/game" />
+		</sync>
+	</target>
+
+	<target name="test" depends="compile-tests, stage" description="Run the test suite, one JVM per test class.">
+		<delete dir="${test.reports}" quiet="true" />
+		<delete dir="${lock.actual}" quiet="true" />
+		<mkdir dir="${test.reports}" />
+		<!-- Tests run under the JVM flags production runs under, read from the file production reads. -->
+		<loadfile property="server.jvmargs" srcFile="${datapack}/game/java.cfg" />
+		<!--
+			Mobius is built from static singletons. A fresh JVM per class is the
+			only way one test cannot leak state into the next.
+		-->
+		<!-- Every class runs even after a failure: a changed behaviour should show everything it broke, not the first thing. -->
+		<junitlauncher failureProperty="tests.failed" printSummary="true">
+			<classpath refid="test.classpath" />
+			<testclasses outputdir="${test.reports}">
+				<fileset dir="${test.bin}" includes="**/${test.only}.class" />
+				<listener type="legacy-plain" sendSysOut="true" sendSysErr="true" />
+				<listener type="legacy-xml" sendSysOut="true" sendSysErr="true" />
+				<fork dir="${runtime.game}" forkMode="perTestClass">
+					<jvmarg line="${server.jvmargs}" />
+					<jvmarg value="-Djava.awt.headless=true" />
+					<!-- Lets a test bind Rnd to a deterministic stream (CORE_PATCHES.md CP-0001). Production never sets this. -->
+					<jvmarg value="-Dlc.rng.bindable=true" />
+					<!-- Lets a test stop and move the game clock, and makes Mobius code read that clock. Production sets neither. -->
+					<jvmarg value="-Dlc.clock.controllable=true" />
+					<jvmarg value="-javaagent:${truth.agent}" />
+					<!-- Goldens print dates. -->
+					<jvmarg value="-Duser.timezone=UTC" />
+					<!--
+						Every identity hash is the same constant, so hash tables keyed by objects without a hashCode of
+						their own (Mobius's world objects, every enum) iterate in insertion order instead of an order
+						that changes from run to run. Without this no world is reproducible. Costs lookups, not correctness.
+					-->
+					<jvmarg value="-XX:+UnlockExperimentalVMOptions" />
+					<jvmarg value="-XX:hashCode=2" />
+					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
+					<sysproperty key="lc.classes.dir" value="${build.bin}" />
+					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->
+					<sysproperty key="lc.lock.dir" value="${lock.dir}" />
+					<sysproperty key="lc.lock.actual" value="${lock.actual}" />
+				</fork>
+			</testclasses>
+		</junitlauncher>
+		<fail if="tests.failed" message="Tests failed. Reports: ${test.reports}" />
+	</target>
+
+	<target name="gate" depends="dist, test" description="Everything a change must pass." />
+
+</project>

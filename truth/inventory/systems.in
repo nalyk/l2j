@@ -1,0 +1,39 @@
+# The H5 world systems the inventory tracks (retail-truth.md §4.5), one per line: key | name | where | note.
+# The generator adds status, cases and notes columns and keeps them across regenerations.
+seven_signs | Seven Signs: periods, seals, Mammon | mechanics/sevensigns | 
+seven_signs_festival | Festival of Darkness | mechanics/sevensigns (festival) | known incomplete native path (blueprint 11 §1.5)
+dimensional_rift | Dimensional Rift | managers/DimensionalRiftManager | 
+four_sepulchers | Four Sepulchers | scripts/ai/bosses, managers | 
+castle_siege | Castle sieges | mechanics/siege, managers/SiegeManager | 
+fortress_siege | Fortress sieges | managers/FortSiegeManager | 
+clan_hall_auction | Clan hall auctions | managers/ClanHallAuctionManager | 
+clan_hall_siege | Contestable clan hall sieges | managers/CHSiegeManager | 
+territory_war | Territory Wars and wards | managers/TerritoryWarManager, scripts/quests/TerritoryWarScripts | 
+manor | Castle Manor | managers/CastleManorManager | 
+olympiad | Olympiad and heroes | mechanics/olympiad | 
+underground_coliseum | Underground Coliseum | mechanics/undergroundColiseum | 
+kratei_cube | Krateï's Cube | mechanics/krateisCube, managers/games/KrateisCubeManager | 
+handys_block_checker | Handy's Block Checker | managers/HandysBlockCheckerManager, managers/games/BlockCheckerManager | 
+monster_race | Monster Race | managers/games/MonsterRaceManager | 
+fishing | Fishing and the Fishing Championship | mechanics/fishing, managers/FishingChampionshipManager | 
+hellbound | Hellbound: levels, trust, quests, Tully, Beleth | scripts/ai/areas/Hellbound | 
+seed_of_destruction | Seed of Destruction: attack, defense state | managers/SeedOfDestructionManager, scripts/ai/areas/Gracia | defense state a known incomplete native path (blueprint 11 §1.5)
+seed_of_infinity | Seed of Infinity: stages, Hall of Suffering, Hall of Erosion, Heart of Infinity | managers/SeedOfInfinityManager | 
+seed_of_annihilation | Seed of Annihilation | scripts/ai/areas/Gracia/AI/SeedOfAnnihilation | 
+cursed_weapons | Cursed weapons (Zariche, Akamanah) | managers/CursedWeaponsManager | 
+item_auction | Item auction | managers/ItemAuctionManager | 
+mail | Mail and parcels | managers/MailManager | 
+airships_boats | Airships and boats | managers/AirShipManager, managers/BoatManager | 
+subclasses_noblesse | Subclasses, noblesse, certification | scripts/ai/others/SubclassCertification | 
+clan_academy | Clan academy | entity/clan | 
+nevit_vitality_recommendation | Nevit's blessing, vitality, recommendations | managers/DailyResetManager | 
+duels | Duels | managers/DuelManager | 
+raid_points | Raid points | managers/RaidBossPointsManager | 
+grand_bosses | Grand boss lifecycles | managers/GrandBossManager | 
+transformations | Transformations | mechanics/effects | 
+petitions | Petitions | mechanics/petition | 
+lottery | Lottery | managers/games/LotteryManager | 
+castle_tax_treasury | Castle taxes and treasury | mechanics/siege/Castle, managers/CastleManager | 
+fortress_contracts | Fortress-castle contracts and fortress functions | mechanics/siege/Fort | 
+raid_boss_respawn | Raid boss respawn engine | managers/RaidBossSpawnManager | 
+clan_reputation_skills | Clan reputation, levels and clan skills | entity/clan/Clan | 

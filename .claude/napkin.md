@@ -20,6 +20,9 @@
 6. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
    Do instead: judge the gate by `BUILD SUCCESSFUL` in `build/gate.log` and by `failures="0"` in the report XML, not by the shell's exit code.
 
+7. **[2026-11-19] A proof is trusted only after its fix is reverted and it fails**
+   Do instead: on ultra, revert each fix (sed on the core line, or the test wrapper), drop any reverted file from CORE_PATCHES.md `Files:` there (or `check-core-ledger` stops the build before tests run), run the class, see every proof fail with its own message, then `scp` the local files back and md5-check them.
+
 ## Lock Harness Guardrails
 1. **[2026-11-19] A lock case runs whole on its own stream, aligned, in a woken arena**
    Do instead: `Arena.wake()` once before a sweep; per case `Arena.align()` then `_server.withRandom(KeyedRandom.of(SEED, "<stream>", key), ...)` around setup, run and clean-up.
@@ -39,8 +42,8 @@
    Do instead: use `spawn.getSpawnLocation()` for the datapack spot, never `spawn.getX()`.
 9. **[2026-11-19] Territory containment is judged at the creature's height**
    Do instead: use `NpcSpawnTerritory.holds(x, y, z)` (CP-0006); `isInsideZone(x, y)` tests bans at the territory's lowest Z and turns out legal points above a banned band.
-10. **[2026-11-19] Locks run in the truth profile**
-   Do instead: classify every new `config/Custom/*.ini` in `TruthProfile.MODULES` (its on-switch, held off, or neutral); a settings change shows in LOCK-CONFIG-0001.
+10. **[2026-11-19] Locks run in the truth profile: every custom switch off**
+   Do instead: add a new `config/Custom/*.ini` to `TruthProfile.MODULES`; its `= true` lines are turned off by rule (only AllowedPlayerRaces kept), numeric neutral values go in `NEUTRAL_VALUES`. To test a custom path (random spawns), set the config static in a `try/finally`, together with any list its loader fills only when switched on (`MOBS_LIST_NOT_RANDOM`).
 
 ## Core & Datapack Guardrails
 1. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
@@ -55,6 +58,8 @@
 ## Shell & Command Reliability
 1. **[2026-11-18] Python block replacements must match exactly once**
    Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
+2. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
+   Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
 
 ## User Directives
 1. **[2026-11-18] Fix bugs and gaps found in scope at once; do not ask**

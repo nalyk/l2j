@@ -8,8 +8,11 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashSet;
-import java.util.Set;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -34,21 +37,32 @@ class FactSchemaTest
 		}
 	}
 
+	/**
+	 * Monthly partitions with exact month boundaries, each starting where the previous ended, ending in a catch-all (spec §4.5). That they stay two months ahead is the maintenance job's (AT-FACT-00 covers the shape only).
+	 */
 	@Test
 	void factsArePartitionedByMonthWithACatchAll() throws SQLException
 	{
-		final Set<String> partitions = new HashSet<>();
+		final List<String> bounds = new ArrayList<>();
 		try (Connection connection = _database.connect();
 			Statement statement = connection.createStatement();
-			ResultSet result = statement.executeQuery("SELECT partition_name FROM information_schema.partitions WHERE table_schema = '" + TestDatabase.SCHEMA + "' AND table_name = 'lc_fact'"))
+			ResultSet result = statement.executeQuery("SELECT partition_description FROM information_schema.partitions WHERE table_schema = '" + TestDatabase.SCHEMA + "' AND table_name = 'lc_fact' ORDER BY partition_ordinal_position"))
 		{
 			while (result.next())
 			{
-				partitions.add(result.getString(1));
+				bounds.add(result.getString(1));
 			}
 		}
-		assertTrue(partitions.contains("pmax"), "no catch-all partition: " + partitions);
-		assertTrue(partitions.size() > 1, "lc_fact is not partitioned by month: " + partitions);
+		assertEquals("MAXVALUE", bounds.get(bounds.size() - 1), "no catch-all partition: " + bounds);
+		assertTrue(bounds.size() > 2, "lc_fact is not partitioned by month: " + bounds);
+		LocalDate previous = null;
+		for (String bound : bounds.subList(0, bounds.size() - 1))
+		{
+			final LocalDate day = Instant.ofEpochSecond(Long.parseLong(bound)).atZone(ZoneOffset.UTC).toLocalDate();
+			assertEquals(1, day.getDayOfMonth(), "a boundary that is not a month's start: " + day);
+			assertTrue((previous == null) || day.equals(previous.plusMonths(1)), "months not contiguous: " + previous + " then " + day);
+			previous = day;
+		}
 
 		try (Connection connection = _database.connect();
 			Statement statement = connection.createStatement())
@@ -68,18 +82,29 @@ class FactSchemaTest
 			// A fact has a positive sequence number, a sensitivity class 0-3 and a JSON payload.
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 0, "'{}'")));
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'not json'")));
-			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'").replace(", 1, NULL, '{}'", ", 9, NULL, '{}'")), "sensitivity out of range");
+			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'").replace(", 12, 1, '{}'", ", 12, 9, '{}'")), "sensitivity out of range");
 			statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'"));
 
 			// One head per stream, never negative.
-			statement.execute("INSERT INTO lc_stream_head (stream, last_seq) VALUES ('region.12', 1)");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_stream_head (stream, last_seq) VALUES ('region.12', 2)"));
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_stream_head (stream, last_seq) VALUES ('region.13', -1)"));
+			statement.execute("INSERT INTO lc_stream_head (stream, epoch, last_seq, last_logical_time) VALUES ('region.12', 0, 1, 0)");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_stream_head (stream, epoch, last_seq, last_logical_time) VALUES ('region.12', 0, 2, 0)"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_stream_head (stream, epoch, last_seq, last_logical_time) VALUES ('region.13', 0, -1, 0)"));
 
-			// A gap's span runs forward, and an acknowledgement names who and why together.
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_gap (stream_or_type, from_at, to_at, refused, reason) VALUES ('system', '2026-11-19 10:00:00', '2026-11-19 09:00:00', 3, 'QUEUE_FULL')"));
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_gap (stream_or_type, from_at, to_at, refused, reason, acknowledged_by) VALUES ('system', '2026-11-19 10:00:00', '2026-11-19 11:00:00', 3, 'QUEUE_FULL', 'admin')"));
-			statement.execute("INSERT INTO lc_journal_gap (stream_or_type, from_at, to_at, refused, reason) VALUES ('system', '2026-11-19 10:00:00', '2026-11-19 11:00:00', 3, 'RESTART')");
+			// A gap's span runs forward; only a RESTART gap may leave its end and count unknown; an acknowledgement names who and why together.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_gap (stream, epoch, from_seq, to_seq, refused, reason) VALUES ('cap.pvp', 1, 10, 9, 3, 'QUEUE_FULL')"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_gap (stream, epoch, from_seq, to_seq, refused, reason) VALUES ('cap.pvp', 1, 10, NULL, NULL, 'QUEUE_FULL')"), "an open-ended gap that is not a restart");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_gap (stream, epoch, from_seq, to_seq, refused, reason, acknowledged_by) VALUES ('cap.pvp', 1, 10, 12, 3, 'QUEUE_FULL', 'admin')"));
+			statement.execute("INSERT INTO lc_journal_gap (stream, epoch, from_seq, to_seq, refused, reason) VALUES ('cap.pvp', 1, 10, NULL, NULL, 'RESTART')");
+
+			// A batch id is committed once; a clean epoch has ended.
+			statement.execute("INSERT INTO lc_journal_batch (batch_id, epoch, committed_at, facts, frontier_logical_time) VALUES (7, 1, NOW(3), 0, 1000)");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_batch (batch_id, epoch, committed_at, facts, frontier_logical_time) VALUES (7, 1, NOW(3), 3, 2000)"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_epoch (started_at, clean) VALUES (NOW(3), TRUE)"));
+
+			// An effect is done exactly when it has a done time; a captured type names its stream family, an outbox type none.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_effect_outbox (application_id, projector, fact_id, kind, payload, state, created_at) VALUES (UNHEX('00'), 'ledger', 1, 'payout', '{}', 'DONE', NOW(3))"));
+			statement.execute("INSERT INTO lc_effect_outbox (application_id, projector, fact_id, kind, payload, state, created_at) VALUES (UNHEX('00'), 'ledger', 1, 'payout', '{}', 'PENDING', NOW(3))");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, sensitivity, owner_module) VALUES (9, 'Ledger.Kill', 1, 'DURABLE', 'CAPTURED', 1, 'LEDGER')"), "a captured type without its stream family");
 
 			// A telemetry cell is written once per window.
 			statement.execute(bucket());
@@ -94,7 +119,7 @@ class FactSchemaTest
 
 	private static String fact(String at, String stream, long seq, String payload)
 	{
-		return "INSERT INTO lc_fact (occurred_at, stream, stream_seq, type, schema_ver, logical_time, region_id, sensitivity, expires_at, payload) VALUES ('" + at + "', '" + stream + "', " + seq + ", 1, 1, 0, 12, 1, NULL, " + payload + ")";
+		return "INSERT INTO lc_fact (occurred_at, stream, epoch, stream_seq, type, schema_ver, logical_time, region_id, sensitivity, payload) VALUES ('" + at + "', '" + stream + "', 0, " + seq + ", 1, 1, 0, 12, 1, " + payload + ")";
 	}
 
 	private static String bucket()

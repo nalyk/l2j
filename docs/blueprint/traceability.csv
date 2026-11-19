@@ -59,13 +59,13 @@ TR-dominance-benefits-and-obligations,90 §2,dominance benefits and obligations 
 TR-newcomer-catch-in,90 §2,newcomer catch-in,12 §5.2; 10 §8,aden-remembers.md,AR-R05;AR-R10,lc_guild_order;lc_resource_family,"SHORTAGE → catch-in orders (§4.4, §4.6)",Guild NPC,AT-AR-05;AT-AR-10,,specified
 TR-imperfect-information,90 §2,imperfect information,12 §7; 01 §2.5,intel-service.md;aden-remembers.md,INTEL-R01;INTEL-R02;INTEL-R11;INTEL-R12;AR-R08,lc_trace;lc_intel;lc_world_rumor,"no state API; evidence channels (§4.8, §9)",,AT-INTEL-01;AT-INTEL-02;AT-INTEL-14;AT-INTEL-12;AT-AR-08,,specified
 TR-npc-rumors,90 §2,NPC rumors,12 §7; 01 §2.5,aden-remembers.md,AR-R08,lc_world_rumor,rumors and criers (§4.8),Npc.showChatWindow; Npc.broadcastSay,AT-AR-08,,specified
-TR-public-living-chronicle,90 §2,public Living Chronicle,17; 12 §9,,,,,,,,blueprint
-TR-persistent-historical-graph,90 §2,persistent historical graph,17; 12 §9,,,,,,,,blueprint
-TR-item-crafter-provenance,90 §2,"item/crafter provenance (item biography, App. E.5)",17 §4,asset-service.md,ASSET-R07,lc_item_lifecycle,,,AT-ASSET-07,,reviewed
-TR-historical-monument,90 §2,historical monument,17 §2,,,,,,,,blueprint
-TR-npc-historical-reference,90 §2,NPC historical reference (App. E.5),17 §2,,,,,,,,blueprint
-TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,intel-service.md,INTEL-R07,lc_trace;lc_intel,,,AT-INTEL-07,,reviewed
-TR-deterministic-engine-optional-llm-narration,90 §2,deterministic engine + optional LLM narration,01 §2.6; 17 §6,,,,,,,,blueprint
+TR-public-living-chronicle,90 §2,public Living Chronicle,17; 12 §9,chronicle.md,CHR-R01;CHR-R02;CHR-R11;CHR-R13,lc_pub_row;lc_pub_visible;lc_pub_name,"projector → lc_pub_row → website (§4.1, §4.9)",,AT-CHR-01;AT-CHR-02;AT-CHR-10;AT-CHR-11;AT-CHR-00,,specified
+TR-persistent-historical-graph,90 §2,persistent historical graph,17; 12 §9,chronicle.md,CHR-R01;CHR-R03,lc_pub_row;lc_history_event,history rows → chr_history (§2.2),,AT-CHR-01;AT-CHR-03,,specified
+TR-item-crafter-provenance,90 §2,"item/crafter provenance (item biography, App. E.5)",17 §4,asset-service.md;chronicle.md,ASSET-R07;CHR-R08,lc_item_lifecycle;lc_chr_saga;lc_chr_saga_event,item sagas (§4.6),Item.setOwnerId; Player.onDieDropItem; onKillUpdatePvPKarma,AT-ASSET-07;AT-CHR-08,,specified
+TR-historical-monument,90 §2,historical monument,17 §2,chronicle.md,CHR-R06,lc_chr_monument;lc_chr_monument_slot,monuments (§4.4),monument NPC spawn,AT-CHR-06,,specified
+TR-npc-historical-reference,90 §2,NPC historical reference (App. E.5),17 §2,chronicle.md,CHR-R01,lc_pub_row,remembering NPCs (§4.2),Npc.showChatWindow seam,AT-CHR-01,,specified
+TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,intel-service.md;chronicle.md,INTEL-R07;CHR-R11;CHR-R13,lc_trace;lc_intel;lc_pub_visible,website views (§4.9),,AT-INTEL-07;AT-CHR-10;AT-CHR-11,,specified
+TR-deterministic-engine-optional-llm-narration,90 §2,deterministic engine + optional LLM narration,01 §2.6; 17 §6,chronicle.md,CHR-R04,lc_chr_prose,narrator boundary (§4.8),,AT-CHR-04,,specified
 TR-npc-reactions-smuggling,90 §2,NPC reactions: smuggling,"12 §5 (situations), §8 (caravans/banditry)",aden-remembers.md,AR-R08;AR-R10,lc_situation;lc_world_rumor,TRADE_SHIFT (§4.4),,AT-AR-08;AT-AR-10,,specified
 TR-npc-reactions-corruption,90 §2,NPC reactions: corruption,"12 §5 (situations), §8 (caravans/banditry)",aden-remembers.md,AR-R08;AR-R10,lc_situation;lc_world_rumor,UNREST (§4.4),,AT-AR-08;AT-AR-10,,specified
 TR-npc-reactions-rebellion,90 §2,NPC reactions: rebellion,"12 §5 (situations), §8 (caravans/banditry)",aden-remembers.md,AR-R08;AR-R10,lc_situation;lc_world_rumor,"UNREST, WAR_EXHAUSTION (§4.4)",,AT-AR-08;AT-AR-10,,specified
@@ -183,10 +183,10 @@ TR-caravan-escort-and-treaty-contracts,90 §4,Caravan Escort and Treaty contract
 TR-cursed-weapon-writs,90 §4,cursed-weapon writs,16 §2,black-ledger.md,BL-R03,,,,AT-BL-03,,reviewed
 TR-citizen-bounties,90 §4,citizen bounties,16 §2,,,,,,,,blueprint
 TR-wanted-boards,90 §4,wanted boards,16 §2,,,,,,,,blueprint
-TR-aden-gazette,90 §4,Aden Gazette,17 §2–§3,,,,,,,,blueprint
-TR-bards,90 §4,bards,17 §2–§3,,,,,,,,blueprint
-TR-town-criers,90 §4,town criers,17 §2–§3,,,,,,,,blueprint
-TR-saga-replays,90 §4,saga replays,17 §5,,,,,,,,blueprint
+TR-aden-gazette,90 §4,Aden Gazette,17 §2–§3,chronicle.md,CHR-R05;CHR-R09,lc_chr_issue;lc_chr_issue_entry;lc_chr_letter,"the Gazette (§4.3, §4.5)",DailyResetManager day seam,AT-CHR-05;AT-CHR-09,,specified
+TR-bards,90 §4,bards,17 §2–§3,chronicle.md,CHR-R01;CHR-R04,lc_pub_row;lc_chr_prose,bards (§4.2),,AT-CHR-01;AT-CHR-04,,specified
+TR-town-criers,90 §4,town criers,17 §2–§3,chronicle.md,CHR-R07,lc_chr_crier_log,criers (§4.2),Npc.broadcastSay,AT-CHR-07,,specified
+TR-saga-replays,90 §4,saga replays,17 §5,chronicle.md,CHR-R02;CHR-R10,lc_chr_battle;lc_chr_battle_sample;lc_chr_battle_mark,battles and replays (§4.7),battle sampler; Door.doDie,AT-CHR-02,,specified
 TR-public-truth-report,90 §4,public Truth Report,11 §5,,,,,,,,blueprint
 TR-lc-why-forensics,90 §4,`lc why` forensics,04 §6,,,,,,,,blueprint
 TR-codex-of-aden-ui,90 §4,Codex of Aden UI,04 §5,codex-ui.md,UI-R01;UI-R02;UI-R03;UI-R04;UI-R05;UI-R06;UI-R07,,,,AT-UI-01;AT-UI-02;AT-UI-03;AT-UI-04;AT-UI-05;AT-UI-06;AT-UI-07,,reviewed
@@ -201,4 +201,4 @@ TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal int
 TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md;pact.md,ASSET-R01;ASSET-R03;ASSET-R14;PACT-R02,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00;AT-PACT-02,,reviewed
 TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,wayfarers-memory.md,MEM-R06,,,,AT-MEM-06,,reviewed
 TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07;ACTOR-R09,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07;AT-ACTOR-09,,reviewed
-TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,,,,,,,,blueprint
+TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,chronicle.md,CHR-R01;CHR-R12,lc_pub_visible,"rule of publication (§1, §2.1)",,AT-CHR-01;AT-CHR-03,,specified

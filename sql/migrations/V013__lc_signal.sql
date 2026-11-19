@@ -94,3 +94,8 @@ CREATE TABLE lc_signal_audit_sample (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 INSERT INTO lc_expiring_table (table_name, expires_column, owner_module, max_life_hours) VALUES ('lc_signal_schedule', 'expires_at', 'SIGNAL', 720), ('lc_signal_session', 'expires_at', 'SIGNAL', 2160), ('lc_signal_audit_sample', 'expires_at', 'SIGNAL', 168);
+
+-- Signal's publication type (spec §4.8; intel-service.md §4.7).
+INSERT INTO lc_pub_type (pub_type, min_delay_minutes, location_related) VALUES ('signal_demand', 1440, TRUE);
+
+INSERT INTO lc_pub_field_rule (pub_type, field, rule) VALUES ('signal_demand', 'territory', 'AREA_TERRITORY'), ('signal_demand', 'objective', 'TEXT_FROM_FACT'), ('signal_demand', 'band', 'TEXT_FROM_FACT'), ('signal_demand', 'day', 'DAY');

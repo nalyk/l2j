@@ -1,6 +1,6 @@
 # SPEC-MEM — Wayfarer's Memory
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 14 (Wayfarer's Memory); 01 §2.5 (shared content is just content); 02 §1, §4, §6 (capture ≤ 2 µs p99); 03 §4.4
   (party seams); 04 §4 (Intel Service: registered copies), §5 (Codex: the login recap); 12 (Aden Remembers moves the
   world); 13 (Signal reads "played together before"); 15 (PACT contracts in projects); 16 §8 / 14 §8 (the Ledger boundary);
@@ -52,8 +52,11 @@ lc_mem_companion(char_id, other_char, party_key VARCHAR(48), overlap_minutes INT
   the character's own rows (a project's missing items); `HISTORICAL` kept only as history.
 - **Coalescing**: a row's key is (char, relation, subject, object, region, provenance, teller, origin, `value_key`); the
   origin is part of it, so two forwarded reports first observed by different characters stay two rows. `value_key` is the
-  part of the value that identifies a distinct observation: price and enchant for `SOLD_BY`, `BUYS`, `PRICED_AT_NPC`,
-  `BOUGHT_FROM`; nothing for counts. A repeat with the same key updates `last_at` and `times`; a different price or enchant
+  part of the value that identifies a distinct observation: price and enchant for `SOLD_BY`, `BUYS`, `BOUGHT_FROM`; the
+  merchant's buy-list id and the price for `PRICED_AT_NPC` (a merchant has several lists, `network/serverpackets/
+  BuyList.java:34-42`, e.g. `dist/game/data/html/merchant/30001-1.htm:3-4` opens lists 3000100 and 3000101); the recipe
+  id and the fee for `CRAFTS` (`network/serverpackets/RecipeShopSellList.java:57-59`);
+  nothing for counts. A repeat with the same key updates `last_at` and `times`; a different price or enchant
   is a **new row**, and offers that coexist in one list (two swords of one enchant at two prices, two enchant levels) are
   rows that never contradict each other: what contradicts an offer is a later complete view of the same list without it
   (§3.1). Different tellers of the same thing stay apart.
@@ -105,11 +108,17 @@ listed in `lc_expiring_table` (intel-service.md §4.5).
 |---|---|---|
 | — | a capture, an import, a rumor told, a grant | `CURRENT`, tier `RAW` (imports: `DURABLE`) |
 | `CURRENT` | its relation's `StaleAfter` passes since `last_at` | `STALE` |
-| `CURRENT`, `STALE` | a later **complete** view of the same list (the same store owner and relation, or the same merchant's buy list) in which this offer (its item and `value_key`) does not appear | `CONTRADICTED` |
+| `CURRENT`, `STALE` | a later **intact** view of the same list in which this offer (its subject and `value_key`) does not appear | `CONTRADICTED` |
 | `CONTRADICTED`, `STALE` | the offer appears again in a view of its list | `CURRENT` |
 
-A view is complete when its capture was not truncated (§3.4, `MaxStoreItemsCaptured`); a truncated view makes the offers it
-shows current and contradicts nothing. Offers shown together in one view are all current together, so no sequence of
+A **list** is a private store's sell list, its buy list or its manufacture list (store owner and relation), or one
+merchant buy list (merchant and list id). A **view** is one capture of one list, and it travels as **one unit** from the
+seam to the database: one buffer record holding the entry count and up to `MaxStoreItemsCaptured` entries (§3.4),
+accepted or refused whole by the ring, and applied by the writer in one step (its entries coalesced and its absences
+decided together), dropped whole if the backlog must drop. A view is **intact** when it was not truncated and was applied
+whole; only an intact view decides absences, and an intact view with no entries (an emptied store) contradicts every
+offer of its list. A truncated view makes the offers it shows current and contradicts nothing; a view that cannot be
+applied whole is not applied at all (counted), so loss makes the journal incomplete, never wrong. Offers shown together in one view are all current together, so no sequence of
 views of an unchanged list can flip one of them. Only the list relations (`SOLD_BY`, `BUYS`, `CRAFTS`, `PRICED_AT_NPC`)
 are contradicted, and only by the character's own `KNOWN` views.
 | `RAW` | `raw_retention_days` pass, not pinned, no `intel_id` | folded into its `SUMMARY` row, deleted |
@@ -155,12 +164,12 @@ disclosed to them; `LEAD` only from the character's own Intel grants. Chat is ne
 Each online character has a bounded buffer of primitive records (`CaptureSlotsPerChar`), a multi-producer ring like the
 journal's (fact-journal.md §3.2: claim, fill, publish; no lock, no I/O, no allocation), because its producers are the packet,
 network, combat and event threads. A seam's work is bounded: at most `MaxStoreItemsCaptured` entries per store list, the
-rest counted as truncated. Every seam is wrapped so that **any exception inside capture is caught, counted and dropped**:
+rest counted as truncated; a list view is one record (§3.1), its entries in the record's preallocated slots. Every seam is wrapped so that **any exception inside capture is caught, counted and dropped**:
 retail processing continues exactly as it would without Wayfarer. A full buffer refuses new records (counted); records are
 never overwritten. The Wayfarer writer coalesces in memory and commits every `FlushSeconds` and at the **logout seam**, a
 synchronous hook before `storeMe()` (`network/Disconnection.java:110-120`; Mobius's logout event runs after the save,
 `Player.java:11766-11770`). During a database outage the writer keeps coalesced rows in memory up to `WriterBacklogRows` and
-drops the oldest beyond that (counted, alarmed); a crash loses what was not committed.
+drops the oldest beyond that, a list view always whole (counted, alarmed); a crash loses what was not committed.
 
 ### 3.5 Who is captured
 
@@ -329,7 +338,7 @@ the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 | AT-MEM-00 | integration | the migration applies; keys and checks refuse an import without teller or origin, an import as `KNOWN`, intel content on a row, intel on a durable or summary row, a second row for an intel item, a second row for one coalescing key, a durable row with an expiry, a shared fact without origin, a changed shared fact, a note over its bound; expiring tables registered |
 | AT-MEM-01 | integration | each seam: the captured values equal the bytes submitted to the client's connection (store lists, buy list) or the change made (trade, loot, quest); a store list whose write is refused (channel closed) leaves no observation; a party pickup distributed to another member records the acquisition for the recipient only, with the monster only if the recipient saw the drop (picker and recipient with differing drop visibility); a store changed between the interaction and the write captures what was written; a ground pickup with its monster from the drop map, party Adena without one, herbs not obtained; a quest advanced by a kill records no NPC; an abort is `QUEST_ABANDONED`, a repeatable script cancellation `QUEST_ENDED`, a non-repeatable completion `QUEST_DONE`; a failed trade records nothing; a boss sent to the player recorded, one hidden from them not; a packet whose serialisation throws leaves no observation; ground loot picked up by a character who saw the drop knows its monster, one who arrived later does not |
 | AT-MEM-02 | integration | the same item known, told by two tellers and rumored: four rows, three groups; a page forwarded twice keeps the original origin; one page carrying the same report first observed by two characters imports as two rows |
-| AT-MEM-03 | integration | a complete view without an earlier offer makes it `CONTRADICTED`; two swords of one enchant at two prices and two enchant levels in one store stay `CURRENT` together through any number of views; a truncated view contradicts nothing; an offer seen again is `CURRENT` again; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
+| AT-MEM-03 | integration | a complete view without an earlier offer makes it `CONTRADICTED`; two swords of one enchant at two prices and two enchant levels in one store stay `CURRENT` together through any number of views; a truncated view contradicts nothing; an emptied store contradicts all its offers; a two-offer view whose record is refused by a full ring, or dropped from the backlog, contradicts nothing and leaves both offers as they were; switching between a merchant's two lists (3000100, 3000101) contradicts neither; a manufacture list with a changed fee contradicts the old fee and a return to it makes it `CURRENT` again; an offer seen again is `CURRENT` again; prices stale after 3 days; a supply change by Aden Remembers leaves old knowledge old |
 | AT-MEM-04 | unit, integration | the query set is exactly §4.1's; two characters with disjoint rows see only their own through every query; a forged page id or query id refused; nothing sorts across characters |
 | AT-MEM-05 | integration | 400 kills one row; raw rows summarised and deleted after retention, the summary still naming each source monster and seller and keeping each price and enchant apart, pinned ones kept; companion rows expired and capped; each bound refused at its limit; a deleted character leaves no `lc_mem_*` row |
 | AT-MEM-06 | integration, restart | a lead and an Intel rumor read through the Intel Service; after expiry both rows gone and the lead history alone shown; no summary, session, milestone or page holds their content; a rebuild and a replay after expiry show nothing more |
@@ -363,6 +372,10 @@ the observation it shows. Admin: `lc why mem <char> <obs>`, `lc mem unfreeze`.
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: open were absences decided from a view partly lost in the ring or backlog, merchants'
+  several buy lists, and manufacture fees without a value key. Revision 5: a list view is one capture unit, accepted,
+  applied and dropped whole, and only an intact view decides absences (an empty one included); the buy-list id and the
+  manufacture fee in the value key; tests for each.
 - Round 3 (Codex), NO SIGN-OFF: open were two offers of one enchant at two prices contradicting each other, summaries
   folding distinct values, party pickups recorded for the picker rather than the recipient, and capture published before
   the packet was submitted. The rest was accepted as implementation obligations and stated limits. Revision 4:

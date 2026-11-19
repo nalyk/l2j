@@ -38,6 +38,8 @@ class SpecTraceabilityTest
 
 	/** Requirement id → the acceptance tests it names. */
 	private static final Map<String, List<String>> REQUIREMENTS = new LinkedHashMap<>();
+	/** Requirements kept with their number but withdrawn (docs/spec/README.md, Identifiers): no test, no matrix row. */
+	private static final Set<String> WITHDRAWN = new HashSet<>();
 	/** Acceptance test id → its spec file. */
 	private static final Map<String, String> TESTS = new HashMap<>();
 	private static final List<Map<String, String>> MATRIX = new ArrayList<>();
@@ -56,6 +58,11 @@ class SpecTraceabilityTest
 				final Matcher requirement = REQUIREMENT.matcher(text);
 				while (requirement.find())
 				{
+					if (requirement.group(2).startsWith("withdrawn"))
+					{
+						assertTrue(WITHDRAWN.add(requirement.group(1)), "requirement defined twice: " + requirement.group(1));
+						continue;
+					}
 					final List<String> tests = new ArrayList<>();
 					final Matcher test = TEST_ID.matcher(requirement.group(3));
 					while (test.find())

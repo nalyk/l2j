@@ -7,29 +7,30 @@
 - Each item includes date + "Do instead".
 
 ## Execution & Validation (Highest Priority)
-1. **[2026-11-19] Git hygiene is continuous and validated, every green step**
+1. **[2026-11-19] A test gate in an `&&` chain must fail on failure**
+   `ssh ... grep -o "BUILD [A-Z]*"` exits 0 on "BUILD FAILED" too, so a chain went on to commit and push a red tree.
+   Do instead: gate with `ssh ... './build.sh test ... > log; grep -q "BUILD SUCCESSFUL" log'` and run the traceability test after every spec edit, not only some.
+2. **[2026-11-19] Git hygiene is continuous and validated, every green step**
    Do instead: before committing, `md5sum` every changed file locally and on ultra and diff them (commit only what the green gate ran); after committing, clean ultra (`git checkout -- . && git clean -fdq test`), push to origin and ultra, then check that local, `origin/n2-foundation` and ultra `HEAD` are the same commit and that ultra's `git status --short` is empty.
-2. **[2026-11-18] Builds and tests run on ultra, never on WSL**
+3. **[2026-11-18] Builds and tests run on ultra, never on WSL**
    Do instead: `scp` the changed files to `nalyk@build-host:gits/l2j/...`, run `./build.sh` (full gate) or `./build.sh test -Dtest.only=<Class>Test` there, write output to `build/gate.log` and read `build/test-reports/TEST-*.xml` for failures.
-3. **[2026-11-18] A golden is recorded by copying, and trusted only after a second run**
+4. **[2026-11-18] A golden is recorded by copying, and trusted only after a second run**
    Do instead: on ultra copy `build/lock-actual/<golden>` to `test/lock/<golden>`, rerun the classes whose goldens changed (`./build.sh test -Dtest.only=<Class>Test`), commit only when they reproduce byte for byte; then `scp` the goldens back.
-4. **[2026-11-19] A gate is 8 minutes: run it in the background and prepare the next step meanwhile**
+5. **[2026-11-19] A gate is 8 minutes: run it in the background and prepare the next step meanwhile**
    Do instead: start the gate with `run_in_background`, write the next patch as a script in the scratchpad (dry-run it on copies), apply it only after the current step is committed.
-5. **[2026-11-19] Ultra keeps files you `scp`'d even after a local `git stash`**
+6. **[2026-11-19] Ultra keeps files you `scp`'d even after a local `git stash`**
    Do instead: after stashing or reverting locally, `git checkout -- <files>` on ultra too, and run `git status --short` there before every gate run.
-6. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
+7. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
    Do instead: judge the gate by `BUILD SUCCESSFUL` in `build/gate.log` and by `failures="0"` in the report XML, not by the shell's exit code.
 
-7. **[2026-11-19] A proof is trusted only after its fix is reverted and it fails**
+8. **[2026-11-19] A proof is trusted only after its fix is reverted and it fails**
    Do instead: on ultra, revert each fix (sed on the core line, or the test wrapper), drop any reverted file from CORE_PATCHES.md `Files:` there (or `check-core-ledger` stops the build before tests run), run the class, see every proof fail with its own message, then `scp` the local files back and md5-check them.
 
-8. **[2026-11-19] Intakes run in a separate worktree on ultra, and move `upstream` for every worktree**
+9. **[2026-11-19] Intakes run in a separate worktree on ultra, and move `upstream` for every worktree**
    Do instead: `git worktree add --detach ~/gits/l2j-intake n2-foundation`, run `tools/intake/intake.sh <sha> n2-foundation` there in the background, then fetch `upstream` and `intake/<sha12>` back, push both to origin (the mirror push is a fast-forward), and `git worktree remove` it. Ledger checks compare with `git merge-base HEAD upstream`, never the tip.
-9. **[2026-11-19] A reverted fix that would deadlock is not run**
+10. **[2026-11-19] A reverted fix that would deadlock is not run**
    Do instead: when a fix prevents a deadlock (a lock taken from inside the simulation), prove it by the test alone; a hung build container outlives `timeout`.
 
-10. **[2026-11-19] A spec about Mobius rests on a cited source survey, and is reviewed before it is called reviewed**
-   Do instead: survey first (an Explore agent returning `path:line` facts), verify every member and line the spec cites against the source before committing, and run Codex rounds on the spec until it signs off; a design that joins Mobius's own locks failed review (inverted orders, unlocked `changeCount`, thread-owned locks).
 
 ## Lock Harness Guardrails
 1. **[2026-11-19] A lock case runs whole on its own stream, aligned, in a woken arena**

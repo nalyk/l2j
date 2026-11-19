@@ -439,7 +439,7 @@ and pack animals are new NPC templates on existing client models (`displayId`), 
   After a restart an `EN_ROUTE` caravan is spawned at `last_node` and walked from it.
 - **Escort**: a Caravan Escort contract (pact.md §4.2, issuer the Caravan Guild), escrowed from the pool (plus Caravan
   Protection's custody) at dispatch, settled on arrival by participation, refunded to the pool on a raid or a recall.
-  **Participation**: while the caravan is `EN_ROUTE`, every `EscortSampleSeconds` (30) each signed escort who is alive,
+  **Participation**: while the caravan is `EN_ROUTE`, every `EscortSampleSeconds` (30) each registered escort (enrolled at the Guild Master, pact.md §4.2) who is alive,
   online and within `EscortRadius` (1500) of the Caravan Master is credited the interval (`presence_seconds`); at arrival
   the escrow is split among escorts whose presence is at least `EscortMinSharePermille` (300) of the travel time, in
   proportion to their presence, the remainder (all of it if nobody qualifies) refunded to the pool. PACT settles the
@@ -670,7 +670,8 @@ asset-service.md revision 10, pact.md revision 6 and black-ledger.md revision 7 
 
 ## 12. Review record
 
-- After the sign-off, the amendment reviews of the dependent specs changed three details here, each to match what those
+- After the sign-off, the amendment reviews of the dependent specs changed four details here (the fourth: escorts are
+  "registered", not "signed", matching PACT's participants), each to match what those
   specs now say: Guild Orders are PACT Purchase Orders of an institutional buyer; each telemetry window is read once
   and the baselines' daily values kept in derived state; the Market Charter is a rebate after signing.
 - Round 5 (Codex), **SIGN-OFF WITH FIXES**: Amnesty compared fact ids, which are delivery order; revision 6 compares

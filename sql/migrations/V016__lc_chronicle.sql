@@ -16,7 +16,9 @@ CREATE TABLE lc_pub_row (
 	source_fact_to BIGINT NOT NULL,
 	superseded_by BIGINT NULL,
 	withdrawn_at TIMESTAMP(3) NULL,
+	application_id BINARY(16) NULL,
 	PRIMARY KEY (pub_row_id),
+	UNIQUE KEY uk_pub_row_application (application_id),
 	KEY idx_pub_row_type (pub_type, written_at),
 	CONSTRAINT chk_pub_row_fields CHECK (JSON_VALID(fields) AND JSON_TYPE(fields) = 'OBJECT'),
 	CONSTRAINT chk_pub_row_facts CHECK (source_fact_to >= source_fact_from),
@@ -25,9 +27,9 @@ CREATE TABLE lc_pub_row (
 	CONSTRAINT fk_pub_row_successor FOREIGN KEY (superseded_by) REFERENCES lc_pub_row (pub_row_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
-CREATE TRIGGER lc_pub_row_due BEFORE INSERT ON lc_pub_row FOR EACH ROW BEGIN DECLARE fact_at TIMESTAMP(3); SET NEW.written_at = NOW(3); SELECT MAX(occurred_at) INTO fact_at FROM lc_fact WHERE id = NEW.source_fact_to; IF fact_at IS NULL OR NEW.event_at < fact_at OR NEW.written_at < NEW.event_at + INTERVAL (SELECT min_delay_minutes FROM lc_pub_type WHERE pub_type = NEW.pub_type) MINUTE OR NEW.superseded_by IS NOT NULL OR NEW.withdrawn_at IS NOT NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pub_row: written only once due by the clock, counted from its newest source fact, and current'; END IF; END;
+CREATE TRIGGER lc_pub_row_due BEFORE INSERT ON lc_pub_row FOR EACH ROW BEGIN DECLARE fact_at TIMESTAMP(3); SET NEW.written_at = NOW(3); SELECT MAX(occurred_at) INTO fact_at FROM lc_fact WHERE id BETWEEN NEW.source_fact_from AND NEW.source_fact_to; IF fact_at IS NULL OR NOT EXISTS (SELECT 1 FROM lc_fact WHERE id = NEW.source_fact_to) OR NEW.event_at < fact_at OR NEW.written_at < NEW.event_at + INTERVAL (SELECT min_delay_minutes FROM lc_pub_type WHERE pub_type = NEW.pub_type) MINUTE OR NEW.superseded_by IS NOT NULL OR NEW.withdrawn_at IS NOT NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pub_row: written only once due by the clock, counted from its newest source fact, and current'; END IF; END;
 
-CREATE TRIGGER lc_pub_row_frozen BEFORE UPDATE ON lc_pub_row FOR EACH ROW IF NOT IFNULL(NEW.pub_row_id = OLD.pub_row_id AND NEW.pub_type = OLD.pub_type AND NEW.written_at = OLD.written_at AND NEW.event_at = OLD.event_at AND NEW.fields = OLD.fields AND NEW.source_fact_from = OLD.source_fact_from AND NEW.source_fact_to = OLD.source_fact_to AND OLD.superseded_by IS NULL AND OLD.withdrawn_at IS NULL AND ((NEW.superseded_by IS NOT NULL AND NEW.withdrawn_at IS NULL AND NEW.superseded_by > OLD.pub_row_id AND (SELECT pub_type = OLD.pub_type AND superseded_by IS NULL AND withdrawn_at IS NULL FROM lc_pub_row WHERE pub_row_id = NEW.superseded_by)) OR (NEW.superseded_by IS NULL AND NEW.withdrawn_at IS NOT NULL)), FALSE) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pub_row: a row never changes; it is corrected once by a later current row of its type, or withdrawn once'; END IF;
+CREATE TRIGGER lc_pub_row_frozen BEFORE UPDATE ON lc_pub_row FOR EACH ROW IF NOT IFNULL(NEW.pub_row_id = OLD.pub_row_id AND NEW.pub_type = OLD.pub_type AND NEW.written_at = OLD.written_at AND NEW.event_at = OLD.event_at AND NEW.fields = OLD.fields AND NEW.source_fact_from = OLD.source_fact_from AND NEW.source_fact_to = OLD.source_fact_to AND NEW.application_id <=> OLD.application_id AND OLD.superseded_by IS NULL AND OLD.withdrawn_at IS NULL AND ((NEW.superseded_by IS NOT NULL AND NEW.withdrawn_at IS NULL AND NEW.superseded_by > OLD.pub_row_id AND (SELECT pub_type = OLD.pub_type AND superseded_by IS NULL AND withdrawn_at IS NULL FROM lc_pub_row WHERE pub_row_id = NEW.superseded_by)) OR (NEW.superseded_by IS NULL AND NEW.withdrawn_at IS NOT NULL)), FALSE) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pub_row: a row never changes; it is corrected once by a later current row of its type, or withdrawn once'; END IF;
 
 CREATE TRIGGER lc_pub_row_kept BEFORE DELETE ON lc_pub_row FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_pub_row: rows are never deleted';
 

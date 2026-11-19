@@ -1,6 +1,6 @@
 # SPEC-PRO — Profiles and Mobius custom modules
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
 - Blueprint: 02 §8 (configuration is a liability; the canonical ruleset is the default; every key has an owner, range,
   default and test), 03 §8 (Mobius H5 custom modules: canonical policy), 10 §5.4 and §9 (citizens' own bounds), 11 §3
   (the `truth` profile), 20 §1.
@@ -36,7 +36,9 @@ dist/game/data/lc/custom_policy.csv        every key of the 44 custom files: mod
 <server root>/config/                      the materialised tree the server reads (§4.1), read-only
 ```
 
-- **Datapack data is not configuration**: files under `dist/game/data` other than the events' `config.xml` (buy lists,
+- **Datapack data is not configuration**: files under `dist/game/data` other than the events' `config.xml` and Living
+  Chronicle's own tables `dist/game/data/lc/*.csv` (configuration by their specs' §8, aden-remembers.md §8: canonical,
+  hashed, overlayable like any configuration file) (buy lists,
   `MerchantPriceConfig.xml`, read at startup by `gameserver/data/MerchantPriceConfigTable.java:80`, spawns, NPCs) are game
   data. No profile overlays them, no profile differs in them, and a change to them is a reviewed change of the datapack,
   locked by the behaviour lock and, for those with a Living Chronicle meaning, by its specs.
@@ -91,15 +93,21 @@ Before the world loads, the profile check refuses to start, naming every differe
 2. every materialised file equals the materialisation of the canonical tree with the profile's overlay and the listed
    machine keys (recomputed), and no other key of a staged file differs. **`hexid.txt`** is the one file a server writes:
    the login registration saves the server's identity there (`gameserver/LoginServerThread.java:256`, read at
-   `gameserver/config/ServerConfig.java:280`), so it lives beside the read-only tree as writable machine state, excluded
-   from the hashes and from every overlay;
+   `gameserver/config/ServerConfig.java:280`) at the path upstream hard-codes, `./config/hexid.txt`
+   (`ServerConfig.java:70`), so that one file inside the otherwise read-only tree is writable machine state, excluded from
+   the hashes and from every overlay;
 3. every key of the 44 custom files has the value `custom_policy.csv` gives for the profile, and every Living Chronicle key
    the value its spec's §8 gives;
 4. in `truth`, Living Chronicle starts **no module**: its bootstrap reads the profile and, for `truth`, initialises
    nothing (one gate, not a key per module); in the other profiles Aden Remembers' `Enabled` (aden-remembers.md §8) is as
    its spec says.
 
-The profile, the overlay's hash and the materialised hashes are written as a `config` fact (fact-journal.md §4.1).
+The profile, the overlay's hash and the materialised hashes are written as a `config` fact (fact-journal.md §4.1). **Effective values**: loaders derive some values from the files (the
+multilingual loader sets `GeneralConfig.CHECK_HTML_ENCODING` false, `gameserver/config/custom/MultilingualSupportConfig.java:55`),
+so after loading the check also snapshots every public static field of the configuration classes into the record; a
+reload is accepted only if it yields the same snapshot. Upstream's `IPConfigData` keeps its subnets and hosts in static
+lists that each reload appends to without clearing (`ServerConfig.java:409-410`, `:446`); the profile core patch clears
+them before parsing (a retail bug fix), so an accepted reload changes nothing.
 **Reloads**: Mobius re-runs `ConfigLoader.init()` from an admin command and the GUI (`dist/game/data/scripts/handlers/
 chat/commands/admin/AdminReload.java:169`, `gameserver/ui/Gui.java:198`), and the same admin command reloads
 `DynamicExpRates.xml`, `SecondaryAuth.xml`, the access levels and admin commands, the siege schedule and others directly
@@ -224,14 +232,14 @@ None for players. Admin: `lc config <file> <key>` prints the canonical, overlay 
 | PRO-R03 | The `truth` overlay MUST equal the behaviour lock's rule, and in `truth` no Living Chronicle module MUST start. | AT-PRO-03 |
 | PRO-R04 | Each custom module MUST have, per profile, exactly `custom_policy.csv`'s values for every key of its file. | AT-PRO-04 |
 | PRO-R05 | withdrawn (revision 2): the human-only captcha would let origin decide a mechanic (§4.3). | — |
-| PRO-R06 | The profile and the materialised hashes MUST be recorded as a `config` fact at startup and at every reload. | AT-PRO-01 |
+| PRO-R06 | The profile, the materialised hashes and the effective values MUST be recorded at startup and at every reload: as a `config` fact, or in `truth` in `materialised.json`. | AT-PRO-01 |
 | PRO-R07 | No custom NPC 03 §8 keeps out of the world MUST be spawned by data. | AT-PRO-05 |
 | PRO-R08 | The welcome line MUST be the latest issue's headline in the player's language, or the canonical text without an issue. | AT-PRO-06 |
 | PRO-R09 | The canonical files MUST equal their committed manifest. | AT-PRO-07 |
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-PRO-01 | integration | each profile: a value changed by its overlay is the one read by `ConfigReader`, by `FortSiegeManager`'s own `Properties`, by the LoginServer's `LoginConfig`, by an event's `config.xml` (replaced whole) and by `ServerConfig`'s `chatfilter.txt`; an overlay of `SkillDurationList` replaces the whole continued value; an overlay creating a file the canonical tree lacks creates it; the `config` fact holds the hashes; the scan finds no configuration file outside the canonical set |
+| AT-PRO-01 | integration | each profile: a value changed by its overlay is the one read by `ConfigReader`, by `FortSiegeManager`'s own `Properties`, by the LoginServer's `LoginConfig`, by an event's `config.xml` (replaced whole) and by `ServerConfig`'s `chatfilter.txt`; an overlay of `SkillDurationList` replaces the whole continued value; an overlay creating a file the canonical tree lacks creates it; the `config` fact (in `truth`, `materialised.json`, with no fact written) holds the hashes and the effective-value snapshot; an admin reload with identical files yields the same snapshot, `ipconfig.xml`'s lists included; the scan finds no configuration file outside the canonical set |
 | AT-PRO-02 | integration | a hand edit of a canonical file, an overlay with an unknown key, an unknown profile, no profile at all (neither server starts), a materialised file changed before an admin reload (each subcommand reading configuration: the generic one, `DynamicExpRates.xml`, `SecondaryAuth.xml`, access levels, siege schedule) and before a GUI reload; machine staging of an unlisted key; `admin_setconfig` outside `dev`: each refused with the difference named |
 | AT-PRO-03 | unit, integration | the committed `truth` overlay equals `TruthProfile`'s rule over the canonical files; LOCK-CONFIG-0001 passes on the materialised `truth` tree; a `truth` server starts no Living Chronicle module |
 | AT-PRO-04 | unit | `custom_policy.csv` covers every key of the 44 files of `TruthProfile.MODULES`; each profile's materialisation yields exactly its column, numeric keys included; "off" leaves no switch true (Community Board services, `BankingAutoConvert`) |
@@ -255,6 +263,10 @@ per-principal Olympiad and event limits.
 
 ## 12. Review record
 
+- Round 5 (Codex), NO SIGN-OFF: Living Chronicle's `data/lc` tables excluded as data; loader-derived values not
+  compared; `hexid.txt` at a path upstream does not use; the `truth` record contradicted by PRO-R06; reloads appending to
+  static lists. Revision 6: `data/lc/*.csv` canonical; an effective-value snapshot checked at reload; `config/hexid.txt`
+  writable in place; PRO-R06 and AT-PRO-01 per profile; the static lists cleared.
 - Round 4 (Codex), NO SIGN-OFF: `MerchantPriceConfig.xml` read as configuration outside the set; GUI access and ban
   reloads; the harness replacing `ipconfig.xml` whole; other admin commands assigning configuration; `hexid.txt` written by
   the server; the `truth` record without a journal; a shipped-true error. Revision 5: datapack data is not configuration

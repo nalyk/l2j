@@ -97,8 +97,10 @@ lc_pact_history(char_id INT PK, completed INT, cancelled INT, defaults INT, craf
   charter, so no charter state can change a quoted fee. After that signature commits, if a Market Charter is enacted in
   the territory and not suspended, its custody pays the payer a **rebate** of ⌊(1 − factor) × the registration part of
   `fee_adena`⌋ (never of the sealing fee) by service mail (Asset
-  `release`), once, under the settlement key `CHARTER/<law>/<contract>`. The rebate is an **effect intent** written in the
-  last signature's own transaction (fact-journal.md §4.4), so a restart between the signing and the payment still pays it;
+  `release`), once, under the settlement key `CHARTER/<law>/<contract>`. The rebate is an **effect intent** of PACT's projector:
+  the last signature's transaction stages its `Pact.Signed` fact (the last one, which moves the contract to `SIGNED`), and the projector, applying that fact, writes the
+  rebate intent with its checkpoint (fact-journal.md §4.4: position (fact, effect index), application id from (projector,
+  fact, index)), so a restart between the signing and the payment still pays it;
   its effect ends in one of two completed outcomes, never a failure: paid (`Pact.RebatePaid`), or skipped because the
   charter is suspended, ended or its custody cannot pay (`Pact.RebateSkipped`, with the reason). The Codex shows the
   rebate as expected, never as part of the terms (aden-remembers.md §4.5).
@@ -438,7 +440,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 | AT-PACT-04 | unit | each clause kind's evaluator against a table of inputs and expected results, including boundaries (a deadline at the same millisecond, a member reaching the minutes exactly); the static scan finds no evaluator reading outside its named inputs |
 | AT-PACT-05 | integration | raids and kills with charters and without; the charter's leader disbanding and forming a new party (the new party's kills retail); a charter's group owning the kill routes exactly its listed items to the expected receivers (computed independently from the charter and the kill), the rest and spoil and Adena exactly as a retail run of the same kill; the owner outside the group, in another group, with a competing command channel holding loot rights, or with no charter: retail exactly; a database fault during routing returns the items to retail; a kill routed twice is refused |
 | AT-PACT-06 | integration | scripted battles with mercenary clans and characters: presence, activity and membership toggled per minute, a hit just before a minute boundary and a side change just after it, hits on an invulnerable or offline-protected target (no activity), damage transferred to a caster's CP leaving no residual HP damage (activity), expected qualifying minutes computed independently; units paid or returned accordingly; a cancelled battle returns all |
-| AT-PACT-07 | integration | fees: values and fees computed independently from the terms (a base of 1 000 under a 0.8 charter: 1 000 charged into the sink, then a 200 rebate by service mail once; no rebate when the charter custody cannot pay or the charter is suspended; never a rebate of the sealing fee), charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
+| AT-PACT-07 | integration, restart | fees: values and fees computed independently from the terms (a base of 1 000 under a 0.8 charter: 1 000 charged into the sink, then a 200 rebate by service mail once; never a rebate of the sealing fee); a crash after the signing commits and before the rebate: paid once after restart; a suspended charter or a custody short: the intent `DONE` with `Pact.RebateSkipped`, never retried, the module not frozen, later effects not blocked; charged to the named payer as sinks, the payer unable to pay keeps the contract partially signed; a treaty with concurrent violations inside and outside the territory and window: one payout per violating signatory and window, unspent forfeits returned, spent ones not |
 | AT-PACT-08 | integration | publication rows of the three types for every visibility: a `PUBLIC` and `publishable` completion writes `pact_completed_terms` and no `pact_completed`; a `PUBLIC` contract that is not `publishable` and a `PARTIES` one write `pact_completed` only, with no clause kind or total; a `PRIVATE` one writes nothing; a sealed contract's rows carry no clause or amount; an attempt to write another type or field refused; history counts equal the facts |
 | AT-PACT-09 | integration | acts outside contracts (attacking a treaty party, keeping a lent weapon outside a loan, leaving a party) stay possible; a clan member without the leader's authority cannot sign or fund, and with `ACCESS_WAREHOUSE` can fund only when `AltMembersCanWithdrawFromClanWH` is on |
 
@@ -459,6 +461,9 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Amendment round 5 (Codex), NO SIGN-OFF: escorts enrolled without signing against Aden Remembers' "signed escort";
+  a rebate intent the signing transaction cannot write; no oracles for its recovery and skip. Fixed: "registered" in both;
+  the intent written by PACT's projector from the signing fact; AT-PACT-07 with the crash and skip cases.
 - Amendment round 4 (Codex), NO SIGN-OFF: an institution could not receive the parchment the signing gives; Caravan
   Escort's escorts had no signing path; the rebate had no durable scheduling or terminal outcome. Fixed: parchments to
   character parties only; escorts are participants paid by units, not parties; the rebate an effect intent of the signing

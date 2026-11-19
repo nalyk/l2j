@@ -1,6 +1,6 @@
 # SPEC-CHR — Chronicle of Aden
 
-- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
+- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
 - Blueprint: 17 (Chronicle of Aden); 01 §2.6 (deterministic engine, optional narration); 02 §7 (three processes; the
   narrator an external local service), §6 (budgets); 04 §4 (publication DTOs, a separate database user), §8 (narrator
   down); 10 §8 (Genesis: the Chronicle runs from day 0); 12 §9 (Aden Remembers decides what became history); 14 §7
@@ -45,7 +45,9 @@ lc_pub_successor     = (old row, its final current row) along corrections       
 
 - **Written when due.** A module writes a row only once its delay has passed: the trigger sets `written_at` to the
   database's clock at the insert, whatever the writer supplied, and refuses the row unless that is ≥ `event_at` + its
-  type's delay, and `event_at` ≥ the `occurred_at` of its newest source fact
+  type's delay, `event_at` being at or after the latest `occurred_at` of **every** fact in its source range (the journal
+  orders facts by delivery, not occurrence, so the newest id need not be the newest event; the range may include unrelated
+  facts, which can only delay a row, never hasten it), and `event_at` ≥ the `occurred_at` of its newest source fact
   (`source_fact_to`, which must exist in `lc_fact`), so the delay is counted from the facts, not from a timestamp the
   writer chose. Chronicle's own pending publications wait in its private `lc_chr_pending` until due. A location-related
   type's delay in `lc_pub_type` follows the Intel Service's `PublicationTacticalDelayMinutes`, never below 1440 (written
@@ -305,9 +307,12 @@ EN, RO and RU; a missing translation is a test failure, not a fallback.
 
 ## 5. Facts
 
-Emitted (durable, the payloads complete, so a replay rebuilds Chronicle's derived tables from them alone; the decisions
-that depend on what was committed when, a composition's membership and a battle's samples, are recorded in their facts,
-not recomputed):
+**Publication rows are outputs, not derived state.** Each `lc_pub_row`, issue, monument row and token is written once, as an
+**effect** of the projector's decision (fact-journal.md §4.4: an application id from (projector, fact, effect index),
+stored on the row and unique), and never regenerated: replay writes no effect, so a replay rebuilds Chronicle's private
+derived state (pending rows, sagas, battles, days, letters) and its effect intents, and compares those; the public record
+keeps its original ids and times. The facts below carry what the private state needs, and the decisions that depend on what
+was committed when (a composition's membership, a battle's samples) are recorded in them rather than recomputed:
 
 | Fact | Payload |
 |---|---|
@@ -397,7 +402,7 @@ was missed, idempotent).
 | AT-CHR-02 | integration | a location-related row refused before its delay from its source fact; raising the tactical delay raises the database floor; a replay dated from its battle's end; cells below the minimum absent |
 | AT-CHR-03 | integration | each basis resolves only while it holds and only on its row types; a withdrawal unnames the character in an archived issue at once and withdraws its milestones, letters and saga entries; opting in again resolves no old token and gives a new, unlinked page; two rows naming one character share no token; for one event with a human and a citizen swapped in a role, every per-event and per-name response is identical, and the humans-only view changes at most a monthly aggregate |
 | AT-CHR-04 | unit | the narrator protocol: only valid choice indices are kept, any free text discarded, in EN, RO and RU; every alternative and flavour sentence of every template is checked by a test that it holds for every row its template serves (a reversed relationship has no alternative); narrator down gives the first alternatives |
-| AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a restart after an empty day's composition does not reconsider it, and a row committed afterwards goes to the next issue; a replay from facts rebuilds the same issues, sagas and battle frames; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
+| AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a restart after an empty day's composition does not reconsider it, and a row committed afterwards goes to the next issue; a replay from facts rebuilds the same private state (days, sagas, battles, letters, pending rows) and the same effect intents, and writes no publication row; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
 | AT-CHR-06 | integration, restart, fault | a monument raised once under a crash at each step, only after its row is written; re-spawned after a restart; retirement order; a withdrawn history row's monument retires |
 | AT-CHR-07 | integration | a player just outside the town zone, though visible to the crier, does not hear it; one proclamation per interval per crier across a restart; each once |
 | AT-CHR-08 | integration, restart | a saga through craft, trade, private store, warehouse, mail, death drop, PvP kills with a saga weapon and with saga armor, a siege and crystallisation; a ground-loot privilege records no owner; a restart keeps the flag of a live saga item; a reused object id starts nothing for the old saga |
@@ -434,6 +439,9 @@ was missed, idempotent).
 
 ## 12. Review record
 
+- Round 4 (Codex), NO SIGN-OFF: replay could not rebuild publication rows (their ids and times are commit-dependent); the
+  delay counted from the newest id, not the newest occurrence. Revision 5: publication rows are effects with application
+  ids, never regenerated, and replay rebuilds private state and intents only; the delay counts from every source fact.
 - Round 3 (Codex), NO SIGN-OFF: commit-dependent decisions without replayable facts; an empty day without a durable
   composed state; stale supersession wording. Revision 4: complete fact payloads, membership and samples recorded in
   their facts; `composed_at` and `issue_no` on the day, set atomically; the wording follows `withdrawn_at`.

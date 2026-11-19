@@ -215,7 +215,7 @@ INFO	CommunityBoardHandler: Loaded 24 handlers.
 INFO	ItemHandler: Loaded 30 handlers.
 INFO	PunishmentHandler: Loaded 3 handlers.
 INFO	UserCommandHandler: Loaded 17 handlers.
-INFO	VoicedCommandHandler: Loaded 9 handlers.
+INFO	VoicedCommandHandler: Loaded 2 handlers.
 INFO	TargetHandler: Loaded 34 handlers.
 INFO	Handlers Loaded...
 INFO	GraciaLoader: Loading Gracia related scripts.
@@ -251,7 +251,7 @@ INFO	TerritoryWarSuperClass: Siege date: Sun Nov 22 22:00:00 UTC 2026
 INFO	SpawnData: Initializing spawns...
 INFO	SpawnData: 429 spawn groups initialized.
 INFO	SpawnData: 187 spawn files parsed.
-INFO	SpawnData: 40379 spawns have been initialized!
+INFO	SpawnData: 40378 spawns have been initialized!
 INFO	DayNightSpawnManager: Removed 0 night creatures
 INFO	DayNightSpawnManager: Spawned 452 day creatures
 INFO	DimensionalRiftManager: Loaded 7 room types with 56 rooms.
@@ -287,9 +287,7 @@ INFO	CharacterBirthday 0 gifts sent.
 INFO	Daily tasks reset completed.
 INFO	MailManager: Loaded 0 messages.
 INFO	PunishmentManager: Loaded 0 active and 0 expired punishments.
-INFO	IdManager: Free ObjectID's remaining: 1879003060
-INFO	OfflineTraderTable: Loading offline traders...
-INFO	OfflineTraderTable: Loaded 0 offline traders.
+INFO	IdManager: Free ObjectID's remaining: 1879003065
 INFO	DeadlockWatcher: Thread started.
 INFO	GameServer: Started, using # of # MB total memory.
 INFO	GameServer: Maximum number of connected players is 2000.

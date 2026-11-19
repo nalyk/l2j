@@ -22,7 +22,7 @@ import org.l2jmobius.gameserver.livingchronicle.rng.KeyedRandom;
 /**
  * The real game server, booted once inside the test JVM.
  * <p>
- * Nothing is mocked: this runs upstream's own {@code GameServer.main} from a staged copy of {@code dist/game}, against a {@link TestDatabase}. The only things changed in the staged copy are where the database is and a static network configuration, so that a test run neither depends on nor talks to anything outside the build.
+ * Nothing is mocked: this runs upstream's own {@code GameServer.main} from a staged copy of {@code dist/game}, against a {@link TestDatabase}. The only things changed in the staged copy are where the database is and a static network configuration, so that a test run neither depends on nor talks to anything outside the build, and the {@link TruthProfile}, every custom Mobius module neutral or off, which is what the behaviour lock is recorded in.
  * </p>
  * <p>
  * Mobius is static singletons throughout, so a server cannot be booted twice in one JVM. The suite runs one JVM per test class; within a class, {@link #boot()} is idempotent.
@@ -156,6 +156,8 @@ public final class TestServer
 
 		// Without ipconfig.xml the server asks an external web service for its public address at boot.
 		Files.copy(DEFAULT_NETWORK_CONFIG, NETWORK_CONFIG, StandardCopyOption.REPLACE_EXISTING);
+
+		TruthProfile.apply(Path.of(""));
 
 		GameServer.main(new String[0]);
 

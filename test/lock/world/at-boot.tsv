@@ -1,6 +1,6 @@
 # LOCK-WORLD-0001: the world as booted at 1794216090000 with seed 1, before any scheduled task has run.
-pending-tasks	3530
-objects	44988
+pending-tasks	3528
+objects	44983
 kind	Adventurer	76
 kind	AirShip	1
 kind	Artefact	11
@@ -8,7 +8,7 @@ kind	Auctioneer	8
 kind	Boat	5
 kind	BroadcastingTower	25
 kind	CastleDoorman	70
-kind	Chest	132
+kind	Chest	131
 kind	ClanHallDoorman	38
 kind	ClanHallManager	43
 kind	DawnPriest	11
@@ -31,7 +31,7 @@ kind	Guard	380
 kind	KrateisCubeManager	1
 kind	KrateisMatchManager	3
 kind	Merchant	209
-kind	Monster	39640
+kind	Monster	39636
 kind	OlympiadManager	36
 kind	PetManager	13
 kind	RaceManager	1
@@ -51,7 +51,7 @@ kind	VillageMasterMystic	11
 kind	VillageMasterOrc	15
 kind	VillageMasterPriest	14
 kind	Warehouse	82
-digest	population	fbf2a9ce66e280af3c29c82546ee991cb0b1d511c43950e3835a25d05d81c6f1
-digest	identity	f332a9fc91fb697f0313bbf4abc9a5b30201ca5eb3271e3f063bab031cf03153
-digest	placement	956ea4c0e7f7e12d3cff404d6e5b28bcd660e192819f48e43624a96a1c2ebebf
-digest	condition	ca9474dcbe38eaa64748cc592606920330e1f120d5d7d974955a9b12596da0a9
+digest	population	c7c57ac43bf23824d9bb5ae17d4b7b228478dc072774d1db7ea0383883d9b764
+digest	identity	9f56eed30567803cc93708c2bd145fc7d218a3b4c1a527667c1b8c50e7578099
+digest	placement	468b675699d97e709ff984b563b84668c120c34e178166cdd8e5c88a4df9c34d
+digest	condition	c47a09dad527bf882c4193a7a52c06e328787c80adc25778e58c85b9f852ac64

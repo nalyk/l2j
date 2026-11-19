@@ -10,6 +10,7 @@ ahead of it (blueprint 02 §2, 30 §2.1): a change that adds behaviour first cha
 |---|---|---|
 | [fact-journal.md](fact-journal.md) | Fact Journal: durable facts, capture, telemetry, precise locations, projector runtime | 04 §1, §6-§8, 02 §6, 03 §4.4, consensus §5 |
 | [actor-identity.md](actor-identity.md) | Actor Identity: origin, account, activity, snapshot, policy tables | 04 §2, 02 §3, §12, 10, consensus §3 |
+| [intel-service.md](intel-service.md) | Intel Service: traces, disclosure, budgets, `canWitness`, expiry, publication filtering | 04 §4, 03 §4.5, 16 §3-§4 §8, 13, 14, 17 |
 | [asset-service.md](asset-service.md) | Asset Service: holders, custody, ledger, transactions, recovery, economy monitor; its site table [asset-economy-sites.csv](asset-economy-sites.csv) | 04 §3, 15 §4, 16 §7, 12 §6.2 §8, consensus §4 |
 
 One file per module. Its DDL lives in `sql/migrations/V###__lc_<module>.sql`, numbered in the order modules depend on each

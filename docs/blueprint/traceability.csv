@@ -57,14 +57,14 @@ TR-boss-ecology-context,90 §2,boss ecology/context (incl. Sea of Spores / Orfen
 TR-anti-zerg-complexity-cost,90 §2,anti-zerg complexity cost,"12 §6.1, §6.3",,,,,,,,blueprint
 TR-dominance-benefits-and-obligations,90 §2,dominance benefits and obligations (App. E.1–E.2),"12 §6.1, §6.3",,,,,,,,blueprint
 TR-newcomer-catch-in,90 §2,newcomer catch-in,12 §5.2; 10 §8,,,,,,,,blueprint
-TR-imperfect-information,90 §2,imperfect information,12 §7; 01 §2.5,,,,,,,,blueprint
+TR-imperfect-information,90 §2,imperfect information,12 §7; 01 §2.5,intel-service.md,INTEL-R01;INTEL-R02,lc_trace;lc_intel,,,AT-INTEL-01;AT-INTEL-02,,specified
 TR-npc-rumors,90 §2,NPC rumors,12 §7; 01 §2.5,,,,,,,,blueprint
 TR-public-living-chronicle,90 §2,public Living Chronicle,17; 12 §9,,,,,,,,blueprint
 TR-persistent-historical-graph,90 §2,persistent historical graph,17; 12 §9,,,,,,,,blueprint
 TR-item-crafter-provenance,90 §2,"item/crafter provenance (item biography, App. E.5)",17 §4,asset-service.md,ASSET-R07,lc_item_lifecycle,,,AT-ASSET-07,,reviewed
 TR-historical-monument,90 §2,historical monument,17 §2,,,,,,,,blueprint
 TR-npc-historical-reference,90 §2,NPC historical reference (App. E.5),17 §2,,,,,,,,blueprint
-TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,,,,,,,,blueprint
+TR-public-chronicle-views,90 §2,public Chronicle views (App. E.6),17 §5,intel-service.md,INTEL-R07,lc_trace;lc_intel,,,AT-INTEL-07,,specified
 TR-deterministic-engine-optional-llm-narration,90 §2,deterministic engine + optional LLM narration,01 §2.6; 17 §6,,,,,,,,blueprint
 TR-npc-reactions-smuggling,90 §2,NPC reactions: smuggling,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
 TR-npc-reactions-corruption,90 §2,NPC reactions: corruption,"12 §5 (situations), §8 (caravans/banditry)",,,,,,,,blueprint
@@ -82,7 +82,7 @@ TR-aden-signal-support-class-preservation,90 §2,Aden Signal: support-class pres
 TR-wayfarer-s-memory-recap,90 §2,Wayfarer's Memory: recap,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-knowledge-graph,90 §2,Wayfarer's Memory: knowledge graph,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-known-told-rumored,90 §2,Wayfarer's Memory: known/told/rumored,14 §1–§9,,,,,,,,blueprint
-TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,,,,,,,,blueprint
+TR-wayfarer-s-memory-stale,90 §2,Wayfarer's Memory: stale,14 §1–§9,intel-service.md,INTEL-R03;INTEL-R06,lc_trace;lc_intel,,,AT-INTEL-03;AT-INTEL-06,,specified
 TR-wayfarer-s-memory-projects-notes,90 §2,Wayfarer's Memory: projects/notes,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observations,14 §1–§9,,,,,,,,blueprint
 TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,,,,,,,,blueprint
@@ -111,20 +111,20 @@ TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard C
 TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-broker-shadow-broker,90 §2,Black Ledger: Broker/Shadow Broker,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-dossiers,90 §2,Black Ledger: dossiers,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-traces,90 §2,Black Ledger: traces,16 §1–§14,intel-service.md,INTEL-R04;INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-10,,specified
+TR-black-ledger-gatekeeper-warehouse-merchant-guard,90 §2,Black Ledger: gatekeeper/warehouse/merchant/guard witnesses,16 §1–§14,intel-service.md,INTEL-R04;INTEL-R09,lc_trace;lc_intel,,,AT-INTEL-04;AT-INTEL-09,,specified
 TR-black-ledger-clan-hall-constraints,90 §2,Black Ledger: clan-hall constraints,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-tavern-rumors,90 §2,Black Ledger: tavern rumors,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-no-offline-gps,90 §2,Black Ledger: no offline GPS,16 §1–§14,fact-journal.md,FACT-R07;FACT-R08,lc_fact_precise,,,AT-FACT-07;AT-FACT-08,storage side only; disclosure is the Intel Service,specified
+TR-black-ledger-decay,90 §2,Black Ledger: decay,16 §1–§14,intel-service.md,INTEL-R03,lc_trace;lc_intel,,,AT-INTEL-03,,specified
+TR-black-ledger-no-offline-gps,90 §2,Black Ledger: no offline GPS,16 §1–§14,fact-journal.md;intel-service.md,FACT-R07;FACT-R08;INTEL-R01,lc_fact_precise;lc_trace;lc_intel,,,AT-FACT-07;AT-FACT-08;AT-INTEL-01,storage side only; disclosure is the Intel Service,specified
 TR-black-ledger-informants,90 §2,Black Ledger: informants,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-intel-budgets,90 §2,Black Ledger: intel budgets,16 §1–§14,intel-service.md,INTEL-R02;INTEL-R05,lc_trace;lc_intel,,,AT-INTEL-02;AT-INTEL-05,,specified
 TR-black-ledger-counter-intelligence,90 §2,Black Ledger: counter-intelligence,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-you-feel-watched,90 §2,"Black Ledger: ""you feel watched""",16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-trail-manipulation,90 §2,Black Ledger: trail manipulation,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,,,,,,,,blueprint
-TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,,,,,,,,blueprint
+TR-black-ledger-bribery,90 §2,Black Ledger: bribery,16 §1–§14,intel-service.md,INTEL-R08,lc_trace;lc_intel,,,AT-INTEL-08,,specified
+TR-black-ledger-false-trails,90 §2,Black Ledger: false trails,16 §1–§14,intel-service.md,INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-10,,specified
+TR-black-ledger-confidence-classes,90 §2,Black Ledger: confidence classes,16 §1–§14,intel-service.md,INTEL-R10,lc_trace;lc_intel,,,AT-INTEL-10,,specified
 TR-black-ledger-hunter-ranks,90 §2,Black Ledger: hunter ranks,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-information-only-progression,90 §2,Black Ledger: information-only progression,16 §1–§14,,,,,,,,blueprint
 TR-black-ledger-conditional-contracts,90 §2,Black Ledger: conditional contracts,16 §1–§14,,,,,,,,blueprint

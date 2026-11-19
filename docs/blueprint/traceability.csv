@@ -46,7 +46,7 @@ TR-custom-depositable-items,90 §1,Custom Depositable Items,not present in H5 (K
 TR-inventory-accounting-note,90 §1,Inventory accounting note (43 + PC Cafe),"superseded: H5 has 44 custom configs, enumerated in 03 §8",,,,,,,,blueprint
 TR-aden-remembers,90 §2,Aden Remembers,12; 04 §1 (Fact Journal),,,,,,,,blueprint
 TR-living-world-director,90 §2,Living World Director,12; 04 §1 (Fact Journal),,,,,,,,blueprint
-TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13;FACT-R15;FACT-R16;FACT-R17,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13;AT-FACT-03;AT-FACT-15;AT-FACT-16,,specified
+TR-world-event-journal,90 §2,World Event Journal,12; 04 §1 (Fact Journal),fact-journal.md,FACT-R01;FACT-R02;FACT-R04;FACT-R05;FACT-R09;FACT-R10;FACT-R11;FACT-R12;FACT-R13;FACT-R15;FACT-R16;FACT-R17,lc_fact;lc_stream_head;lc_journal_gap;lc_projector_checkpoint;lc_fact_type,,core-seam capture calls (fact-journal.md §3.4),AT-FACT-00;AT-FACT-01;AT-FACT-02;AT-FACT-04;AT-FACT-05;AT-FACT-09;AT-FACT-10;AT-FACT-11;AT-FACT-12;AT-FACT-13;AT-FACT-03;AT-FACT-15;AT-FACT-16;AT-FACT-06;AT-FACT-18,,specified
 TR-regional-state-engine,90 §2,regional state engine,"12 §1, §6",,,,,,,,blueprint
 TR-political-economic-graph,90 §2,political/economic graph,"12 §1, §6",,,,,,,,blueprint
 TR-resource-pressure,90 §2,resource pressure,"12 §4, §5.1",,,,,,,,blueprint
@@ -159,7 +159,7 @@ TR-geodata,90 §3,geodata,03 §7,,,,,,,,blueprint
 TR-dev-ram-cpu-storage,90 §3,dev RAM/CPU/storage,replaced by measured capacity on build-host: 03 §9–§10,,,,,,,,blueprint
 TR-no-gpu-requirement,90 §3,no GPU requirement,authoritative systems need none; the narrator uses the RTX 5090 (17 §6),,,,,,,,blueprint
 TR-client-on-workstation,90 §3,client on workstation,03 §6 (client package),,,,,,,,blueprint
-TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R03;ACTOR-R04;ACTOR-R05;ACTOR-R06,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-03;AT-ACTOR-04;AT-ACTOR-05;AT-ACTOR-06,,specified
+TR-synthetic-headless-actors,90 §3,synthetic/headless actors,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R03;ACTOR-R04;ACTOR-R05;ACTOR-R06;ACTOR-R09;ACTOR-R10,lc_account;lc_principal,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-03;AT-ACTOR-04;AT-ACTOR-05;AT-ACTOR-06;AT-ACTOR-09;AT-ACTOR-10,,specified
 TR-fake-player-classification,90 §3,fake-player classification,10; 04 §2,actor-identity.md,ACTOR-R01;ACTOR-R07,lc_actor_policy,,,AT-ACTOR-00;AT-ACTOR-01;AT-ACTOR-07,,specified
 TR-missing-quests,90 §3,missing quests,"H5 content inventory: 03 §5, 11 §1.5",,,,,,,,blueprint
 TR-npc-ai-fidelity,90 §3,NPC AI fidelity,11 §1.4,,,,,,,,blueprint
@@ -167,8 +167,8 @@ TR-formula-trigger-edge-cases,90 §3,formula/trigger edge cases,11 §1.4,,,,,,,,
 TR-geodata-pathfinding-risk,90 §3,geodata/pathfinding risk,03 §7; 30 §5,,,,,,,,blueprint
 TR-protocol-client-compatibility,90 §3,protocol/client compatibility,"03 §1, §6; 10 §5.2",,,,,,,,blueprint
 TR-absent-ncsoft-operational-infrastructure,90 §3,absent NCSoft operational infrastructure,02 §12; 16 §8–§9,,,,,,,,blueprint
-TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02,lc_account,,,AT-ACTOR-02,,specified
-TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10,,specified
+TR-anti-cheat-limits,90 §3,anti-cheat limits,02 §12; 16 §8–§9,actor-identity.md,ACTOR-R02;ACTOR-R10,lc_account,,,AT-ACTOR-02;AT-ACTOR-00;AT-ACTOR-10,,specified
+TR-observability,90 §3,observability,02 §11; 04 §6,fact-journal.md,FACT-R04;FACT-R10,lc_journal_gap,,,AT-FACT-04;AT-FACT-10;AT-FACT-06,,specified
 TR-reason-codes,90 §3,reason codes,02 §11; 04 §6,,,,,,,,blueprint
 TR-audit,90 §3,audit,02 §11; 04 §6,asset-service.md,ASSET-R15,lc_module_state,,,AT-ASSET-15,,reviewed
 TR-persistence,90 §3,persistence,04 §9,asset-service.md;fact-journal.md,ASSET-R01;ASSET-R06;ASSET-R17;ASSET-R18;ASSET-R19;ASSET-R24;ASSET-R23;ASSET-R26;ASSET-R28;FACT-R17,lc_asset_op;lc_asset_pending,,core patches asset-service.md §11,AT-ASSET-06;AT-ASSET-17;AT-ASSET-20;AT-ASSET-21;AT-ASSET-25;AT-ASSET-24;AT-ASSET-28;AT-ASSET-01;AT-ASSET-09;AT-ASSET-02;AT-FACT-02,,specified
@@ -200,5 +200,5 @@ TR-signal-wayfarer-you-hunted-with-x-three-times-as,20 §1,"Signal ↔ Wayfarer:
 TR-signal-pact-signal-introduces-pact-commits,20 §1,Signal ↔ PACT: Signal introduces; PACT commits (crafter → Crafting Pact; mercenaries → Mercenary Contract; supplier → Purchase Order),20 §1,,,,,,,,blueprint
 TR-pact-ledger-share-hardened-escrow-primitives-nev,20 §1,"PACT ↔ Ledger: share hardened escrow primitives (Asset Service), never institutions: Notarius / Magistrate / Broker",20 §1,asset-service.md,ASSET-R01;ASSET-R03;ASSET-R14,lc_settlement_key;lc_custody,,,AT-ASSET-03;AT-ASSET-14;AT-ASSET-01;AT-ASSET-20;AT-ASSET-00,,reviewed
 TR-wayfarer-ledger-clues-kept-with-confidence-and-e,20 §1,Wayfarer ↔ Ledger: clues kept with confidence and expiry; a hunt's end never leaves a tracking database,20 §1,,,,,,,,blueprint
-TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07,,specified
+TR-citizens-everything-citizens-use-every-system-th,20 §1,"Citizens ↔ everything: citizens use every system through the protocol, under the same rules; actor class affects policy tables only",20 §1,actor-identity.md,ACTOR-R05;ACTOR-R07;ACTOR-R09,lc_actor_policy,,,AT-ACTOR-05;AT-ACTOR-07;AT-ACTOR-09,,specified
 TR-chronicle-everything-reads-publication-dtos-only,20 §1,Chronicle ↔ everything: reads publication DTOs only,20 §1,,,,,,,,blueprint

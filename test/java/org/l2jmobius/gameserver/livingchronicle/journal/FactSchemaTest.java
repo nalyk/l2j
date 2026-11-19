@@ -84,7 +84,10 @@ class FactSchemaTest
 			// A fact has a positive sequence number, a sensitivity class 0-3 and a JSON payload.
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 0, "'{}'")));
 			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'not json'")));
-			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'").replace(", 12, 1, '{}', 1)", ", 12, 9, '{}', 1)")), "sensitivity out of range");
+			assertThrows(SQLException.class, () -> statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'").replace(", 12, 1, '{}', 1, 1, ", ", 12, 9, '{}', 1, 1, ")), "sensitivity out of range");
+			// The retention record is a single row.
+			statement.execute("INSERT INTO lc_journal_retention (id, max_dropped_fact_id) VALUES (1, 0)");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_journal_retention (id, max_dropped_fact_id) VALUES (2, 0)"));
 			statement.execute(fact("2026-11-19 10:00:00", "region.12", 1, "'{}'"));
 
 			// One head per outbox stream, never negative; a staged fact has a positive number, one per stream and number.
@@ -127,12 +130,12 @@ class FactSchemaTest
 
 	private static String fact(String at, String stream, long seq, String payload)
 	{
-		return "INSERT INTO lc_fact (occurred_at, stream, stream_seq, type, schema_ver, logical_time, region_id, sensitivity, payload, batch_id) VALUES ('" + at + "', '" + stream + "', " + seq + ", 1, 1, 0, 12, 1, " + payload + ", 1)";
+		return "INSERT INTO lc_fact (occurred_at, stream, stream_seq, type, schema_ver, logical_time, region_id, sensitivity, payload, batch_id, config_ver, captured_at) VALUES ('" + at + "', '" + stream + "', " + seq + ", 1, 1, 0, 12, 1, " + payload + ", 1, 1, '" + at + "')";
 	}
 
 	private static String staged(String stream, long seq)
 	{
-		return "INSERT INTO lc_fact_outbox (staged_at, stream, stream_seq, type, schema_ver, logical_time, region_id, sensitivity, payload) VALUES (NOW(3), '" + stream + "', " + seq + ", 1, 1, 0, 12, 1, '{}')";
+		return "INSERT INTO lc_fact_outbox (staged_at, stream, stream_seq, type, schema_ver, logical_time, region_id, sensitivity, payload, config_ver) VALUES (NOW(3), '" + stream + "', " + seq + ", 1, 1, 0, 12, 1, '{}', 1)";
 	}
 
 	private static String bucket()

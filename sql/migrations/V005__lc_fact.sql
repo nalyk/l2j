@@ -24,8 +24,12 @@ CREATE TABLE lc_fact (
 	sensitivity TINYINT NOT NULL,
 	payload JSON NOT NULL,
 	op_id BINARY(16) NULL,
+	config_ver INT NOT NULL,
+	captured_at TIMESTAMP(3) NOT NULL,
+	source_outbox_id BIGINT NULL,
 	batch_id BIGINT NOT NULL,
 	PRIMARY KEY (id, occurred_at),
+	KEY idx_fact_source (source_outbox_id),
 	KEY idx_fact_stream (stream, stream_seq),
 	KEY idx_fact_type_time (type, occurred_at),
 	KEY idx_fact_op (op_id),
@@ -58,6 +62,7 @@ CREATE TABLE lc_fact_outbox (
 	sensitivity TINYINT NOT NULL,
 	payload JSON NOT NULL,
 	op_id BINARY(16) NULL,
+	config_ver INT NOT NULL,
 	PRIMARY KEY (outbox_id),
 	UNIQUE KEY uk_outbox_stream_seq (stream, stream_seq),
 	CONSTRAINT chk_outbox_seq CHECK (stream_seq > 0),
@@ -224,4 +229,13 @@ CREATE TABLE lc_replay_snapshot (
 	taken_at TIMESTAMP(3) NOT NULL,
 	store_ref VARCHAR(128) NOT NULL,
 	PRIMARY KEY (projector, last_fact_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- The highest fact id ever dropped with a partition: a replay snapshot is usable only at or beyond it (spec §4.5).
+CREATE TABLE lc_journal_retention (
+	id TINYINT NOT NULL,
+	max_dropped_fact_id BIGINT NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT chk_retention_single CHECK (id = 1),
+	CONSTRAINT chk_retention_id CHECK (max_dropped_fact_id >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

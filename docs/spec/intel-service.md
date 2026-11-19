@@ -290,10 +290,11 @@ Signal location is not trace-based: it is the character's own current region, ke
   requester and the subject and not past its time, the subject's presence row exists and is unexpired, and §4.4's Signal
   rules hold (opt-in, `INTERACTIVE`, no block either way, Signal's visibility including the requester). The view holds the
   region and nothing else; it is not an intel item, has no grant, and is not kept.
-- **Against the other rules**: a Signal region is a consented disclosure (both characters asked to meet), so it has no
-  budget units; it is not evidence-driven, so the quantum grid (§4.6) does not apply to it; but it **enters the combined
-  bound** (§4.3) as a positive answer whose implied area is the region's cells, so that no other purpose can afterwards
-  narrow the subject below the floor by combining it with Signal's answer.
+- **Against the other rules**: a Signal region is a **consented** disclosure: the subject agreed to meet the requester,
+  and the region is where they are now, at the precision anyone meeting them would see. So it has no budget units, the
+  quantum grid (§4.6) does not apply to it, and it is **outside the combined bound** (§4.3), which bounds what the service
+  discloses about a subject without their consent. A requester who combines a consented region with other answers learns
+  what that combination allows; the subject chose to share the first.
 
 ## 5. Facts
 
@@ -371,7 +372,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | INTEL-R09 | A sampling pass MUST stay within `SightingPassMicros`, deferring witnesses round-robin and resetting their pairs. | AT-INTEL-09 |
 | INTEL-R10 | Every disclosure MUST be recorded as an outbox fact without the subject's place, the witness's place or the trace's time; no trace MUST be journaled. | AT-INTEL-10 |
 | INTEL-R11 | A disclosure MUST be authorised by the service from the authenticated requester, in person where its purpose requires, and every read MUST be authorised again against current grants, memberships and purpose rules. | AT-INTEL-14 |
-| INTEL-R12 | The implied areas of positive answers about a subject in a window MUST NOT intersect below `MinCombinedCells`, and a refusal MUST be indistinguishable from an absence. | AT-INTEL-12 |
+| INTEL-R12 | The implied areas of the positive answers given about a subject without their consent in a window MUST NOT intersect below `MinCombinedCells`, and a refusal MUST be indistinguishable from an absence; consented Signal regions (§4.9) are outside this bound. | AT-INTEL-12 |
 | INTEL-R13 | Signal locations MUST be at most `REGION`, live `SignalLocationTtlMinutes`, and cover only opted-in, interactive, non-blocking characters whose visibility includes the requester, checked at every read. | AT-INTEL-13 |
 | INTEL-R14 | Every evidence-driven change of an answer (appearance, age band, expiry) MUST happen on the quantum grid. | AT-INTEL-11 |
 | INTEL-R15 | Suppression MUST apply only to bribable witness kinds within their maximum, on the quantum grid; rumors MUST be their own traces (heard or planted, identical to a reader), disclosed only under `LEDGER_RUMOR`, always at `RUMOR` confidence, budgeted and bounded at territory size, never changing a real trace's items. | AT-INTEL-15 |
@@ -396,7 +397,7 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 | AT-INTEL-13 | integration | Signal: a non-opted-in, offline, detached, blocking or not-visible-to-the-requester character is never located; an opted-in one only at `REGION`, for the TTL; an opt-out or block after a grant hides it at the next read |
 | AT-INTEL-14 | integration | a disclosure asked remotely, for another contract, with a forged budget or audience, or by a non-party: refused; a reader who left the clan or contract of a grant reads nothing |
 | AT-INTEL-15 | integration | a bribe at a guard refused, at a gatekeeper beyond the kind's maximum capped; suppression starting and ending on the grid; a real trace disclosed as `WITNESS` before and after its heard rumor, in both orders, unchanged; heard and planted rumors indistinguishable in fields, never above `RUMOR`, never under another purpose; rumors in the combined bound at territory size |
-| AT-INTEL-17 | integration | `signalRegion` refused without a mutual introduction, after its time, after `signalUnmutual`, for a third character, after the presence expired or was deleted, under a block or outside visibility; returned at `REGION` otherwise; a lost presence report expires the row; a Ledger questioning after a Signal region sees the region counted in the combined bound |
+| AT-INTEL-17 | integration | `signalRegion` refused without a mutual introduction, after its time, after `signalUnmutual`, for a third character, after the presence expired or was deleted, under a block or outside visibility; returned at `REGION` otherwise; a lost presence report expires the row; Signal regions, before and after Ledger answers and across a moving subject, never enter the combined bound and never refuse a Ledger answer |
 | AT-INTEL-16 | integration, unit | identity evidence recorded by another module refused (static scan and a database grant); an `ALIAS_LINK` never to its owner, only at a Broker in person; `PATRON_*` only to the bound seal's holder, in step order, after its contract ended; no identity item carries an area; identity evidence gone with its trace |
 
 ## 11. Upstream constraints

@@ -1,6 +1,6 @@
 # SPEC-SIG — Aden Signal
 
-- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
+- Status: draft (revision 4, answering three adversarial review rounds; record in §12)
 - Blueprint: 13 (Aden Signal); 02 §1 (we do not break the game), §4 (production checks), §9 (tests decide); 03 §4.4
   (`ON_PLAYER_PARTY_JOIN`, `ON_PLAYER_PARTY_LEAVE`); 04 §4 (Intel Service), §5 (Codex), §7 (keyed randomness); 10
   (citizens as candidates); 12 (Aden Remembers consumes demand); 14 (Wayfarer's collaborators); 17 (Gazette); 20 §1
@@ -81,7 +81,8 @@ publish a mutual introduction for a version A has just replaced.
   120 units per second; a **gatekeeper edge** costs one minute and joins the region of each gatekeeper to the region of
   each destination of its **unrestricted** teleport lists (`dist/game/data/teleporters/`; a list with conditions, such as
   noblesse or item lists, is not an edge). Minutes are rounded up; between a viewer and an intent with several declared
-  regions, travel is the minimum over them.
+  regions, travel is the minimum over them. Regions without map cells (such as the Coliseum's,
+  `dist/game/data/mapregion/colosseum.xml:5`) have no centre: they are not in the graph and cannot be declared.
 
 ## 3. State machines
 
@@ -313,14 +314,15 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 | AT-SIG-07 | integration | four controlled principals and none other: no cell; alts of one account counted once; cells banded, daily, after the delay |
 | AT-SIG-08 | integration, restart | sessions once per introduction; a party already shared at mutual interest is no session; continued at `ContinueMinutes`; a restart before it gives unknown, excluded from metrics |
 | AT-SIG-09 | unit | the static scan: no mechanics API, grant, reward or NPC spawn in Signal code |
-| AT-SIG-10 | sim, human | characters assigned by `rng("signal.ab", char)` to treatment (Signal and retail matching) or control (retail matching only), at least 2 000 **looking periods** per cohort and arm. A looking period is defined the same way in both arms: it starts when the character registers in retail party matching (`PartyMatchWaitingList` or a party room) or sets a Signal intent, and ends when that registration or intent ends. Both arms are measured with the same events, the party seams: **time to first contact** is from the start to the first party invitation the character sends or receives during the period (censored at its end); **conversion** is the share of periods in which the character is in a party of at least two within 60 minutes; for periods seeking a healer or a buffer, the time to a party containing one; acceptance: treatment's median time to first contact at least 20 % lower and conversion at least 10 points higher, each with a 95 % bootstrap interval excluding no effect, in the human and the mixed cohorts; and the time to a party containing a healer or a buffer lower under treatment, same bound |
+| AT-SIG-10 | sim, human | characters assigned by `rng("signal.ab", char)` to treatment (Signal and retail matching) or control (retail matching only), at least 2 000 **looking periods** per cohort and arm. A looking period is defined the same way in both arms: it starts when the character registers in retail party matching (`PartyMatchWaitingList` or a party room) or sets a Signal intent, and ends when that registration or intent ends. Both arms are measured with the same instrumentation: the party seams and a **party invitation seam** at both points Mobius sends an invitation (`network/clientpackets/RequestJoinParty.java:234`, `:259`), so declined invitations count. **Time to first contact** is from the start to the first party invitation the character sends or receives during the period (censored at its end); **conversion** is the share of periods in which the character is in a party of at least two within 60 minutes; a period is **missing a healer or a buffer** when the character's party (or the character alone) contains no class filling that role by the class-role table, judged identically in both arms, and for those periods the time until a character filling it joins; acceptance: treatment's median time to first contact at least 20 % lower and conversion at least 10 points higher, each with a 95 % bootstrap interval excluding no effect, in the human and the mixed cohorts; and the time to a party containing a healer or a buffer lower under treatment, same bound |
 | AT-SIG-11 | integration | the offered draft per pairing, pre-filled only with declared fields; Signal unchanged by its fate |
 | AT-SIG-12 | integration | an edit, a visibility, clan or synthetic change between interest and answer drops the introduction; re-interest within the pair cooldown refused across new intents; the per-recipient cap; an anonymous block excludes the pair both ways without naming the sender |
 | AT-SIG-13 | integration | a planted ineligible candidate and a planted stale presence: the verifier alarms and freezes Signal; nothing shown until unfreeze |
 
 ## 11. Upstream constraints
 
-1. **Mobius dispatches no party join or leave event** (`Party.java:301`, `:422`, `:551`). → the party seams (03 §4.4).
+1. **Mobius dispatches no party join, leave or invitation event** (`Party.java:301`, `:422`, `:551`;
+   `RequestJoinParty.java:234`, `:259`). → the party seams (03 §4.4) and an invitation seam, for the A/B measurement.
 2. **Retail party matching exists** (`PartyMatchRoomList`, `PartyMatchWaitingList`). → unchanged; the control arm.
 3. **A party holds 9** (`RequestJoinParty.java:217`). → the capacity constraint.
 4. **Blocks are per character, either way** (`BlockList.java:151`). → checked both ways.
@@ -329,6 +331,11 @@ sender). Notifications as system messages; the latent prompt as the Codex dialog
 
 ## 12. Review record
 
+- Round 3 (Codex), NO SIGN-OFF: open were invitations invisible to the party seams and no equivalent healer/buffer
+  measurement in the control arm, regions without cells in the travel graph, and Signal regions entering the combined
+  bound in one order only. Revision 4: an invitation seam and "missing a healer or a buffer" judged from party composition
+  in both arms; cell-less regions excluded and undeclarable; Signal regions as consented disclosures outside the combined
+  bound, with INTEL-R12 narrowed to non-consented answers (intel-service.md).
 - Round 2 (Codex), NO SIGN-OFF: open were eligibility still reading the candidate's actual region, transitions on two
   queues without a shared check, no revocation of Intel's mutual registration, early-ended sessions left unknown, an A/B
   control without equivalent events, travel computation underspecified, a schema test claiming the writer's threshold, a

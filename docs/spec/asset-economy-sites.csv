@@ -1,0 +1,8 @@
+site,file,member,class,holding_from,holding_to,reason
+loto_ticket,dist/game/data/scripts/handlers/bypass/npc/Loto.java,useBypass,SOURCE,,INVENTORY,a lottery ticket is constructed directly and put in the inventory (line 242)
+race_ticket,java/org/l2jmobius/gameserver/entity/actor/instance/RaceManager.java,buyTicket,SOURCE,,INVENTORY,a race ticket is constructed directly (line 171)
+merc_ticket,java/org/l2jmobius/gameserver/managers/MercTicketManager.java,addTicket,SOURCE,,GROUND,a mercenary ticket is constructed directly on the ground (line 195)
+event_items_sql,java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java,destroyItemsOnEnd,SINK,ANY,,DELETE FROM items WHERE item_id=? at an event's end (line 557); its item ids are ineligible for custody (spec 4.4)
+hero_items_sql,java/org/l2jmobius/gameserver/mechanics/olympiad/Hero.java,deleteItemsInDb,SINK,ANY,,DELETE FROM items WHERE item_id IN (hero items) for every non-GM owner (line 81 run at 874); hero items are not tradeable so never eligible
+stack_clamp,java/org/l2jmobius/gameserver/entity/item/instance/Item.java,changeCount,SINK,ANY,,a stack's gain above MAX_ADENA or loss below 0 is clamped away (lines 458-469)
+treasury_clamp,java/org/l2jmobius/gameserver/mechanics/siege/Castle.java,addToTreasuryNoTax,SINK,CASTLE_TREASURY,,a treasury gain above MAX_ADENA is clamped away (lines 333-357)

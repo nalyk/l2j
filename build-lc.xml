@@ -111,6 +111,8 @@
 					<jvmarg value="-XX:+UnlockExperimentalVMOptions" />
 					<jvmarg value="-XX:hashCode=2" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
+					<!-- Living Chronicle's own schema (docs/spec), applied by tests on top of the stock one. -->
+					<sysproperty key="lc.migrations.dir" value="${basedir}/sql/migrations" />
 					<sysproperty key="lc.classes.dir" value="${build.bin}" />
 					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->
 					<sysproperty key="lc.lock.dir" value="${lock.dir}" />

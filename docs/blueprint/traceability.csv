@@ -1,44 +1,44 @@
 id,source,sub_feature,blueprint,spec,requirements,tables,flow,hooks,tests,evidence,status
-TR-allowed-player-races,90 §1,Allowed Player Races,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-auto-potions,90 §1,Auto Potions,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-banking,90 §1,Banking,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-boss-announcements,90 §1,Boss Announcements,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-cancel-return,90 §1,Cancel Return,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-captcha,90 §1,Captcha,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-champion-monsters,90 §1,Champion Monsters,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-chat-moderation,90 §1,Chat Moderation,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-per-class-balance,90 §1,Per-Class Balance,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-custom-community-board,90 §1,Custom Community Board,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-custom-mail-manager,90 §1,Custom Mail Manager,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-delevel-manager,90 §1,Delevel Manager,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-dualbox-control,90 §1,Dualbox Control,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-faction-system,90 §1,Faction System,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-fake-players,90 §1,Fake Players,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-find-pvp,90 §1,Find PvP,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-free-mounts,90 §1,Free Mounts,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-merchant-zero-sell-price,90 §1,Merchant Zero Sell Price,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-multilingual,90 §1,Multilingual,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-nobless-master,90 §1,Nobless Master,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-npc-stat-multipliers,90 §1,NPC Stat Multipliers,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-offline-auto-play,90 §1,Offline Auto Play,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-offline-trade-craft,90 §1,Offline Trade/Craft,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-online-info,90 §1,Online Info,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-password-change,90 §1,Password Change,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-premium,90 §1,Premium,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-private-store-distance,90 §1,Private Store Distance,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-pvp-pk-announcements,90 §1,PvP/PK Announcements,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-pvp-pk-rewards,90 §1,PvP/PK Rewards,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-pvp-titles-colors,90 §1,PvP Titles/Colors,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-randomized-spawns,90 §1,Randomized Spawns,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-scheme-buffer,90 §1,Scheme Buffer,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-welcome-message,90 §1,Welcome Message,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-sell-buffs,90 §1,Sell Buffs,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-server-time,90 §1,Server Time,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-starting-location,90 §1,Starting Location,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-starting-title,90 §1,Starting Title,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-transmog,90 §1,Transmog,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-walker-bot-protection,90 §1,Walker/Bot Protection,03 §8 (each with policy and reason),,,,,,,,blueprint
-TR-wedding,90 §1,Wedding,03 §8 (each with policy and reason),,,,,,,,blueprint
+TR-allowed-player-races,90 §1,Allowed Player Races,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04;PRO-R06,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04;AT-PRO-03,,specified
+TR-auto-potions,90 §1,Auto Potions,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-banking,90 §1,Banking,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-boss-announcements,90 §1,Boss Announcements,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-cancel-return,90 §1,Cancel Return,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-captcha,90 §1,Captcha,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04;PRO-R05,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04;AT-PRO-05,,specified
+TR-champion-monsters,90 §1,Champion Monsters,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-chat-moderation,90 §1,Chat Moderation,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-per-class-balance,90 §1,Per-Class Balance,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-custom-community-board,90 §1,Custom Community Board,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-custom-mail-manager,90 §1,Custom Mail Manager,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-delevel-manager,90 §1,Delevel Manager,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-dualbox-control,90 §1,Dualbox Control,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-faction-system,90 §1,Faction System,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-fake-players,90 §1,Fake Players,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-find-pvp,90 §1,Find PvP,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-free-mounts,90 §1,Free Mounts,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-merchant-zero-sell-price,90 §1,Merchant Zero Sell Price,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-multilingual,90 §1,Multilingual,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-nobless-master,90 §1,Nobless Master,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-npc-stat-multipliers,90 §1,NPC Stat Multipliers,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-offline-auto-play,90 §1,Offline Auto Play,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-offline-trade-craft,90 §1,Offline Trade/Craft,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-online-info,90 §1,Online Info,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-password-change,90 §1,Password Change,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-premium,90 §1,Premium,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-private-store-distance,90 §1,Private Store Distance,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-pvp-pk-announcements,90 §1,PvP/PK Announcements,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-pvp-pk-rewards,90 §1,PvP/PK Rewards,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-pvp-titles-colors,90 §1,PvP Titles/Colors,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-randomized-spawns,90 §1,Randomized Spawns,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-scheme-buffer,90 §1,Scheme Buffer,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-welcome-message,90 §1,Welcome Message,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-sell-buffs,90 §1,Sell Buffs,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-server-time,90 §1,Server Time,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-starting-location,90 §1,Starting Location,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-starting-title,90 §1,Starting Title,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-transmog,90 §1,Transmog,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-walker-bot-protection,90 §1,Walker/Bot Protection,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
+TR-wedding,90 §1,Wedding,03 §8 (each with policy and reason),profiles.md,PRO-R01;PRO-R02;PRO-R04,dist/game/data/lc/custom_policy.csv,"profile overlay at ConfigReader; startup check (§4.1, §4.2)",ConfigReader profile overlay,AT-PRO-01;AT-PRO-02;AT-PRO-04,,specified
 TR-pc-cafe-pc-bang,90 §1,PC Cafe / PC Bang,"H5 has `PcCafePointsManager`, configured in `PremiumSystem.ini`; OFF — 03 §8 (PremiumSystem row)",,,,,,,,blueprint
 TR-vip-tier-system,90 §1,VIP Tier System,not present in H5 (Kamael-only configs),,,,,,,,blueprint
 TR-sayune-for-everyone,90 §1,Sayune for Everyone,not present in H5 (Kamael-only configs),,,,,,,,blueprint
@@ -146,7 +146,7 @@ TR-hunter-mythology,90 §2,hunter mythology,16 §6,black-ledger.md,BL-R10;BL-R12
 TR-profession-definition,90 §2,profession definition (App. F),16 §6,,,,,,,,blueprint
 TR-retail-truth-statuses,90 §2,Retail Truth: statuses,11,,,,,,,,blueprint
 TR-retail-truth-evidence-cases,90 §2,Retail Truth: evidence cases,11,,,,,,,,blueprint
-TR-retail-truth-clean-profile,90 §2,Retail Truth: clean profile,11,,,,,,,,blueprint
+TR-retail-truth-clean-profile,90 §2,Retail Truth: clean profile,11,profiles.md,PRO-R03,,,,AT-PRO-03,,specified
 TR-retail-truth-regression-gates,90 §2,Retail Truth: regression gates,11,,,,,,,,blueprint
 TR-retail-truth-automated-tests,90 §2,Retail Truth: automated tests,11,,,,,,,,blueprint
 TR-retail-truth-ai-combat-economy-world-validation,90 §2,Retail Truth: AI/combat/economy/world validation,11,,,,,,,,blueprint

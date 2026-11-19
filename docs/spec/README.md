@@ -19,6 +19,7 @@ ahead of it (blueprint 02 §2, 30 §2.1): a change that adds behaviour first cha
 | [wayfarers-memory.md](wayfarers-memory.md) | Wayfarer's Memory: own-experience observations with provenance, recap, projects, notes, shared pages, personal history, the Ledger boundary | 14, 01 §2.5, 03 §4.4, 04 §4-§5, 12, 13, 16 §8 |
 | [aden-remembers.md](aden-remembers.md) | Aden Remembers: regions, regional state, situations, bounded actuators, Crown Law, the Merchant Guild and caravans, influence, rumors, history | 12, 04 §1 §3 §6-§8, 10 §8, 13, 15, 16, 17, 90 §2 |
 | [chronicle.md](chronicle.md) | Chronicle of Aden: the publication row store, names, the Gazette, monuments and in-world voices, item sagas, battle replays, the narrator boundary, the website | 17, 01 §2.6, 02 §7, 04 §4 §8, 10 §8, 12 §9, 14 §7, 16 §2, 20 §1 |
+| [profiles.md](profiles.md) | Profiles and Mobius custom modules: the profile, configuration overlays at the one reading point, the startup check, each custom module's policy per profile | 02 §8, 03 §8, 10 §9, 11 §3, 20 §1 |
 
 One file per module. Its DDL lives in `sql/migrations/V###__lc_<module>.sql`, numbered in the order modules depend on each
 other; a spec names its tables, the migration defines them, and a test applies every migration to MariaDB.

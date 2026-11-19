@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 2, answering the first adversarial review; record in §12)
+- Status: draft (revision 3, answering two adversarial review rounds; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -39,9 +39,11 @@ An asset is always in exactly one holding. An asset operation debits and credits
 | 3 | `PLAYER` | char id | memory: the inventory of a player **in the world** (§2.4) | items, Adena |
 | 4 | `PLAYER_WAREHOUSE` | char id | memory: the warehouse container of a player in the world | items, Adena |
 | 5 | `CUSTODY` | custody id | the `items` rows `owner_id = -1`, `loc = 'ESCROW'`, `loc_data = custody id` | items, Adena |
-| 6 | `GROUND` | — (credit only) | memory: an item placed in the world (a caravan raid's dropped share, 12 §8) | items, Adena |
+| 6 | `GROUND` | — (credit only) | memory: an item placed in the world (a caravan raid's dropped share, 12 §8); until placed, the committed `lc_ground_drop` row | items, Adena |
 | — | `SOURCE(code, ref)` / `SINK(code, ref)` | posting code (§2.5) | nowhere: the asset enters or leaves existence | — |
 
+- `PLAYER` and `PLAYER_WAREHOUSE` of one character share one holder lock (L1, keyed by the character), because login and
+  logout restore and tear down both together (Player.java:7358-7360).
 - A character that is not in the world is never a holder: what an operation owes it goes into a `DELIVERY` custody
   (§4.3), claimed in person later. No operation writes an offline character's rows.
 - Equipped items, pet, mail, freight, refund and auction-bid holdings are never debited or credited by an asset
@@ -74,6 +76,8 @@ lc_economy_census(census_id BIGINT, taken_at TIMESTAMP(3), kind {SHUTDOWN|STARTU
                   qty BIGINT UNSIGNED, PRIMARY KEY(census_id, item_id, holding))
 lc_economy_counter(item_id INT PK, existence BIGINT, as_of_census BIGINT)
 lc_module_state(module VARCHAR(16) PK, state {RUNNING|FROZEN}, reason VARCHAR(64), since TIMESTAMP(3), evidence_fact_id BIGINT NULL)
+lc_ground_drop(op_id BINARY(16), leg SMALLINT, x INT, y INT, z INT, instance_id INT, placed_at TIMESTAMP(3) NULL,
+               PRIMARY KEY(op_id, leg) → lc_ledger_posting)
 ```
 
 - `lc_custody.owner_module/owner_ref` name what the custody is for: (`PACT`, contract id), (`LEDGER`, contract id),
@@ -88,6 +92,8 @@ lc_module_state(module VARCHAR(16) PK, state {RUNNING|FROZEN}, reason VARCHAR(64
   (both are classified sites, §2.7); a split of a tracked stack starts a child lifecycle (`parent_lifecycle_id`).
 - `lc_economy_*` hold the monitor's state (§2.6): buckets are telemetry, never per-event rows (04 §1.1).
 - `lc_module_state` is the freeze switch every Living Chronicle module honours (04 §8); the Asset Service is its first user.
+- `lc_ground_drop` records where a committed `GROUND` leg is to be placed; `placed_at` is set once it is in the world, so
+  a drop that committed but was not placed (thread death, crash) is placed by the applier or by startup recovery.
 
 ### 2.3 The `items` row of an escrowed asset
 
@@ -97,14 +103,16 @@ the same transaction (§4.2 rule 8). Adena in a custody is one stackable row per
 
 ### 2.4 Authority, presence and handoff
 
-- For every Mobius holder an operation touches, memory is authoritative and the database is a copy (§2.1). The operation
-  reads memory, writes both: the row inside its transaction, memory after commit (§3.2).
-- A player is **in the world** from the moment login has restored the inventory until logout takes the player's holder
-  lock (L1, §4.2). Logout acquires L1 *before* it marks the player offline (Player.java:11793) and holds it through the
-  final save (ItemContainer.java:550) and the removal of the containers. An operation that obtains L1 checks presence
-  under it: a player not in the world is not a holder, and the operation defers what it owes into a `DELIVERY` custody.
-- Login acquires L1 before restoring the inventory, so a recovery, a quarantine (§3.3) or an operation in progress for that
-  character completes before the inventory is read.
+- For every Mobius holder an operation touches, memory is authoritative and the database is a lagging copy (§2.1).
+- An operation never writes an absolute value over a Mobius holder's row. It writes **relative deltas**
+  (`count = count - n`, a whole object's `owner_id/loc/loc_data` by object id, `treasury = treasury + n`) to rows that it
+  first made current under a fence (§3.3), and applies the same deltas to memory. A delta composes with Mobius's own lazy
+  absolute writes: whatever Mobius later writes is memory, and memory already contains the delta.
+- A player is **in the world** from the moment login, holding L1, has restored inventory, warehouse and freight
+  (Player.java:7358-7360), until logout takes L1. Logout takes L1 at the start of the whole disconnection sequence,
+  before the first save (`Disconnection.storeAndDelete`, Disconnection.java:116), and holds it through `deleteMe`, the
+  final saves and the removal of the containers. An operation checks presence under L1: a character not in the world is not
+  a holder, and what the operation owes it goes into a `DELIVERY` custody.
 - Custody rows have no in-memory `Item` outside an operation.
 
 ### 2.5 Posting codes
@@ -125,32 +133,44 @@ by Aden Remembers), and every other source is an audited correction.
 
 ### 2.6 The economy monitor
 
-Conservation across the whole server, with authorisation coming from the site table (§2.7), not from a process name.
+Conservation across the whole server, with authorisation coming from the site table (§2.7), not from a process name. What
+it guarantees, and what it only watches, are stated separately.
 
-1. **Classified sites.** Every place in core and datapack that creates, destroys or changes the quantity of an item, or
-   that moves one between holdings, is a *site* with a class: `SOURCE`, `SINK`, `MOVE` (a pair: the same quantity out of
-   one holding and into another), `RESTORE` (rebuilding memory from rows: never counted) or `EXCLUDED` (with the reason).
-   Every SQL statement in core and datapack that deletes or updates `items` rows is a site too.
-2. **Counting.** At runtime each site adds its quantity to the open bucket under its own site name and class. The
-   mechanism (the site passes its identity; where an `ItemProcessType` is ambiguous the core patch gives the call its own
-   tag) is N3's to choose; the rule is that the count is attributed to the site that made the change.
-3. **Moves balance, continuously.** Per item id, the running sum `Σ MOVE_OUT − Σ MOVE_IN` is zero whenever no move is in
-   progress. A move in progress is counted; a nonzero balance with none in progress, or one that persists past
-   `MoveSettleMillis`, is a violation (INV06). A dupe or a loss inside any retail transfer path is caught here, at once.
-4. **Existence counters.** Per item id, an in-memory counter changed only by `SOURCE` and `SINK` sites and by asset
-   operations' source and sink legs.
-5. **Exact census at quiescence.** At a clean shutdown, after the final saves and with no player in the world, every
-   holding is counted from the database plus the memory-only holdings that are about to be discarded (ground items when
-   `SaveDroppedItem = False`, General.ini:217; refund lists), which are posted as `SINK` sites first. The counters are
-   persisted with that census (`SHUTDOWN`). At startup, before any login, the database is counted again (`STARTUP`); it
-   must equal the persisted counters exactly, per item id (INV06).
-6. **After a crash** there is no exact boundary: Mobius loses unsaved progress by design. The startup census becomes a
-   `REBASE` census, recorded with the per-item difference from the last persisted counters in `Asset.MonitorRebased`. A
-   rebase is never reported as conservation holding; custodies are exact regardless (INV11).
-7. **Holdings counted**: inventory and paperdoll, warehouse, clan warehouse, pet and pet equipment, mail attachments,
-   freight, refund (memory), ground (memory), custody rows, castle treasuries, item-auction bids (`item_auction_bid`,
-   ItemAuction.java:69) and clan-hall bids (`auction_bid.maxBid`, ClanHallAuction.java:326). A bid is a holding of the
-   bidder until it is refunded (MOVE back) or won (SINK).
+**Guaranteed (exact):**
+
+1. Every operation's postings balance (INV01) and every custody holds exactly what its postings say (INV11), always,
+   including across crashes.
+2. Across a clean restart, every item id is conserved exactly: the census taken at the shutdown boundary equals the census
+   taken at the next startup, and the existence counters carried between them equal both (INV06).
+
+**Watched (alarm, not proof):**
+
+3. Every place that changes an item's existence or quantity is a classified site, and each change is counted under its
+   site (§2.7). A per-window imbalance between a move site's outgoing and incoming quantity beyond `MoveToleranceQty`, for
+   two consecutive windows, raises `Asset.MoveImbalance`. Retail transfers span calls, threads and persistence steps (mail
+   cash on delivery, RequestPostAttachment.java:183-256; auction refunds; freight; offline shops), so an exact live check
+   would need an identity on every retail transfer; this is a deliberate limit, not a guarantee, and offsetting errors of
+   equal size in one window can hide each other.
+
+**The shutdown boundary.** After Mobius's shutdown has disconnected every player and stopped its task pools
+(Shutdown.java:380, 403), the service writes every authoritative container that Mobius does not (a clan warehouse whose
+leader is offline is skipped by `ItemContainer.updateDatabase`, ItemContainer.java:579: the service writes each clan
+warehouse's items itself), checks every write succeeded, posts each memory-only holding about to be discarded as a sink
+(ground items when `SaveDroppedItem = False`, General.ini:217; with it on they are counted from `itemsonground` instead),
+and only then takes the `SHUTDOWN` census from the database and persists the counters. Refund lists are already
+destroyed at logout (Player.java:12131, PlayerRefund.java:85) through a classified sink site, so they are never counted.
+
+**At startup**, before any login, the database is counted again (`STARTUP`) and compared with the persisted counters.
+After a crash there is no boundary: the census is a `REBASE`, recorded with its per-item difference in
+`Asset.MonitorRebased`, and never reported as conservation holding; INV11 still holds exactly.
+
+**Holdings counted**: inventory and paperdoll, warehouse, clan warehouse, pet and pet equipment, mail attachments,
+freight, custody rows, castle treasuries, ground (`itemsonground`, when saved), and the open bid commitments: item-auction
+bids whose `playerBid > 0` in auctions not yet finished (ItemAuctionBid.java:51-58, ItemAuction.java:473-477), and
+clan-hall bids (`auction_bid.maxBid`, ClanHallAuction.java:326). Each bid transition is its own site in §2.7: placing a bid
+moves Adena into the bid holding; cancelling an item-auction bid moves it back; cancelling a clan-hall bid moves 90 % back
+and sinks 10 % (ClanHallAuction.java:292-317); winning an NPC's auction sinks the bid; winning a player-owned hall moves
+the bid to the seller (ClanHallAuction.java:470-473), with any clamp a sink.
 
 ### 2.7 The site table
 
@@ -161,7 +181,9 @@ can change an item's existence or quantity (`ItemManager.createItem`, `ItemManag
 site the table does not classify, and on any table row that no longer matches a site. Known sites that must be in it from
 the start: direct item construction for lottery and race tickets (`dist/game/data/scripts/handlers/bypass/npc/Loto.java:242`,
 RaceManager.java:171) and mercenary tickets (MercTicketManager.java:195), restores (`RESTORE`), and the blanket SQL
-deletions of event and hero items (LongTimeEvent.java:557, Hero.java:81: `SINK`).
+deletions of event and hero items (LongTimeEvent.java:557, Hero.java:81: `SINK`). A constructor followed by
+`setCount` on the fresh object, before it enters any holding, is one site (the quantity first exists there); a
+reconstruction from rows is `RESTORE`.
 
 ## 3. State machines
 
@@ -181,39 +203,49 @@ A `CLOSED` custody never reopens; a new holding is a new custody.
 
 ### 3.2 Asset operation
 
+Every leg is a **debit** (an asset leaves a holder) or a **credit** (an asset enters one). Debits are applied to memory
+before the transaction, credits after it, so that nothing is spendable before it is committed and nothing is spent
+twice while a transaction is open.
+
 | From | To | When |
 |---|---|---|
-| — | `BEGUN` | `begin(opId)`; if `lc_asset_op` has `opId` and `applied_at` is set, the call returns the earlier outcome and does nothing; if it is set but unapplied, the call joins the applier (§3.3) |
-| `BEGUN` | `LOCKED` | every lock is taken in the order of §4.2 |
-| `LOCKED` | `STAGED` | every leg, posting, eligibility rule (§4.4), version check, settlement key and fact is staged and validated against memory and rows |
-| `STAGED` | `COMMITTING` | the statements run on one connection with autocommit off; `COMMIT` is sent |
+| — | `BEGUN` | `begin(opId)`; if `lc_asset_op` has `opId`, the call returns the earlier outcome and does nothing (its credit legs, if not yet applied in memory, are the applier's, §3.4) |
+| `BEGUN` | `LOCKED` | the holder locks (L1) of every holder named are taken in holder order |
+| `LOCKED` | `FENCED` | every touched Mobius item and castle is fenced and flushed (§3.3) |
+| `FENCED` | `DEBITED` | every debit is applied to memory atomically and checked (an insufficient or no-longer-eligible asset aborts the operation), and recorded in the operation's in-memory undo list |
+| `DEBITED` | `COMMITTING` | the statements (relative deltas, custody rows, postings, settlement key, owner state and version, facts, `lc_asset_op`) run on one connection, autocommit off; `COMMIT` is sent |
 | `COMMITTING` | `COMMITTED` | the commit returned |
-| `COMMITTING` | `ABORTED` | an error *before* `COMMIT` was sent: rollback |
+| `COMMITTING` | `ABORTED` | an error before `COMMIT` was sent: rollback, then the undo list is applied to memory |
 | `COMMITTING` | `UNCERTAIN` | the connection failed after `COMMIT` was sent |
 | `UNCERTAIN` | `COMMITTED` / `ABORTED` | a **locking** read of `opId` in `lc_asset_op` on a new connection returns (it waits while the original transaction is unresolved): present means committed, absent means aborted |
-| `UNCERTAIN` | `UNCERTAIN` | the read times out or fails: retried; locks stay held; after `UncertainCommitLookupMillis` the touched holders are quarantined (§3.3) and the module is frozen; never aborted on a timeout |
-| `COMMITTED` | `APPLIED` | memory of every touched holder made equal to the committed rows; `applied_at` written |
-| `COMMITTED` | `QUARANTINED` | applying to memory, or writing `applied_at`, failed (§3.3) |
-| `APPLIED` | `DONE` | locks released, then clients and caches told |
-| `BEGUN`, `LOCKED`, `STAGED`, `ABORTED` | `DONE` | locks released; memory untouched |
+| `UNCERTAIN` | `UNCERTAIN` | the read times out or fails: retried; L1 and the fences stay; after `UncertainCommitLookupMillis` the module is frozen (§6); never aborted on a timeout |
+| `COMMITTED` | `APPLIED` | every credit is applied to memory (and every ground leg placed, `placed_at` set), each leg marked applied in memory as it is applied; `applied_at` written |
+| `APPLIED`, `ABORTED` | `DONE` | fences lifted and fenced items written (§3.3), L1 released, then clients and caches told |
 
-Nothing is published to a client or a cache before `APPLIED`; no lock is released before `APPLIED`, `ABORTED` or
-`QUARANTINED`-and-handed-over.
+While an operation is `UNCERTAIN`, gameplay goes on: the fenced items stay in memory and in use, only their row writes wait.
+A crash in any state leaves the rows as the last committed transaction made them, and Mobius rebuilds memory from rows.
 
-### 3.3 Quarantine and the applier
+### 3.3 Fences
 
-A holder whose state the service cannot vouch for (operation `UNCERTAIN` past the lookup time, or `COMMITTED` but not
-applied) is **quarantined**:
+A **fence** marks a Mobius item, a castle treasury or an item's variables as owned by one asset operation. Core patches
+(§11) make the three Mobius writers (`Item.updateDatabase`, Item.java:1481; the castle treasury write, Castle.java:361;
+the variables save, ItemVariables.java:172) skip a fenced object for any thread but the fence's owner, leaving it dirty.
 
-- a player is disconnected *without* saving the touched items (their in-memory copies are marked unsaveable first), and
-  login waits on L1 until the holder is released;
-- a clan warehouse or castle treasury keeps its touched items' locks (L3/L4) held by the applier, so no Mobius code can
-  read or write them;
-- the **applier** (one supervisor thread of the service) takes over the dead or failed worker's locks, re-reads the
-  committed rows of every touched holder and replaces memory with them, writes `applied_at`, and releases the holder.
-  Applying is idempotent: it sets memory from rows, it never re-applies deltas.
-- A quarantine that the applier cannot clear within `QuarantineAlarmMillis` raises `Asset.QuarantineStuck` and pages the
-  admin; the holder stays quarantined.
+- To fence: set the fence, then take and release the object's write lock once (`_dbLock`, the treasury's write path, the
+  variables save lock), so that a write already in progress has finished and every later one sees the fence; then flush
+  the object (write its current memory) as the fence owner, so its row exists and is current.
+- To lift: clear the fence and write the object once more, as Mobius would have.
+- A fence is never held while waiting for another fence or for a Mobius lock: fences are taken in object-id order after L1,
+  and taking one never blocks on anything but the momentary write lock.
+
+### 3.4 The applier
+
+One supervisor thread of the service. If the thread running an operation dies after `COMMITTED`, the applier finishes the
+operation from the rows: it applies the credit legs not yet marked applied (the marks are in memory, set atomically with
+each leg), places unplaced ground drops, writes `applied_at`, lifts the fences. If it dies before `COMMIT` was sent, the
+applier rolls the undo list back into memory. Nothing in the applier needs to own another thread's lock: the operation's
+only locks are its L1 permits and its fences, and both belong to the operation, not to a thread: L1 is a binary permit per
+holder (a semaphore, released by whoever finishes the operation), and a fence is a record naming the operation.
 
 ## 4. Operations
 
@@ -237,35 +269,29 @@ the same id, so a retry after an uncertain commit can never apply twice.
 
 ### 4.2 Rules
 
-1. One connection, autocommit off, one transaction for: `items` rows and their attribute, elemental and variable rows,
-   `castle.treasury`, custody rows, the owner module's state and version, ledger postings, the settlement key, durable
-   facts and the `lc_asset_op` row.
-2. **Lock hierarchy.** Locks are taken in rank order, and within a rank in key order; code holding a lock of rank *r*
-   never waits for a lock of a lower rank, and never calls Mobius code that may:
-
-   | Rank | Lock | Taken by |
-   |---|---|---|
-   | L1 | holder lock, one per holder key (fork-owned) | asset operations, the applier; login and logout of that player, first |
-   | L2 | the player's monitor (`Player.store` is synchronized, Player.java:7621) | Mobius only; an asset operation never takes it |
-   | L3 | the castle's treasury monitor (core patch, §11.10); each touched item's monitor (`synchronized (item)`, ItemContainer.java:427) in object-id order | Mobius and asset operations |
-   | L4 | each touched item's `_dbLock` (Item.java:167, 1483) and its variables' save lock (ItemVariables.java:172), in object-id order | Mobius and asset operations |
-   | L5 | the operation's database connection | asset operations |
-
-   Mobius already takes L2 → L3 → L4 (`Player.store` → item writes; `transferItem` takes the item's monitor then writes,
-   ItemContainer.java:340-388), so the hierarchy adds no inversion; AT-ASSET-05 checks it with a lock-order witness.
-3. From `LOCKED` to `APPLIED` the operation holds L3 and L4 of every item it touches: no Mobius count change and no Mobius
-   write of those items (`Player.store`, autosave, `transferItem`, a scheduled variables save) can happen in between, so
-   none can write an earlier state over committed rows.
+1. One connection, autocommit off, one transaction for: the relative deltas on `items` rows and their attribute,
+   elemental and variable rows, on `castle.treasury`, custody rows, the owner module's state and version, ledger
+   postings, the settlement key, ground drops, durable facts and the `lc_asset_op` row.
+2. **Locks.** An operation takes the holder locks L1 of every holder it names, in holder order (§2.1) and then by key,
+   before anything else, and holds no other lock across a step. L1 ranks above every Mobius lock: Mobius code takes L1
+   only at the very start of login and logout, holding nothing. Everything else an operation does in memory goes through
+   Mobius's own methods, which take Mobius's locks as they always do, or through the fences (§3.3), which never wait.
+   AT-ASSET-05 checks with a lock-order witness that no path waits for L1 while holding a Mobius lock.
+3. A debit of a whole object removes it from its container under the item's own monitor, after checking under that
+   monitor that the object is still in that holder and still eligible; a debit from a stack uses the atomic checked
+   decrease (§11.15). A credit to a stack goes to a row made current under its fence; a credit of a new object inserts
+   its row in the transaction and adds it to memory after commit.
 4. A stack is moved whole or split, never both in one leg; quantities are exact; a move never clamps (§4.3 `release`).
 5. The owner module's holding predicate is checked for every custody touched (INV05).
 6. Every operation's postings balance per item id (INV01), and per custody they match the custody's rows (INV11), before
    `COMMIT` is sent.
 7. While an owner module is frozen, no operation on its custodies commits except corrective admin operations (§4.5).
-8. An item entering a custody has its variables written from memory in the transaction, its pending scheduled variables
-   save cancelled and its variables object detached; an item leaving a custody gets a variables object loaded from the
-   committed rows.
+8. An item entering a custody has its variables written from memory in the transaction under the variables' fence, with
+   setting and change-tracking made one step by a core patch (§11.12); its variables object is then retired, so a late
+   writer holding it is refused and logged, not lost silently. An item leaving a custody gets a variables object loaded
+   from the committed rows.
 9. An item entering a custody leaves memory entirely: removed from its container without releasing its object id
-   (§11.6), its `Item` discarded after `APPLIED` (INV07).
+   (§11.6), its `Item` discarded once the operation is `DONE` (INV07).
 
 ### 4.3 Operations offered
 
@@ -329,7 +355,7 @@ All durable (04 §1.1), written in the operation's transaction, `op_id` set.
 | ASSET-INV03 | every `loc = 'ESCROW'` row has `owner_id = -1` and a custody in `OPEN` or `FROZEN` | per operation for the rows it touches; full scan at every census and at startup |
 | ASSET-INV04 | a `CLOSED` custody holds no row; a custody's version only grows | per operation |
 | ASSET-INV05 | every custody that holds a row is allowed to hold by its owner module (`allowsHolding(owner_ref)`) | per operation; full pass at every census |
-| ASSET-INV06 | moves balance (§2.6.3); at a clean restart the startup census equals the persisted counters per item id (§2.6.5) | continuously; at startup |
+| ASSET-INV06 | across a clean restart, the startup census equals the shutdown census and the persisted counters per item id (§2.6) | at startup |
 | ASSET-INV07 | no in-memory `Item` exists for an `ESCROW` row outside an operation | per operation; at every census |
 | ASSET-INV08 | at most one live lifecycle per object id; a live lifecycle's object is in exactly one holding | by the unique key; at every census |
 | ASSET-INV09 | `LazyItemsUpdate = False` (GeneralConfig.java:80, General.ini:193) | at startup; the module refuses to start otherwise |
@@ -350,10 +376,11 @@ memory is applied, after `applied_at`, after each cache update, after each clien
 |---|---|
 | before `COMMIT` is sent | rolled back; memory and rows as before; retry with the same `OpId` succeeds once |
 | connection lost after `COMMIT` sent | `UNCERTAIN`: resolved by the locking read, never by a timeout (§3.2) |
-| after `COMMIT`, before memory applied; during or after applying; before `applied_at` | `QUARANTINED`; the applier makes memory equal to the rows (§3.3) |
+| after `COMMIT`, before or while credits are applied, before `applied_at` | the applier applies the remaining credit legs and places unplaced drops (§3.4) |
+| before `COMMIT` is sent, after debits were applied to memory | the undo list is applied to memory; nothing committed |
 | after `APPLIED`, during cache updates or client packets | committed and applied; caches and clients brought up to date by the applier's re-publication; nothing re-moved |
 | database restarted mid-transaction | rolled back by InnoDB; as the first row |
-| GameServer killed in any custody state | at startup, before any login: committed operations are complete in rows; INV03, INV05 and INV11 are checked over every custody; the census is `STARTUP` after a clean shutdown and `REBASE` after a crash (§2.6) |
+| GameServer killed in any custody state | at startup, before any login: committed operations are complete in rows; committed ground drops with no `placed_at` are placed; INV03, INV05 and INV11 are checked over every custody; the census is `STARTUP` after a clean shutdown and `REBASE` after a crash (§2.6) |
 | full inventory, weight limit, `MAX_ADENA`, beneficiary not in the world | the rest goes to a `DELIVERY` custody, claimable in person |
 | owner module frozen | its custodies stay as they are; only corrective operations commit; gameplay goes on (04 §8) |
 
@@ -365,8 +392,7 @@ memory is applied, after `applied_at`, after each cache update, after each clien
 |---|---|---|---|---|
 | `CommitBudgetMillis` | 1–1000 | 15 | 15 everywhere | AT-ASSET-30 |
 | `UncertainCommitLookupMillis` | 100–60000 | 5000 | 5000 everywhere | AT-ASSET-21 |
-| `QuarantineAlarmMillis` | 1000–600000 | 60000 | 60000 everywhere | AT-ASSET-22 |
-| `MoveSettleMillis` | 1–10000 | 1000 | 1000 everywhere | AT-ASSET-12 |
+| `MoveToleranceQty` | 0–10^9 | 0 | 0 everywhere | AT-ASSET-12 |
 | `BucketWindowMinutes` | 1–1440 | 60 | 60 / 5 / 5 / 60 / 60 | AT-ASSET-12 |
 
 `LazyItemsUpdate = False` is asserted, not configured (INV09).
@@ -386,14 +412,14 @@ memory is applied, after `applied_at`, after each cache update, after each clien
 | ASSET-R02 | Retrying an operation with the same `OpId` MUST have no effect once it committed. | AT-ASSET-02 |
 | ASSET-R03 | A second settlement with the same (scope, key) MUST abort without moving anything. | AT-ASSET-00, AT-ASSET-03 |
 | ASSET-R04 | An operation whose expected owner version differs MUST abort without moving anything. | AT-ASSET-04 |
-| ASSET-R05 | Locks MUST be taken in the hierarchy of §4.2; no path, asset or Mobius, may deadlock against an operation. | AT-ASSET-05 |
-| ASSET-R06 | No Mobius write or count change MUST be able to put an earlier state over a committed operation's rows or memory. | AT-ASSET-06 |
+| ASSET-R05 | An operation MUST take only its L1 permits and fences (§4.2); no path, asset or Mobius, may deadlock against it. | AT-ASSET-05 |
+| ASSET-R06 | An operation MUST change Mobius holders' rows only by relative deltas on rows made current under a fence, so that no Mobius write, before or after, can lose or repeat its effect. | AT-ASSET-06 |
 | ASSET-R07 | A non-stackable escrowed item MUST keep its object id, enchant, augmentation, elementals and variables (including unsaved changes) through fund and release; a moved part of a stack MUST keep its item id and get a child lifecycle. | AT-ASSET-07 |
 | ASSET-R08 | No inventory, warehouse, pet, mail or freight restore MUST load an `ESCROW` row; startup cleanup and every classified SQL site MUST leave it. | AT-ASSET-00, AT-ASSET-08, AT-ASSET-26 |
 | ASSET-R09 | An escrowed item's object id MUST stay reserved while its row exists, at runtime and across restarts. | AT-ASSET-00, AT-ASSET-09 |
 | ASSET-R10 | A release that does not fit, or is owed to a character not in the world, MUST put the rest into a `DELIVERY` custody, never clamp, drop or write offline rows. | AT-ASSET-10 |
 | ASSET-R11 | A claim MUST move all of a delivery or nothing, in person. | AT-ASSET-11 |
-| ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a move MUST balance; a clean restart MUST conserve every item id exactly. | AT-ASSET-12 |
+| ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST conserve every item id exactly; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
 | ASSET-R14 | Living Chronicle MUST NOT create an asset except `TOWN_SUPPLY` within budget and audited `ADMIN_CORRECTION`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and the custody, write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
@@ -403,9 +429,10 @@ memory is applied, after `applied_at`, after each cache update, after each clien
 | ASSET-R19 | The module MUST refuse to start unless `LazyItemsUpdate = False`. | AT-ASSET-17 |
 | ASSET-R20 | An item MUST enter a custody only if it is eligible (§4.4). | AT-ASSET-18 |
 | ASSET-R21 | An operation MUST commit within `CommitBudgetMillis` at p99 under the capacity benchmark. | AT-ASSET-30 |
-| ASSET-R22 | A committed operation whose application failed MUST quarantine its holders until the applier has made memory equal to the rows. | AT-ASSET-22 |
+| ASSET-R22 | Debits MUST reach memory before the transaction and credits only after it commits; a dead operation MUST be finished by the applier from the rows (credits) or its undo list (debits), never twice. | AT-ASSET-22 |
 | ASSET-R23 | Logout and login MUST take the player's holder lock first; an operation MUST NOT treat a player as a holder unless in the world under that lock. | AT-ASSET-24 |
 | ASSET-R24 | Mobius MUST release an object id only after its row is deleted. | AT-ASSET-09 |
+| ASSET-R25 | A committed ground drop MUST be placed exactly once, by the operation, the applier or startup recovery. | AT-ASSET-27 |
 
 | Test | Kind | What it does |
 |---|---|---|
@@ -414,27 +441,28 @@ memory is applied, after `applied_at`, after each cache update, after each clien
 | AT-ASSET-02 | integration | same `OpId` twice, applied and unapplied: no second effect |
 | AT-ASSET-03 | integration | two settlements with one key: the second aborts, nothing moved |
 | AT-ASSET-04 | integration | stale owner version: aborts, nothing moved |
-| AT-ASSET-05 | integration | random concurrent operations interleaved with `Player.store`, autosave, logout, login, `transferItem`, trade, private stores, mail, warehouses, castle tax, pet actions, under a lock-order witness: no inversion, no deadlock |
+| AT-ASSET-05 | integration | random concurrent operations interleaved with `Player.store`, autosave, logout, login, `transferItem`, trade, private stores, mail, warehouses, castle tax, pet actions, enchanting, under a lock-order witness: nothing waits for L1 while holding a Mobius lock, no deadlock |
 | AT-ASSET-06 | integration | operations racing every Mobius writer of the same items, then a restart: rows equal committed state |
-| AT-ASSET-07 | integration | an enchanted, augmented, elemental item with variables changed but not yet saved round-trips through escrow; a split stack gets a child lifecycle |
+| AT-ASSET-07 | integration | an enchanted, augmented, elemental item with variables changed but not yet saved, and with a variables write racing the fund, round-trips through escrow; a late writer on the retired variables is refused; a split stack gets a child lifecycle |
 | AT-ASSET-08 | restart | escrow rows survive cleanup and every classified SQL site, and no container loads them at login |
 | AT-ASSET-09 | integration, restart | the allocator never hands out an escrowed object id, at runtime and after restart; a failed row delete keeps the id reserved |
 | AT-ASSET-10 | integration | release into a full, overweight, `MAX_ADENA` inventory, or to a character not in the world, defers exactly the rest |
 | AT-ASSET-11 | integration | claim with room for part: nothing moves; with room for all, in person: everything moves |
-| AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site and on a stale table row; a dupe injected into a retail transfer path breaks the move balance at once; a clean restart conserves every item id |
+| AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site and on a stale table row; a dupe injected into a retail transfer path raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
 | AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except `TOWN_SUPPLY` within budget and audited corrections |
 | AT-ASSET-15 | integration | a forged `ESCROW` row under a closed custody: module and custody frozen, evidence written, rows untouched; only a correction commits |
-| AT-ASSET-16 | integration | client packets, cache updates and lock releases observed only after `APPLIED` |
+| AT-ASSET-16 | integration | client packets, cache updates and L1 releases observed only after `APPLIED` or `ABORTED`, or after the applier finished |
 | AT-ASSET-17 | unit | startup with `LazyItemsUpdate = True` refused |
 | AT-ASSET-18 | unit | each ineligible kind of item (§4.4) refused |
 | AT-ASSET-20 | fault | kill at every point of §7 for every operation kind, recover, retry |
-| AT-ASSET-21 | fault | connection cut after `COMMIT` sent, both outcomes; lookup timing out keeps the holders locked and never aborts |
-| AT-ASSET-22 | fault | applying fails: holders quarantined, player disconnected without saving the touched items, applier repairs |
+| AT-ASSET-21 | fault | connection cut after `COMMIT` sent, both outcomes; lookup timing out keeps L1 and the fences, freezes the module, and never aborts; play on the fenced items continues |
+| AT-ASSET-22 | fault | the operation's thread dies at each step; the applier finishes or undoes it; no leg applied twice; gameplay on the touched items continues meanwhile |
 | AT-ASSET-23 | fault | database restarted mid-transaction |
-| AT-ASSET-24 | integration | operations racing logout and login of their player: none reads a stale copy; payouts during logout are deferred |
+| AT-ASSET-24 | integration | operations on inventory or warehouse racing logout and login of their character: none reads a stale copy; payouts during logout are deferred |
 | AT-ASSET-25 | restart | GameServer killed in every custody state; recovery before login; INV11 exact |
 | AT-ASSET-26 | restart | `DatabaseCleanUp = True` with escrow rows of every kind |
+| AT-ASSET-27 | fault, restart | a drop dies after commit, before placing, with and without a restart: placed once |
 | AT-ASSET-30 | sim | capacity benchmark: commit p99 within budget |
 
 ## 11. Upstream constraints (for N3 design and N4 implementation)
@@ -464,22 +492,45 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 9. **Offline Adena is written by inserting a new row** (cash on delivery to an offline sender,
    RequestPostAttachment.java:253-257); the Asset Service never writes offline rows (§2.1).
 10. **The castle treasury is changed without a lock** (`addToTreasuryNoTax` reads, changes and writes `_treasury`
-    unsynchronised, Castle.java:333-367) and its SQL failures leave memory changed. Core patch: treasury changes take
-    the castle's treasury monitor (L3).
+    unsynchronised, Castle.java:333-367) and its SQL failures leave memory changed. Core patch: treasury changes are
+    atomic (a checked compare-and-set on `_treasury`), and the write honours the fence (§3.3).
 11. **Blanket deletions by item id** reach every owner, -1 included (LongTimeEvent.java:557; Hero.java:81 at 874). → §4.4
     eligibility and §2.7 classification.
-12. **Item variables are saved later, on their own lock and connection** (ItemVariables.java:135, 172). → §4.2 rule 8.
+12. **Item variables are saved later, on their own lock and connection** (ItemVariables.java:135, 172), and `set`
+    tracks the change and sets the value as two steps (AbstractVariables.java:117-121), so a capture between them reads the
+    old value. Core patch: tracking and setting are one step under the save lock; the save honours the fence; a retired
+    variables object refuses writes. → §4.2 rule 8.
 13. **Logout marks the player offline before the final save** (Player.java:11793, ItemContainer.java:550). → §2.4 handoff.
 14. **Quantity is created outside `ItemManager.createItem`**: lottery, race and mercenary tickets are constructed
-    directly (Loto.java:242, RaceManager.java:171, MercTicketManager.java:195). → §2.7.
+    directly (Loto.java:242; RaceManager.java:171 in `onBypassFeedback`; MercTicketManager.java:335 in `addTicket`, while
+    :195 in `load` rebuilds saved tickets). → §2.7.
+15. **Counts change without a lock** (`Item.changeCount`, Item.java:451, read-modify-write of `_count`; called without the
+    item's monitor by `ItemContainer.addItem`, :268, and for the destination of `transferItem`, :376), so two concurrent
+    changes can lose one, in Mobius today. Core patch: `changeCount` and `setCount` update `_count` atomically
+    (compare-and-set, no monitor, so no new lock order), and a checked `tryDecrease(n)` serves debits (§4.2 rule 3).
+16. **Mobius's own locks do not form an order an outsider can join**: `transferItem` holds the source item's monitor
+    while the inventory sends the skill list under the player's monitor (Inventory.java:881, 907; Player.java:10490),
+    enchanting likewise (RequestEnchantItem.java:176, 266); and those locks are thread-owned, so no supervisor could take
+    them over. → the operation takes only L1 and fences (§3.3, §4.2 rule 2).
+17. **Fences**: `Item.updateDatabase`, the castle treasury write and the variables save skip a fenced object for any
+    thread but the fence's owner (core patch, §3.3).
+18. **Login and logout take the character's L1 first** (core patch at `Disconnection.storeAndDelete`, Disconnection.java:116,
+    and before the restores at Player.java:7358). → §2.4.
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF: 9 of 20 fixed; new findings showed that joining Mobius's own locks cannot work (inverted
+  orders, unlocked count changes, thread-owned locks) and that quarantine could itself lose unsaved memory. Revision 3
+  replaces both with fences and relative deltas (§2.4, §3.2-§3.4, §4.2), debits before and credits after commit, an
+  applier that needs no thread's lock, one L1 per character for inventory and warehouse, logout locked from its first save,
+  durable ground drops (`lc_ground_drop`), the two upstream races as core patches (§11.12, §11.15), an honest scope for
+  the live move check with the shutdown boundary made exact (§2.6), the bid transitions as sites, the site table's wrong
+  members fixed, and the two DDL checks that SQL's NULL let through.
 - Round 1 (Codex, different model family), NO SIGN-OFF, 20 findings. Revision 2 answers them: authority of castle
   treasuries and clan warehouses (§2.1, §11.10); blanket deletions (§4.4, §2.7, §11.11); the lock hierarchy including
   Mobius's own locks (§4.2); the logout handoff (§2.4); site-classified conservation in place of process-classified
   (§2.6, §2.7); unhooked creation paths (§2.7, §11.14); census only at quiescence, crash as an explicit rebase, exact
-  custody conservation (§2.6, INV11); ambiguous commits by a locking read (§3.2); quarantine and the applier (§3.3);
+  custody conservation (§2.6, INV11); ambiguous commits by a locking read (§3.2); the applier (§3.4);
   core id-reuse ordering (ASSET-R24); lifecycle ends, splits and merges (§2.2); variables (§4.2 rule 8); pet control
   items and the other availability rules (§4.4); caravan arrive and drop operations (§4.3); corrections on frozen
   modules (§4.5); the delivery's origin operation (§2.2); the missing acceptance cases (§10).

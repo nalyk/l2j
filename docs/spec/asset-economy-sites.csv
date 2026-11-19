@@ -1,8 +1,19 @@
 site,file,member,class,holding_from,holding_to,reason
-loto_ticket,dist/game/data/scripts/handlers/bypass/npc/Loto.java,useBypass,SOURCE,,INVENTORY,a lottery ticket is constructed directly and put in the inventory (line 242)
-race_ticket,java/org/l2jmobius/gameserver/entity/actor/instance/RaceManager.java,buyTicket,SOURCE,,INVENTORY,a race ticket is constructed directly (line 171)
-merc_ticket,java/org/l2jmobius/gameserver/managers/MercTicketManager.java,addTicket,SOURCE,,GROUND,a mercenary ticket is constructed directly on the ground (line 195)
+loto_ticket,dist/game/data/scripts/handlers/bypass/npc/Loto.java,showLotoWindow,SOURCE,,INVENTORY,a lottery ticket is constructed directly and put in the inventory (line 242)
+race_ticket,java/org/l2jmobius/gameserver/entity/actor/instance/RaceManager.java,onBypassFeedback,SOURCE,,INVENTORY,a race ticket is constructed directly (line 171); its setCount on the fresh object is the same site
+merc_ticket,java/org/l2jmobius/gameserver/managers/MercTicketManager.java,addTicket,SOURCE,,GROUND,a mercenary ticket is constructed directly on the ground (line 335)
+merc_ticket_restore,java/org/l2jmobius/gameserver/managers/MercTicketManager.java,load,RESTORE,,GROUND,saved tickets rebuilt from castle_siege_guards (lines 147-195); never counted
 event_items_sql,java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java,destroyItemsOnEnd,SINK,ANY,,DELETE FROM items WHERE item_id=? at an event's end (line 557); its item ids are ineligible for custody (spec 4.4)
 hero_items_sql,java/org/l2jmobius/gameserver/mechanics/olympiad/Hero.java,deleteItemsInDb,SINK,ANY,,DELETE FROM items WHERE item_id IN (hero items) for every non-GM owner (line 81 run at 874); hero items are not tradeable so never eligible
 stack_clamp,java/org/l2jmobius/gameserver/entity/item/instance/Item.java,changeCount,SINK,ANY,,a stack's gain above MAX_ADENA or loss below 0 is clamped away (lines 458-469)
 treasury_clamp,java/org/l2jmobius/gameserver/mechanics/siege/Castle.java,addToTreasuryNoTax,SINK,CASTLE_TREASURY,,a treasury gain above MAX_ADENA is clamped away (lines 333-357)
+item_auction_bid,java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java,registerBid,MOVE,INVENTORY,ITEM_AUCTION_BID,a bid (or its raise) leaves the inventory into the open bid through reduceItemCount (lines 285-310 and 506-508; process FEE)
+item_auction_cancel,java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java,cancelBid,MOVE,ITEM_AUCTION_BID,INVENTORY,a cancelled bid comes back through increaseItemCount (lines 473 and 517-519; process REFUND); the bid row stays with playerBid = -1 (line 477)
+item_auction_win,java/org/l2jmobius/gameserver/entity/item/auction/ItemAuctionInstance.java,ScheduleAuctionTask.runImpl,SINK,ITEM_AUCTION_BID,,the highest bid of an auction set to FINISHED (line 462) is paid to an NPC: it leaves existence; the other bids remain refundable
+ch_auction_bid,java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java,setBid,MOVE,CLANWH,CH_AUCTION_BID,a clan-hall bid leaves the clan warehouse through takeItem (lines 273 and 326)
+ch_auction_cancel,java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java,returnItem,MOVE,CH_AUCTION_BID,CLANWH,90 % of a cancelled or outbid bid comes back (lines 292-317; called at 420 and 508); a capacity clamp is a sink
+ch_auction_cancel_fee,java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java,returnItem,SINK,CH_AUCTION_BID,,the 10 % a returned bid with penalty loses (lines 292-317)
+ch_auction_win_npc,java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java,endAuction,SINK,CH_AUCTION_BID,,a hall bought from no clan: the winning bid leaves existence (lines 450-)
+ch_auction_win_player,java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java,endAuction,MOVE,CH_AUCTION_BID,CLANWH,a hall sold by a clan: 90 % of the winning bid is paid to the seller (line 472), the rest a sink through returnItem
+refund_expire,java/org/l2jmobius/gameserver/entity/itemcontainer/PlayerRefund.java,deleteMe,SINK,REFUND,,refund lists are destroyed at logout (PlayerRefund.java:85 via Player.java:12131)
+ch_auction_lease_return,java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java,endAuction,SOURCE,,CLANWH,the seller gets the hall's lease back (line 473); to be reviewed in N3: whether the lease was a counted commitment when paid

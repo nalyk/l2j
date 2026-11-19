@@ -52,7 +52,7 @@ class AssetSchemaTest
 				tables.add(result.getString(1));
 			}
 		}
-		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state"), tables);
+		assertEquals(Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_ground_drop"), tables);
 	}
 
 	@Test
@@ -82,6 +82,8 @@ class AssetSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "268477000", "NULL", "OPEN", "NULL")), "a contract with a beneficiary");
 			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "NULL", "NULL", "CLOSED", "NULL")), "closed by no operation");
 			assertThrows(SQLException.class, () -> statement.execute(custody("LOAN", "NULL", "NULL", "OPEN", "NULL")), "an unknown kind");
+			assertThrows(SQLException.class, () -> statement.execute(custody("CONTRACT", "NULL", "NULL", "OPEN", OP)), "an open custody with a closing operation");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_custody (kind, owner_module, owner_ref, state, created_op, closed_op, created_at, closed_at) VALUES ('CONTRACT', 'PACT', 7, 'CLOSED', " + OP + ", " + OP + ", NOW(3), NULL)"), "closed with no time");
 			statement.execute(custody("DELIVERY", "268477000", OP, "OPEN", "NULL"));
 			statement.execute(custody("CONTRACT", "NULL", "NULL", "CLOSED", OP));
 
@@ -90,8 +92,13 @@ class AssetSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))"));
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3) WHERE object_id = 268500001"), "an end without its reason");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'MERGED' WHERE object_id = 268500001"), "a merge without the stack it went into");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET merged_into = lifecycle_id WHERE object_id = 268500001"), "a live lifecycle already merged into another");
 			statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'DESTROYED' WHERE object_id = 268500001");
 			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
+
+			// A ground drop belongs to a posting leg that committed.
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_ground_drop (op_id, leg, x, y, z) VALUES (" + OP + ", 9, 0, 0, 0)"));
+			statement.execute("INSERT INTO lc_ground_drop (op_id, leg, x, y, z) VALUES (" + OP + ", 0, 0, 0, 0)");
 
 			// A frozen module says why.
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_module_state (module, state, since) VALUES ('PACT', 'FROZEN', NOW(3))"));

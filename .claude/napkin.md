@@ -28,6 +28,9 @@
 9. **[2026-11-19] A reverted fix that would deadlock is not run**
    Do instead: when a fix prevents a deadlock (a lock taken from inside the simulation), prove it by the test alone; a hung build container outlives `timeout`.
 
+10. **[2026-11-19] A spec about Mobius rests on a cited source survey, and is reviewed before it is called reviewed**
+   Do instead: survey first (an Explore agent returning `path:line` facts), verify every member and line the spec cites against the source before committing, and run Codex rounds on the spec until it signs off; a design that joins Mobius's own locks failed review (inverted orders, unlocked `changeCount`, thread-owned locks).
+
 ## Lock Harness Guardrails
 1. **[2026-11-19] A lock case runs whole on its own stream, aligned, in a woken arena**
    Do instead: `Arena.wake()` once before a sweep; per case `Arena.align()` then `_server.withRandom(KeyedRandom.of(SEED, "<stream>", key), ...)` around setup, run and clean-up.

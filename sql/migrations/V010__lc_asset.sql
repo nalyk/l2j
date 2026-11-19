@@ -24,7 +24,8 @@ CREATE TABLE lc_custody (
 	KEY idx_custody_beneficiary (beneficiary_char, state),
 	CONSTRAINT chk_custody_beneficiary CHECK ((kind = 'DELIVERY') = (beneficiary_char IS NOT NULL)),
 	CONSTRAINT chk_custody_origin CHECK ((kind = 'DELIVERY') = (origin_op IS NOT NULL)),
-	CONSTRAINT chk_custody_closed CHECK ((state = 'CLOSED') = (closed_op IS NOT NULL AND closed_at IS NOT NULL)),
+	CONSTRAINT chk_custody_closed CHECK ((state = 'CLOSED') = (closed_op IS NOT NULL)),
+	CONSTRAINT chk_custody_closed_at CHECK ((closed_op IS NULL) = (closed_at IS NULL)),
 	CONSTRAINT chk_custody_version CHECK (version >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
@@ -92,7 +93,8 @@ CREATE TABLE lc_item_lifecycle (
 	CONSTRAINT fk_lifecycle_merged FOREIGN KEY (merged_into) REFERENCES lc_item_lifecycle (lifecycle_id),
 	CONSTRAINT chk_lifecycle_end CHECK ((ended_at IS NULL) = (end_reason IS NULL)),
 	CONSTRAINT chk_lifecycle_order CHECK ((ended_at IS NULL) OR (ended_at >= began_at)),
-	CONSTRAINT chk_lifecycle_merge CHECK ((end_reason = 'MERGED') = (merged_into IS NOT NULL))
+	-- Null-safe: a live lifecycle (end_reason NULL) with merged_into set must fail, not evaluate to NULL and pass.
+	CONSTRAINT chk_lifecycle_merge CHECK ((end_reason <=> 'MERGED') = (merged_into IS NOT NULL))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 -- Economy monitor (spec §2.6): quantity counted per classified site (docs/spec/asset-economy-sites.csv) and window,
@@ -135,4 +137,17 @@ CREATE TABLE lc_module_state (
 	evidence_fact_id BIGINT NULL,
 	PRIMARY KEY (module),
 	CONSTRAINT chk_module_frozen_reason CHECK ((state = 'RUNNING') OR (reason IS NOT NULL))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- Where a committed GROUND leg is to be placed; placed_at is set once it is in the world (spec §2.2, ASSET-R25).
+CREATE TABLE lc_ground_drop (
+	op_id BINARY(16) NOT NULL,
+	leg SMALLINT NOT NULL,
+	x INT NOT NULL,
+	y INT NOT NULL,
+	z INT NOT NULL,
+	instance_id INT NOT NULL DEFAULT 0,
+	placed_at TIMESTAMP(3) NULL,
+	PRIMARY KEY (op_id, leg),
+	CONSTRAINT fk_ground_drop_leg FOREIGN KEY (op_id, leg) REFERENCES lc_ledger_posting (op_id, leg)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

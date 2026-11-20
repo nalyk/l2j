@@ -149,5 +149,6 @@ Where things are:
 This is a fan project. Lineage II is a trademark of NCSoft. The project isn't affiliated with or endorsed by NCSoft, and
 this repository contains no game client.
 
-Code that comes from L2J Mobius keeps its license, the MIT notice at the top of each file. A license for Living
-Chronicle's own code hasn't been chosen yet.
+Everything here is under the MIT license ([LICENSE](LICENSE)): the code that comes from L2J Mobius, which was already
+MIT, and Living Chronicle's own code and documents. You can read it, learn from it, fork it and build on it, as long as
+you keep the copyright notice.

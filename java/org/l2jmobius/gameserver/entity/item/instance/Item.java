@@ -109,6 +109,9 @@ public class Item extends WorldObject
 	/** ID of who dropped the item last, used for knownlist */
 	private int _dropperObjectId = 0;
 	
+	/** Set by {@link #releaseObjectIdWhenRowDeleted()}: the object id is released right after this item's row is deleted (CP-0011). */
+	private boolean _releaseIdOnDelete;
+	
 	/** Taken by the Asset Service (CP-0010): never written by Mobius again, refused by every Mobius operation. */
 	private volatile boolean _retired;
 	
@@ -464,6 +467,31 @@ public class Item extends WorldObject
 	public boolean isRetired()
 	{
 		return _retired;
+	}
+	
+	/**
+	 * Releases this destroyed item's object id as soon as no row holds it (CP-0011): at once if the item has no row,
+	 * otherwise right after {@link #updateDatabase()} has deleted the row, never if that delete fails, so the id manager
+	 * never hands out an id a row still uses (asset-service.md §11.6).
+	 */
+	public void releaseObjectIdWhenRowDeleted()
+	{
+		_dbLock.lock();
+		try
+		{
+			if (_existsInDb)
+			{
+				_releaseIdOnDelete = true;
+			}
+			else
+			{
+				IdManager.getInstance().releaseId(getObjectId());
+			}
+		}
+		finally
+		{
+			_dbLock.unlock();
+		}
 	}
 	
 	/**
@@ -1809,6 +1837,11 @@ public class Item extends WorldObject
 				ps.executeUpdate();
 				_existsInDb = false;
 				_storedInDb = false;
+				if (_releaseIdOnDelete)
+				{
+					_releaseIdOnDelete = false;
+					IdManager.getInstance().releaseId(getObjectId()); // CP-0011: the row is gone, the id is free
+				}
 			}
 			
 			try (PreparedStatement ps = con.prepareStatement("DELETE FROM item_attributes WHERE itemId = ?"))

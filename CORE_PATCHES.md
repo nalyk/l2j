@@ -177,3 +177,17 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   its row.
 - Proof: `RetiredItemTest.aRetiredItemIsNotTransferred`, `aRetiredItemIsNotDestroyed`, `aRetiredItemIsNotDropped`,
   `aRetiredItemIsNotAddedToAnotherContainer`, `aRetiredItemIsNotEquipped`, `aRetiredItemIsNeverWritten`.
+
+## CP-0011 Object ids released after their row is deleted
+
+- Files: `java/org/l2jmobius/gameserver/managers/ItemManager.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: `ItemManager.destroyItem` released the item's object id at once (ItemManager.java:177), before its caller
+  deleted the row (`ItemContainer.java:235`, `:385`, `:450`), and a failed delete is only logged (Item.java:1769): the id
+  manager could hand the id to a new item while a row still held it. The Asset Service keeps escrowed and mailed rows by
+  object id, so an id must stay reserved exactly while a row has it (asset-service.md §11.6, ASSET-R24, INV10).
+- Change: `destroyItem` asks the item to release its id when its row is gone (`releaseObjectIdWhenRowDeleted`): at once
+  if the item has no row, as before; otherwise inside `removeFromDb`, right after the `items` row's DELETE succeeded,
+  under the item's write lock. A failed delete releases nothing.
+- Invariant: an object id is in use while any `items` row has it.
+- Proof: `IdReleaseTest.aDestroyedItemsIdIsReservedUntilItsRowIsDeleted`, `aFailedDeleteKeepsTheIdReserved` (the delete
+  refused by a trigger: row kept, id kept), `anItemWithoutARowIsReleasedAtOnce` (retail's immediate release).

@@ -174,7 +174,7 @@ public class ItemManager
 			item.setLastChange(Item.REMOVED);
 			
 			World.removeObject(item);
-			IdManager.getInstance().releaseId(item.getObjectId());
+			item.releaseObjectIdWhenRowDeleted(); // CP-0011: not before the row is deleted
 			
 			if ((process != null) && (process != ItemProcessType.NONE))
 			{

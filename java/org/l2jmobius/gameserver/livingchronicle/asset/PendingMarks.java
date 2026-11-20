@@ -5,11 +5,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.l2jmobius.commons.database.DatabaseFactory;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 
 /**
  * Pending marks (docs/spec/asset-service.md §2.2 {@code lc_asset_pending}, §2.4): a character whose items an operation has
@@ -43,7 +43,7 @@ public final class PendingMarks
 		{
 			insert.setInt(1, charId);
 			insert.setBytes(2, op.bytes());
-			insert.setTimestamp(3, Timestamp.from(Instant.now()));
+			insert.setTimestamp(3, new Timestamp(GameClock.millis())); // the game clock, as every Living Chronicle instant
 			insert.executeUpdate();
 		}
 		finally

@@ -222,3 +222,50 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   object's rows are written by nothing but the Asset Service's transaction.
 - Proof: `ItemVariablesTest.aCaptureNeverSeesATrackedChangeWithoutItsValue` (upstream: `true=ABSENT`, a tracked change
   without its value), `aRetiredVariablesObjectRefusesWritesAndNeverSaves`.
+
+## CP-0014 Service mail adopted, and never expiring
+
+- Files: `java/org/l2jmobius/gameserver/managers/MailManager.java`, `java/org/l2jmobius/gameserver/taskmanagers/MessageDeletionTaskManager.java`
+- Reason: the Asset Service writes service mail in its own transaction, so `MailManager` (which only knows messages it
+  loaded at boot or sent itself, MailManager.java:53-75, :157-177) must adopt a committed message; and service mail must
+  never expire, because expiry of sender -1 mail with the receiver offline destroys the attachments
+  (MessageDeletionTaskManager.java:84-104) and the client cannot show an expiry after 2038 (asset-service.md §2.1,
+  §11.19).
+- Change: `MailManager.adopt(messageId)` reads the committed row as `load()` does, keeps it if absent (idempotent), tells
+  an online receiver and registers it with the deletion task; `MessageDeletionTaskManager.add` ignores the service-mail
+  expiration (`ServiceMail.EXPIRATION`, 2038-01-19), so neither adoption nor the boot load ever schedules it. Every other
+  message is scheduled as before.
+- Invariant: a committed service mail is in `MailManager` once, and is never deleted by expiry.
+- Proof: `ServiceMailAdoptionTest.aCommittedMessageIsAdoptedOnce`, `aServiceMailIsNeverScheduledForExpiry`,
+  `retailMailStillExpires`.
+
+## CP-0015 Claims of service mail recorded
+
+- Files: `java/org/l2jmobius/gameserver/network/holders/MailMessage.java`
+- Reason: retail's claim (RequestPostAttachment.java:191-232) moves a mail's attachments into the receiver's inventory and
+  clears them through `MailMessage.removeAttachments`, telling nobody; the Asset Service must know a service mail was
+  claimed (its delivery's `claimed_at`, asset-service.md §2.1, §11.23, INV12), and a character's deletion is refused
+  while one is unclaimed.
+- Change: when `removeAttachments` clears a sender -1 message's attachments, it calls
+  `ServiceMail.attachmentsCleared(messageId)`, which sets `claimed_at` on the message's delivery if it has one and does
+  nothing when Living Chronicle is not running (the `truth` profile). Retail's claim is otherwise unchanged.
+- Invariant: a service mail whose attachments retail has cleared has `claimed_at` set (or the census sets it).
+- Proof: `ServiceMailClaimTest.claimingTheAttachmentsSetsClaimedAt` (the claim as RequestPostAttachment performs it),
+  `anotherSystemMailHasNoDeliveryAndNothingChanges`.
+
+## CP-0016 The deletion guard
+
+- Files: `java/org/l2jmobius/gameserver/network/GameClient.java`, `java/org/l2jmobius/gameserver/network/clientpackets/CharacterDelete.java`
+- Reason: deleting a character removes its own items (GameClient.java:439-455) and leaves owner -1 rows, so service mail
+  owed to a deleted character could never be claimed, and a character whose items an operation has taken but not yet
+  committed could be deleted mid-operation (asset-service.md §2.1, §11.21, ASSET-R27).
+- Change: `markToDeleteChar` marks the character through `DeletionGuard.markForDeletion`, which in one transaction locks
+  the characters row, refuses while it has unclaimed service mail or a pending mark, and otherwise sets `deletetime`;
+  with `DeleteDays = 0` the immediate deletion follows the guard's mark. A refusal answers 3, which `CharacterDelete`
+  sends as `CharDeleteFail(REASON_DELETION_FAILED)`. When Living Chronicle is not running the guard marks exactly as
+  retail did. The deletion time is now computed in `long`: upstream's `DELETE_DAYS * 86400000` overflowed `int` for 25
+  days or more.
+- Invariant: a character marked or deleted has no unclaimed service mail and no pending mark; service mail is never
+  written to a marked character (the release refuses it under the same row lock).
+- Proof: `DeletionGuardTest.aCharacterWithUnclaimedServiceMailIsNotMarked` (and marked once the mail is claimed),
+  `aCharacterWithAPendingMarkIsNotMarked`, `aMarkedCharacterReceivesNoServiceMail`; on upstream both refusals failed.

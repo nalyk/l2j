@@ -85,6 +85,11 @@ public class CharacterDelete extends ClientPacket
 					client.sendPacket(new CharDeleteFail(CharDeleteFail.REASON_CLAN_LEADERS_MAY_NOT_BE_DELETED));
 					break;
 				}
+				case 3: // CP-0016: unclaimed service mail or a pending asset operation
+				{
+					client.sendPacket(new CharDeleteFail(CharDeleteFail.REASON_DELETION_FAILED));
+					break;
+				}
 			}
 		}
 		catch (Exception e)

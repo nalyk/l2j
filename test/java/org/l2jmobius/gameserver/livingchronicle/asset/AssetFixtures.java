@@ -23,6 +23,7 @@ final class AssetFixtures
 	final TestDatabase database;
 	final AssetService service;
 	private final AtomicInteger _ids;
+	private ObjectIds _external;
 	private final AtomicInteger _subjects = new AtomicInteger();
 
 	AssetFixtures(int firstObjectId, Map<String, HoldingPolicy> owners) throws Exception
@@ -33,7 +34,28 @@ final class AssetFixtures
 			Migrations.applyAll(connection);
 		}
 		_ids = new AtomicInteger(firstObjectId);
+		_external = null;
 		service = new AssetService(database::connect, _ids::incrementAndGet, new OutboxStager(Clock.systemUTC(), () -> 0L, () -> 1), AssetConfig.defaults(), owners);
+	}
+
+	/**
+	 * Over a booted server's database: the Living Chronicle migrations applied once, object ids from Mobius's id
+	 * manager, and service mail adopted by its {@code MailManager}.
+	 */
+	AssetFixtures(TestDatabase serverDatabase, ObjectIds ids, Map<String, HoldingPolicy> owners, java.util.function.IntConsumer adopt) throws Exception
+	{
+		database = serverDatabase;
+		try (Connection connection = database.connect();
+			ResultSet result = connection.getMetaData().getTables(null, null, "lc_custody", null))
+		{
+			if (!result.next())
+			{
+				Migrations.applyAll(connection);
+			}
+		}
+		_ids = null;
+		_external = ids;
+		service = new AssetService(database::connect, ids, new OutboxStager(Clock.systemUTC(), () -> 0L, () -> 1), AssetConfig.defaults(), owners, adopt);
 	}
 
 	OpId op(String action)
@@ -50,7 +72,7 @@ final class AssetFixtures
 	int seed(int custody, int itemId, long qty, boolean wholeObject) throws SQLException
 	{
 		final OpId op = op("SEED");
-		final int objectId = _ids.incrementAndGet();
+		final int objectId = _external != null ? _external.next() : _ids.incrementAndGet();
 		try (Connection connection = database.connect();
 			Statement statement = connection.createStatement())
 		{

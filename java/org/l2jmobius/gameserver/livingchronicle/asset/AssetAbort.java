@@ -22,6 +22,8 @@ public final class AssetAbort extends Exception
 		NOT_ALLOWED_TO_HOLD,
 		/** The owner module is frozen (§4.2 rule 7). */
 		MODULE_FROZEN,
+		/** The receiver of a service mail no longer exists or is marked for deletion (§2.1). */
+		RECEIVER_GONE,
 		/** A custody to close still holds rows. */
 		NOT_EMPTY,
 		/** The legs do not balance, or a custody's postings would not match its rows: a bug or tampering, never a user error. */

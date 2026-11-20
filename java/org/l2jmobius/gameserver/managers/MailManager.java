@@ -74,6 +74,50 @@ public class MailManager
 		LOGGER.info(getClass().getSimpleName() + ": Loaded " + count + " messages.");
 	}
 	
+	/**
+	 * Adopts a message another writer already committed (CP-0014: the Asset Service writes service mail in its own
+	 * transaction): reads its row as {@link #load()} does and keeps it, once; an online receiver is told. Idempotent.
+	 * @param msgId the committed message
+	 */
+	public void adopt(int msgId)
+	{
+		if (_messages.containsKey(msgId))
+		{
+			return;
+		}
+		
+		try (Connection con = DatabaseFactory.getConnection();
+			PreparedStatement ps = con.prepareStatement("SELECT * FROM messages WHERE messageId = ?"))
+		{
+			ps.setInt(1, msgId);
+			try (ResultSet rs = ps.executeQuery())
+			{
+				if (!rs.next())
+				{
+					return;
+				}
+				
+				final MailMessage msg = new MailMessage(rs);
+				if (_messages.putIfAbsent(msgId, msg) != null)
+				{
+					return;
+				}
+				
+				final Player receiver = World.getPlayer(msg.getReceiverId());
+				if (receiver != null)
+				{
+					receiver.sendPacket(ExNoticePostArrived.valueOf(true));
+				}
+				
+				MessageDeletionTaskManager.getInstance().add(msgId, msg.getExpiration());
+			}
+		}
+		catch (SQLException e)
+		{
+			LOGGER.log(Level.WARNING, getClass().getSimpleName() + ": Error adopting message " + msgId + ":", e);
+		}
+	}
+	
 	public MailMessage getMessage(int msgId)
 	{
 		return _messages.get(msgId);

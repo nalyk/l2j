@@ -26,6 +26,7 @@ import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.commons.util.Rnd;
 import org.l2jmobius.gameserver.data.sql.CharInfoTable;
 import org.l2jmobius.gameserver.entity.itemcontainer.Mail;
+import org.l2jmobius.gameserver.livingchronicle.asset.ServiceMail;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.managers.MailManager;
 import org.l2jmobius.gameserver.network.enums.MessageSenderType;
@@ -354,6 +355,11 @@ public class MailMessage
 		if (_unloadTask != null)
 		{
 			_unloadTask.cancel(false);
+		}
+		
+		if (_senderId == ServiceMail.SENDER)
+		{
+			ServiceMail.attachmentsCleared(_messageId); // CP-0015: a claimed service mail is recorded
 		}
 	}
 	

@@ -41,6 +41,7 @@ import org.l2jmobius.gameserver.data.xml.SecondaryAuthData;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
+import org.l2jmobius.gameserver.livingchronicle.asset.DeletionGuard;
 import org.l2jmobius.gameserver.network.holders.CharacterInfoHolder;
 import org.l2jmobius.gameserver.network.holders.ClientHardwareInfoHolder;
 import org.l2jmobius.gameserver.network.serverpackets.LeaveWorld;
@@ -287,21 +288,17 @@ public class GameClient extends Client<org.l2jmobius.commons.network.Connection<
 					}
 				}
 				
-				// Setting delete time
+				// Setting delete time, through the deletion guard (CP-0016): refused while service mail or a pending mark is owed.
 				if (answer == 0)
 				{
+					if (!DeletionGuard.markForDeletion(objectId, System.currentTimeMillis() + (PlayerConfig.DELETE_DAYS * 86400000L))) // 24*60*60*1000 = 86400000
+					{
+						return 3;
+					}
+					
 					if (PlayerConfig.DELETE_DAYS == 0)
 					{
 						deleteCharByObjId(objectId);
-					}
-					else
-					{
-						try (PreparedStatement ps2 = con.prepareStatement("UPDATE characters SET deletetime=? WHERE charId=?"))
-						{
-							ps2.setLong(1, System.currentTimeMillis() + (PlayerConfig.DELETE_DAYS * 86400000)); // 24*60*60*1000 = 86400000
-							ps2.setInt(2, objectId);
-							ps2.execute();
-						}
 					}
 					
 					LOGGER_ACCOUNTING.info("Delete, " + objectId + ", " + this);

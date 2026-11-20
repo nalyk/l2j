@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.livingchronicle.asset.ServiceMail;
 import org.l2jmobius.gameserver.managers.MailManager;
 import org.l2jmobius.gameserver.network.SystemMessageId;
 import org.l2jmobius.gameserver.network.holders.MailMessage;
@@ -118,6 +119,11 @@ public class MessageDeletionTaskManager implements Runnable
 	
 	public void add(int msgId, long deletionTime)
 	{
+		if (deletionTime == ServiceMail.EXPIRATION)
+		{
+			return; // CP-0014: service mail never expires (asset-service.md §2.1)
+		}
+		
 		PENDING_MESSAGES.put(msgId, deletionTime);
 	}
 	

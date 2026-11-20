@@ -23,6 +23,8 @@ package org.l2jmobius.gameserver.entity.item.instance;
 import static org.l2jmobius.gameserver.entity.itemcontainer.Inventory.ADENA_ID;
 import static org.l2jmobius.gameserver.entity.itemcontainer.Inventory.MAX_ADENA;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -107,8 +109,20 @@ public class Item extends WorldObject
 	/** ID of who dropped the item last, used for knownlist */
 	private int _dropperObjectId = 0;
 	
-	/** Quantity of the item */
-	private long _count;
+	/** Quantity of the item; changed by compare-and-set (CP-0009), so concurrent changes never lose one another. */
+	private volatile long _count;
+	private static final VarHandle COUNT;
+	static
+	{
+		try
+		{
+			COUNT = MethodHandles.lookup().findVarHandle(Item.class, "_count", long.class);
+		}
+		catch (ReflectiveOperationException e)
+		{
+			throw new ExceptionInInitializerError(e);
+		}
+	}
 	/** Initial Quantity of the item */
 	private long _initCount;
 	/** Remaining time (in miliseconds) */
@@ -433,6 +447,32 @@ public class Item extends WorldObject
 	}
 	
 	/**
+	 * Takes {@code quantity} from this stack atomically, only if at least one unit remains (CP-0009, the Asset Service's
+	 * debit of part of a stack; taking a whole stack is a whole-object debit).
+	 * @param quantity a positive quantity
+	 * @return whether it was taken
+	 */
+	public boolean tryDecrease(long quantity)
+	{
+		if (quantity <= 0)
+		{
+			throw new IllegalArgumentException("a decrease is positive, not " + quantity);
+		}
+		long old;
+		do
+		{
+			old = _count;
+			if ((old - quantity) < 1)
+			{
+				return false;
+			}
+		}
+		while (!COUNT.compareAndSet(this, old, old - quantity));
+		_storedInDb = false;
+		return true;
+	}
+	
+	/**
 	 * @return Returns the count.
 	 */
 	public long getCount()
@@ -455,21 +495,19 @@ public class Item extends WorldObject
 			return;
 		}
 		
-		final long old = _count;
 		final long max = _itemId == ADENA_ID ? MAX_ADENA : Long.MAX_VALUE;
-		if ((count > 0) && (_count > (max - count)))
+		long old;
+		long next;
+		do
 		{
-			setCount(max);
+			old = _count;
+			next = ((count > 0) && (old > (max - count))) ? max : old + count; // the same clamps as before, applied atomically
+			if (next < 0)
+			{
+				next = 0;
+			}
 		}
-		else
-		{
-			setCount(_count + count);
-		}
-		
-		if (_count < 0)
-		{
-			setCount(0);
-		}
+		while (!COUNT.compareAndSet(this, old, next));
 		
 		_storedInDb = false;
 		

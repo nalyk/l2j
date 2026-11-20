@@ -144,3 +144,17 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   location); it restores as an `Item` in `ESCROW`.
 - Proof: `EscrowLocationTest.anEscrowRowRestoresAsAnItemWithItsLocation`, `cleanupKeepsEscrowRowsWhateverTheirOwner`
   (and an ordinary orphan still deleted), `noContainerLoadsAnEscrowRow`.
+
+## CP-0009 Atomic stack counts
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: `Item.changeCount` reads `_count`, computes and writes it back with no lock (Item.java:451-474), and Mobius calls
+  it without the item's monitor (`ItemContainer.addItem`, :230 and :268; the destination of `transferItem`, :376, under
+  the source's monitor), so two concurrent changes of one stack can lose one of them, in Mobius today. The Asset Service
+  must also take part of a stack without ever racing a retail change (asset-service.md §3.3, §11.15).
+- Change: `_count` is `volatile` and `changeCount` updates it by compare-and-set with exactly the clamps it had (Adena
+  at `MAX_ADENA`, every count at 0); new `tryDecrease(quantity)` takes the quantity atomically only if at least one unit
+  remains. No lock is added, so no lock order changes.
+- Invariant: every change to a stack's count is applied exactly once; a debit never empties a stack.
+- Proof: `AtomicCountTest.concurrentChangesLoseNothing` (8 threads × 20 000 increments, exact),
+  `tryDecreaseRacingIncreasesLosesNothing`, `tryDecreaseLeavesAtLeastOne`, `retailClampsAreUnchanged`.

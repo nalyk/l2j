@@ -814,6 +814,22 @@ public final class AssetTx implements AutoCloseable
 		}
 	}
 
+	/**
+	 * One exchange with a live character (§4.3 {@code exchange}; the Guild's buying and selling): the character's
+	 * {@code gives} enter custody {@code into} and custody {@code from}'s {@code pays} reach the character as service mail,
+	 * in one transaction, so either both happen or neither does (what was already taken comes back by refund).
+	 */
+	public void exchange(int charId, List<Asset> gives, int into, List<Asset> pays, int from, String subject, String content)
+	{
+		fund(into, Holder.player(charId), gives);
+		release(from, charId, pays, MailReason.PAYOUT, subject, content);
+		final List<Map<String, Object>> given = new ArrayList<>();
+		gives.forEach(asset -> given.add(legOf(asset)));
+		final List<Map<String, Object>> paid = new ArrayList<>();
+		pays.forEach(asset -> paid.add(legOf(asset)));
+		step(execution -> execution.facts().add(AssetFact.of("Exchanged", into, "operation", _op.hex(), "character", charId, "custody_in", into, "gives", given, "custody_out", from, "pays", paid)), into, from);
+	}
+
 	/** A service mail's message row (§2.1), in the operation's transaction; its attachment rows follow. */
 	private int insertServiceMail(Connection connection, int receiverCharId, String subject, String content) throws SQLException
 	{

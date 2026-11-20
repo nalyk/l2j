@@ -222,3 +222,19 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   object's rows are written by nothing but the Asset Service's transaction.
 - Proof: `ItemVariablesTest.aCaptureNeverSeesATrackedChangeWithoutItsValue` (upstream: `true=ABSENT`, a tracked change
   without its value), `aRetiredVariablesObjectRefusesWritesAndNeverSaves`.
+
+## CP-0014 Service mail adopted, and never expiring
+
+- Files: `java/org/l2jmobius/gameserver/managers/MailManager.java`, `java/org/l2jmobius/gameserver/taskmanagers/MessageDeletionTaskManager.java`
+- Reason: the Asset Service writes service mail in its own transaction, so `MailManager` (which only knows messages it
+  loaded at boot or sent itself, MailManager.java:53-75, :157-177) must adopt a committed message; and service mail must
+  never expire, because expiry of sender -1 mail with the receiver offline destroys the attachments
+  (MessageDeletionTaskManager.java:84-104) and the client cannot show an expiry after 2038 (asset-service.md §2.1,
+  §11.19).
+- Change: `MailManager.adopt(messageId)` reads the committed row as `load()` does, keeps it if absent (idempotent), tells
+  an online receiver and registers it with the deletion task; `MessageDeletionTaskManager.add` ignores the service-mail
+  expiration (`ServiceMail.EXPIRATION`, 2038-01-19), so neither adoption nor the boot load ever schedules it. Every other
+  message is scheduled as before.
+- Invariant: a committed service mail is in `MailManager` once, and is never deleted by expiry.
+- Proof: `ServiceMailAdoptionTest.aCommittedMessageIsAdoptedOnce`, `aServiceMailIsNeverScheduledForExpiry`,
+  `retailMailStillExpires`.

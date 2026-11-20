@@ -24,6 +24,11 @@ public record Holder(Kind kind, int id)
 		return new Holder(Kind.PLAYER_WAREHOUSE, charId);
 	}
 
+	public static Holder clanWarehouse(int clanId)
+	{
+		return new Holder(Kind.CLAN_WAREHOUSE, clanId);
+	}
+
 	/** The ledger account of this holder. */
 	Leg.AccountKind account()
 	{

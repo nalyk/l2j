@@ -49,6 +49,24 @@ final class Eligibility
 		return null;
 	}
 
+	/** For a clan warehouse (§4.4): the same checks without the player-bound ones. */
+	static String clanRefusal(Item item)
+	{
+		if (item.isEquipped() || item.isQuestItem() || !item.isTradeable())
+		{
+			return "equipped, a quest item, or not tradeable";
+		}
+		if (item.isTimeLimitedItem() || item.isShadowItem())
+		{
+			return "time-limited or shadow item";
+		}
+		if (blanketDeleted().contains(item.getId()))
+		{
+			return "an item id Mobius deletes by item id (hero or event item)";
+		}
+		return null;
+	}
+
 	/** The item ids Mobius deletes from every owner at once: hero items and the loaded events' items. */
 	static Set<Integer> blanketDeleted()
 	{

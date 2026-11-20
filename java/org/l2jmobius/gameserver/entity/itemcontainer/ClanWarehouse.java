@@ -102,38 +102,43 @@ public class ClanWarehouse extends Warehouse
 	@Override
 	public Item addItem(ItemProcessType process, Item item, Player actor, Object reference)
 	{
-		// Notify to scripts
-		if (EventDispatcher.getInstance().hasListener(EventType.ON_PLAYER_CLAN_WH_ITEM_ADD, item.getTemplate()))
+		final Item added = super.addItem(process, item, actor, reference);
+		
+		// Notify to scripts, only for an operation that happened (CP-0020).
+		if ((added != null) && EventDispatcher.getInstance().hasListener(EventType.ON_PLAYER_CLAN_WH_ITEM_ADD, item.getTemplate()))
 		{
 			EventDispatcher.getInstance().notifyEventAsync(new OnPlayerClanWHItemAdd(actor, item, this), item.getTemplate());
 		}
 		
-		return super.addItem(process, item, actor, reference);
+		return added;
 	}
 	
 	@Override
 	public Item destroyItem(ItemProcessType process, Item item, long count, Player actor, Object reference)
 	{
-		// Notify to scripts
-		if (EventDispatcher.getInstance().hasListener(EventType.ON_PLAYER_CLAN_WH_ITEM_DESTROY, item.getTemplate()))
+		final Item destroyed = super.destroyItem(process, item, count, actor, reference);
+		
+		// Notify to scripts, only for an operation that happened (CP-0020).
+		if ((destroyed != null) && EventDispatcher.getInstance().hasListener(EventType.ON_PLAYER_CLAN_WH_ITEM_DESTROY, item.getTemplate()))
 		{
 			EventDispatcher.getInstance().notifyEventAsync(new OnPlayerClanWHItemDestroy(actor, item, count, this), item.getTemplate());
 		}
 		
-		return super.destroyItem(process, item, count, actor, reference);
+		return destroyed;
 	}
 	
 	@Override
 	public Item transferItem(ItemProcessType process, int objectId, long count, ItemContainer target, Player actor, Object reference)
 	{
 		final Item item = getItemByObjectId(objectId);
+		final Item transferred = super.transferItem(process, objectId, count, target, actor, reference);
 		
-		// Notify to scripts
-		if (EventDispatcher.getInstance().hasListener(EventType.ON_PLAYER_CLAN_WH_ITEM_TRANSFER, item.getTemplate()))
+		// Notify to scripts, only for an operation that happened (CP-0020); an item no longer here is not dereferenced.
+		if ((item != null) && (transferred != null) && EventDispatcher.getInstance().hasListener(EventType.ON_PLAYER_CLAN_WH_ITEM_TRANSFER, item.getTemplate()))
 		{
 			EventDispatcher.getInstance().notifyEventAsync(new OnPlayerClanWHItemTransfer(actor, item, count, target), item.getTemplate());
 		}
 		
-		return super.transferItem(process, objectId, count, target, actor, reference);
+		return transferred;
 	}
 }

@@ -312,3 +312,16 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   lock. Nothing else calls it.
 - Invariant: after the service has written a stack's row, Mobius updates that row and never inserts another.
 - Proof: `StackDebitTest.aStackNeverSavedGetsItsRowInTheOperationAndMobiusKnowsIt`.
+
+## CP-0020 Clan warehouse events for operations that happen
+
+- Files: `java/org/l2jmobius/gameserver/entity/itemcontainer/ClanWarehouse.java`
+- Reason: `ClanWarehouse.addItem`, `destroyItem` and `transferItem` notified scripts before calling `super`, so an
+  operation `super` refused (now including any on an item the Asset Service retired, CP-0010) still fired its event, and
+  `transferItem` dereferenced `getItemByObjectId(objectId)` unchecked: a NullPointerException in retail when the item was
+  already gone (asset-service.md §3.3, the part 2 obligation).
+- Change: each calls `super` first and notifies only when the operation happened, with the same event and arguments;
+  `transferItem` checks for a missing item. Retail operations that succeed fire exactly the events they fired before.
+- Invariant: a clan warehouse event means its operation happened.
+- Proof: `ClanAndTreasuryDebitTest.clanWarehouseEventsFireOnlyForOperationsThatHappen` (a refused destroy fires nothing; a
+  missing object's transfer returns null).

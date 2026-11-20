@@ -56,16 +56,19 @@
    Do instead: add a new `config/Custom/*.ini` to `TruthProfile.MODULES`; its `= true` lines are turned off by rule (only AllowedPlayerRaces kept), numeric neutral values go in `NEUTRAL_VALUES`. To test a custom path (random spawns), set the config static in a `try/finally`, together with any list its loader fills only when switched on (`MOBS_LIST_NOT_RANDOM`).
 
 ## Core & Datapack Guardrails
-1. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
+1. **[2026-11-20] Asset tests need tradeable items and a character in the World**
+   Do instead: use the Short Sword (id 1), not the Squire's Sword (2369, a starter item with is_tradable=false, which §4.4
+   refuses), and call `World.addObject(player)` after `TestPlayers.create` for anything that looks players up by id.
+2. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
    Do instead: add `CP-NNNN` (files, reason, change, invariant, proof) in the same commit; `check-core-ledger` fails the build otherwise.
-2. **[2026-11-19] Upstream files mix CRLF and LF**
+3. **[2026-11-19] Upstream files mix CRLF and LF**
    Do instead: edit them byte-wise in Python, check whether `\r\n` is present first and write the same endings back.
-3. **[2026-11-19] `-XX:hashCode=2` makes every identity hash equal in tests**
+4. **[2026-11-19] `-XX:hashCode=2` makes every identity hash equal in tests**
    Do instead: key test maps by object id (Integer), never by world objects; expect maps keyed by objects to degrade to one bucket.
-4. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
+5. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
    Do instead: use `java.lang.classfile` to swap `invokevirtual X.m(args)R` for `invokestatic W.m(X,args)R` (same stack effect) at listed sites; `MethodRedirector` handles static calls only and never touches instructions.
 
-5. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
+6. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
    MariaDB raises error 1442 on `FOR UPDATE` of the table that fired the trigger.
    Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
 

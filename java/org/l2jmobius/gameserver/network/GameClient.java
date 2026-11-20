@@ -42,6 +42,7 @@ import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.livingchronicle.asset.DeletionGuard;
+import org.l2jmobius.gameserver.livingchronicle.asset.PendingMarks;
 import org.l2jmobius.gameserver.network.holders.CharacterInfoHolder;
 import org.l2jmobius.gameserver.network.holders.ClientHardwareInfoHolder;
 import org.l2jmobius.gameserver.network.serverpackets.LeaveWorld;
@@ -530,6 +531,13 @@ public class GameClient extends Client<org.l2jmobius.commons.network.Connection<
 				player.deleteMe();
 			}
 			
+			return null;
+		}
+		
+		// CP-0018: an asset operation that took this character's items may still change its rows; wait for it.
+		if (!PendingMarks.awaitNone(objectId))
+		{
+			LOGGER.warning("Login of character " + objectId + " refused: an asset operation on its items is still pending.");
 			return null;
 		}
 		

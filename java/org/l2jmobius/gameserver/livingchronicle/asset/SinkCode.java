@@ -11,5 +11,13 @@ public enum SinkCode
 	/** The rest of a raided manifest. */
 	ROAD_LOSS,
 	/** A contractual craft's materials, consumed from the contract's custody (pact.md §4.3). */
-	CRAFT_INPUT
+	CRAFT_INPUT,
+	/** Institutional fees charged to a holder (15 §6, 16 §7, 17 §2). */
+	FEE_NOTARIUS,
+	FEE_BROKER,
+	FEE_QUESTIONING,
+	FEE_ALIAS,
+	FEE_GAZETTE,
+	/** A bribe paid to a witness NPC (black-ledger.md §4.7). */
+	FEE_BRIBE
 }

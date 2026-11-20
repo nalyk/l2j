@@ -269,3 +269,59 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   written to a marked character (the release refuses it under the same row lock).
 - Proof: `DeletionGuardTest.aCharacterWithUnclaimedServiceMailIsNotMarked` (and marked once the mail is claimed),
   `aCharacterWithAPendingMarkIsNotMarked`, `aMarkedCharacterReceivesNoServiceMail`; on upstream both refusals failed.
+
+## CP-0017 The taking seams
+
+- Files: `java/org/l2jmobius/gameserver/entity/itemcontainer/ItemContainer.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`
+- Reason: the Asset Service takes items out of live containers under Mobius's own locks (asset-service.md §3.3), but
+  Mobius keeps what it needs private: a container's `removeItem` is protected (its overrides unequip and clear the Adena
+  caches, Inventory.java:891, PlayerInventory.java:770), an item's write lock (`_dbLock`, Item.java:167) is private, and a
+  treasury change always writes its row (Castle.java:333-373), where the service writes the row in its own transaction.
+- Change: `ItemContainer.removeForAsset(item)` (the virtual `removeItem`, then `refreshWeight`); `Item.awaitWrites()`
+  (take and release the write lock) and `Item.writeLock()`; `Castle.tryDebitTreasury(amount)` and
+  `creditTreasuryInMemory(amount)`, compare-and-set only, a credit past `MAX_ADENA` refused. Nothing calls them but the
+  Asset Service; Mobius's behaviour is unchanged.
+- Invariant: the service takes items and treasury amounts exactly as Mobius's own code would, without new locks.
+- Proof: `TakingSeamsTest.anItemTakenForAnAssetLeavesItsContainerAsRetailRemovalDoes`,
+  `awaitingWritesWaitsForAWriteInProgress`, `aTreasuryChangesInMemoryOnlyAndRefusesAnOverdrawOrAPassOverTheCap`.
+
+## CP-0018 The login wait
+
+- Files: `java/org/l2jmobius/gameserver/network/GameClient.java`
+- Reason: a login restores a character's items from rows with plain reads that do not wait for an uncommitted change
+  (Player.java:7357-7360); while an asset operation has taken an item in memory and not yet committed or refunded, the
+  item's row still says where it was, so a login in between would restore a second, live `Item` (asset-service.md §2.4,
+  §11.22, ASSET-R26).
+- Change: `GameClient.load` waits, before `Player.load`, while `lc_asset_pending` marks the character
+  (`PendingMarks.awaitNone`: a plain read polled every 50 ms, taking no lock); if a mark outlives four times
+  `UncertainCommitLookupMillis`, the login is refused and the character not loaded. When Living Chronicle is not
+  running nothing waits.
+- Invariant: no character is loaded while an operation that took its items is pending.
+- Proof: `LoginWaitTest.aLoginWaitsWhileAnOperationOfTheCharacterIsPending` (upstream loaded it at once),
+  `aLoginIsRefusedIfTheMarkOutlivesTheBound` (upstream loaded it), `anUnmarkedLoginDoesNotWait`,
+  `markingCommitsOnItsOwnConnection`.
+
+## CP-0019 A row the Asset Service wrote
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: when the Asset Service takes part of a stack that Mobius has never saved, its transaction must insert the
+  stack's row from memory (else a crash would leave the taken part in escrow and no debited stack in the database:
+  Adena from nowhere, asset-service.md §3.3 step 2); Mobius then must know the row exists, or its next write would
+  insert a second one (Item.java `insertIntoDb`, `_existsInDb`, private).
+- Change: `Item.markRowWritten()` sets `_existsInDb`; the service calls it after its commit, holding the stack's write
+  lock. Nothing else calls it.
+- Invariant: after the service has written a stack's row, Mobius updates that row and never inserts another.
+- Proof: `StackDebitTest.aStackNeverSavedGetsItsRowInTheOperationAndMobiusKnowsIt`.
+
+## CP-0020 Clan warehouse events for operations that happen
+
+- Files: `java/org/l2jmobius/gameserver/entity/itemcontainer/ClanWarehouse.java`
+- Reason: `ClanWarehouse.addItem`, `destroyItem` and `transferItem` notified scripts before calling `super`, so an
+  operation `super` refused (now including any on an item the Asset Service retired, CP-0010) still fired its event, and
+  `transferItem` dereferenced `getItemByObjectId(objectId)` unchecked: a NullPointerException in retail when the item was
+  already gone (asset-service.md §3.3, the part 2 obligation).
+- Change: each calls `super` first and notifies only when the operation happened, with the same event and arguments;
+  `transferItem` checks for a missing item. Retail operations that succeed fire exactly the events they fired before.
+- Invariant: a clan warehouse event means its operation happened.
+- Proof: `ClanAndTreasuryDebitTest.clanWarehouseEventsFireOnlyForOperationsThatHappen` (a refused destroy fires nothing; a
+  missing object's transfer returns null).

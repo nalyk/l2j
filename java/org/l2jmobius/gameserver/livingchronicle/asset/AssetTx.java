@@ -13,9 +13,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.l2jmobius.gameserver.data.sql.ClanTable;
+import org.l2jmobius.gameserver.entity.World;
+import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.entity.clan.Clan;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.itemcontainer.Inventory;
+import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
 import org.l2jmobius.gameserver.livingchronicle.journal.DurableFact;
+import org.l2jmobius.gameserver.managers.CastleManager;
+import org.l2jmobius.gameserver.mechanics.siege.Castle;
+import org.l2jmobius.gameserver.mechanics.variables.ItemVariables;
 
 /**
  * One asset operation (docs/spec/asset-service.md §3.2, §4.1, §4.2). The caller declares what the operation does; nothing
@@ -55,6 +66,23 @@ public final class AssetTx implements AutoCloseable
 		}
 	}
 
+	/** A debit from a Mobius holder into a custody (§4.3 {@code fund}, custody set) or a sink ({@code charge}, sink set). */
+	private record Debit(int custody, Holder holder, List<Asset> assets, SinkCode sink)
+	{
+	}
+
+	/**
+	 * What was taken in memory: a whole object (§3.3 step 1, {@code part} 0) or {@code part} units of a stack (step 2);
+	 * what the transaction writes and a refund returns.
+	 */
+	private record Taken(Debit debit, Item item, Map<String, String> variables, long part)
+	{
+		boolean whole()
+		{
+			return part == 0;
+		}
+	}
+
 	private record Version(String table, String idColumn, long id, int version)
 	{
 	}
@@ -73,6 +101,10 @@ public final class AssetTx implements AutoCloseable
 	private final TreeSet<Integer> _custodies = new TreeSet<>();
 	/** Characters whose rows the operation locks first (the global row-lock order starts with `characters`). */
 	private final TreeSet<Integer> _characters = new TreeSet<>();
+	private final List<Debit> _debits = new ArrayList<>();
+	private final List<Taken> _taken = new ArrayList<>();
+	/** Characters whose items this operation takes: marked before the first debit (§2.4). */
+	private final TreeSet<Integer> _marked = new TreeSet<>();
 	/** The service mails the last attempt wrote, adopted by the game after commit. */
 	private List<Integer> _mails = List.of();
 	private final List<Version> _versions = new ArrayList<>();
@@ -201,18 +233,7 @@ public final class AssetTx implements AutoCloseable
 				throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + receiverCharId + " is gone or marked for deletion");
 			}
 			final Connection connection = execution.connection();
-			final int message = _service.ids().next();
-			try (PreparedStatement insert = connection.prepareStatement("INSERT INTO messages (messageId, senderId, receiverId, subject, content, expiration, reqAdena, hasAttachments, isUnread, isDeletedBySender, isDeletedByReceiver, sendBySystem, isReturned) VALUES (?, ?, ?, ?, ?, ?, 0, 'true', 'true', 'true', 'false', ?, 'false')"))
-			{
-				insert.setInt(1, message);
-				insert.setInt(2, ServiceMail.SENDER);
-				insert.setInt(3, receiverCharId);
-				insert.setString(4, subject);
-				insert.setString(5, content);
-				insert.setLong(6, ServiceMail.EXPIRATION);
-				insert.setInt(7, ServiceMail.SEND_BY_SYSTEM);
-				insert.executeUpdate();
-			}
+			final int message = insertServiceMail(connection, receiverCharId, subject, content);
 			final List<Map<String, Object>> legs = new ArrayList<>();
 			for (Asset asset : released)
 			{
@@ -245,6 +266,586 @@ public final class AssetTx implements AutoCloseable
 			execution.mailed(message, receiverCharId, reason);
 			execution.facts().add(AssetFact.of("EscrowReleased", custody, "custody", custody, "receiver", receiverCharId, "mail", message, "reason", reason.name(), "legs", legs));
 		}, custody);
+	}
+
+	/**
+	 * Funds a custody from a live character's inventory or warehouse (§4.3 {@code fund}, §3.3 step 1): each whole object
+	 * is taken in memory under Mobius's own locks, retired, and written as an {@code ESCROW} row from memory in the
+	 * transaction. The character must be in the world; every item must be eligible (§4.4). (Amounts of a stack: part 4,
+	 * task 5.)
+	 */
+	public void fund(int custody, Holder holder, List<Asset> assets)
+	{
+		if (holder.kind() == Holder.Kind.CASTLE_TREASURY)
+		{
+			throw new IllegalArgumentException("a treasury is funded through commitTreasury");
+		}
+		final Debit debit = new Debit(custody, holder, List.copyOf(assets), null);
+		_debits.add(debit);
+		if (holder.isCharacter())
+		{
+			_characters.add(holder.id());
+			_marked.add(holder.id());
+		}
+		step(execution ->
+		{
+			final Custody target = execution.open(custody);
+			execution.notFrozen(target);
+			execution.allowsHolding(target);
+			final List<Map<String, Object>> legs = new ArrayList<>();
+			for (Taken taken : _taken)
+			{
+				if (taken.debit() != debit)
+				{
+					continue;
+				}
+				final Item item = taken.item();
+				if (taken.whole())
+				{
+					ItemRows.write(execution.connection(), item, -1, "ESCROW", custody, taken.variables());
+					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
+					legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+				}
+				else
+				{
+					ItemRows.writeStack(execution.connection(), item); // the stack as Mobius would write it now, debit applied
+					execution.give(custody, custody, new Asset(item.getId(), taken.part(), null));
+					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), null, null, taken.part(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), null, null, taken.part(), Leg.Direction.CREDIT));
+					legs.add(legOf(new Asset(item.getId(), taken.part(), null)));
+				}
+			}
+			execution.touched(custody);
+			execution.facts().add(AssetFact.of("EscrowFunded", custody, "custody", custody, "holder", holder.kind().name(), "holder_id", holder.id(), "legs", legs));
+		}, custody);
+	}
+
+	/**
+	 * Charges a live character's Adena into a sink (§4.3 {@code charge}, §2.5): part of its Adena stack, taken as §3.3
+	 * step 2 orders it, never its last unit.
+	 */
+	public void charge(Holder holder, long amount, SinkCode sink)
+	{
+		if (!holder.isCharacter())
+		{
+			throw new IllegalArgumentException("charge from " + holder.kind() + ": part 4, task 6");
+		}
+		final Debit debit = new Debit(-1, holder, List.of(new Asset(Inventory.ADENA_ID, amount, null)), sink);
+		_debits.add(debit);
+		_characters.add(holder.id());
+		_marked.add(holder.id());
+		step(execution ->
+		{
+			for (Taken taken : _taken)
+			{
+				if (taken.debit() != debit)
+				{
+					continue;
+				}
+				ItemRows.writeStack(execution.connection(), taken.item());
+				execution.legs().add(new Leg(holder.account(), holder.id(), null, taken.item().getId(), null, null, taken.part(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, 0, sink.name(), taken.item().getId(), null, null, taken.part(), Leg.Direction.CREDIT));
+			}
+		});
+	}
+
+	/** A castle treasury debited (commit) or credited (return) under its write lock (§3.3 step 3). */
+	private record TreasuryMove(int castleId, int custody, long amount, boolean debit)
+	{
+	}
+
+	private final List<TreasuryMove> _treasury = new ArrayList<>();
+	/** Treasury debits taken in memory, written back by a refund. */
+	private final List<TreasuryMove> _treasuryTaken = new ArrayList<>();
+
+	/** A castle's treasury into a custody (§4.3 {@code commit}, Crown Law): debited in memory, its row written from memory. */
+	public void commitTreasury(int castleId, int custody, long amount)
+	{
+		final TreasuryMove move = new TreasuryMove(castleId, custody, amount, true);
+		_treasury.add(move);
+		step(execution ->
+		{
+			final Custody target = execution.open(custody);
+			execution.notFrozen(target);
+			execution.allowsHolding(target);
+			writeTreasury(execution.connection(), castleId, castle(castleId).getTreasury());
+			execution.give(custody, custody, new Asset(Inventory.ADENA_ID, amount, null));
+			execution.legs().add(new Leg(Leg.AccountKind.CASTLE_TREASURY, castleId, null, Inventory.ADENA_ID, null, null, amount, Leg.Direction.DEBIT));
+			execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, Inventory.ADENA_ID, null, null, amount, Leg.Direction.CREDIT));
+			execution.facts().add(AssetFact.of("TreasuryCommitted", custody, "castle", castleId, "custody", custody, "amount", amount));
+		}, custody);
+	}
+
+	/** A custody's Adena back into a castle's treasury (§4.3 {@code return}): the row written as memory plus the amount, memory credited after commit. */
+	public void returnToTreasury(int custody, int castleId, long amount)
+	{
+		final TreasuryMove move = new TreasuryMove(castleId, custody, amount, false);
+		_treasury.add(move);
+		step(execution ->
+		{
+			execution.notFrozen(execution.open(custody));
+			final long after = castle(castleId).getTreasury() + amount;
+			if (after > Inventory.MAX_ADENA)
+			{
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "castle " + castleId + "'s treasury would pass MAX_ADENA: refused, never clamped (§4.2 rule 4)");
+			}
+			execution.take(custody, new Asset(Inventory.ADENA_ID, amount, null), true);
+			writeTreasury(execution.connection(), castleId, after);
+			execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, Inventory.ADENA_ID, null, null, amount, Leg.Direction.DEBIT));
+			execution.legs().add(new Leg(Leg.AccountKind.CASTLE_TREASURY, castleId, null, Inventory.ADENA_ID, null, null, amount, Leg.Direction.CREDIT));
+			execution.facts().add(AssetFact.of("TreasuryReturned", custody, "castle", castleId, "custody", custody, "amount", amount));
+		}, custody);
+	}
+
+	private static Castle castle(int castleId) throws AssetAbort
+	{
+		final Castle castle = CastleManager.getInstance().getCastleById(castleId);
+		if (castle == null)
+		{
+			throw new AssetAbort(AssetAbort.Reason.HOLDER_ABSENT, "castle " + castleId + " does not exist");
+		}
+		return castle;
+	}
+
+	private static void writeTreasury(Connection connection, int castleId, long treasury) throws SQLException
+	{
+		try (PreparedStatement write = connection.prepareStatement("UPDATE castle SET treasury = ? WHERE id = ?"))
+		{
+			write.setLong(1, treasury);
+			write.setInt(2, castleId);
+			write.executeUpdate();
+		}
+	}
+
+	/** MARKED then TAKEN (§3.2, §3.3 step 1): marks committed, then each whole object taken out of memory. */
+	private void take() throws AssetAbort
+	{
+		try (Connection connection = _service.db().open())
+		{
+			for (int charId : _marked)
+			{
+				PendingMarks.mark(connection, charId, _op);
+			}
+		}
+		catch (SQLException e)
+		{
+			clearMarks();
+			throw new AssetAbort(AssetAbort.Reason.ERROR, _op + ": could not mark", e);
+		}
+		try
+		{
+			for (Debit debit : _debits)
+			{
+				final Player player = player(debit);
+				final ItemContainer container = container(debit, player);
+				for (Asset asset : debit.assets())
+				{
+					if (asset.objectId() == null)
+					{
+						continue; // an amount: taken under the stack locks (§3.3 step 2)
+					}
+					final Item item = container.getItemByObjectId(asset.objectId());
+					if (item == null)
+					{
+						throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is not in " + debit.holder());
+					}
+					// Mobius's order: the item's monitor, then the container's (§3.3, CP-0010 refusals run under them).
+					synchronized (item)
+					{
+						synchronized (container)
+						{
+							if ((container.getItemByObjectId(asset.objectId()) != item) || item.isRetired() || (item.getId() != asset.itemId()) || (item.getCount() != asset.qty()))
+							{
+								throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is no longer as named in " + debit.holder());
+							}
+							final String refusal = refusal(player, item);
+							if (refusal != null)
+							{
+								throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, item + ": " + refusal);
+							}
+							item.retire();
+							container.removeForAsset(item);
+						}
+					}
+					final Map<String, String> variables = captureVariables(item);
+					item.awaitWrites();
+					_taken.add(new Taken(debit, item, variables, 0));
+				}
+			}
+		}
+		catch (AssetAbort e)
+		{
+			if (_taken.isEmpty())
+			{
+				clearMarks();
+			}
+			else
+			{
+				refund(e);
+			}
+			throw e;
+		}
+	}
+
+	/** The character a debit takes from, in the world; null for a clan warehouse. */
+	private static Player player(Debit debit) throws AssetAbort
+	{
+		if (!debit.holder().isCharacter())
+		{
+			return null;
+		}
+		final Player player = World.getPlayer(debit.holder().id());
+		if (player == null)
+		{
+			throw new AssetAbort(AssetAbort.Reason.HOLDER_ABSENT, "character " + debit.holder().id() + " is not in the world");
+		}
+		return player;
+	}
+
+	private static ItemContainer container(Debit debit, Player player) throws AssetAbort
+	{
+		switch (debit.holder().kind())
+		{
+			case PLAYER:
+			{
+				return player.getInventory();
+			}
+			case PLAYER_WAREHOUSE:
+			{
+				return player.getWarehouse();
+			}
+			default:
+			{
+				final Clan clan = ClanTable.getInstance().getClan(debit.holder().id());
+				if (clan == null)
+				{
+					throw new AssetAbort(AssetAbort.Reason.HOLDER_ABSENT, "clan " + debit.holder().id() + " does not exist");
+				}
+				return clan.getWarehouse(); // always in memory (Clan.java:145, 177)
+			}
+		}
+	}
+
+	private static String refusal(Player player, Item item)
+	{
+		return player != null ? Eligibility.refusal(player, item) : Eligibility.clanRefusal(item);
+	}
+
+	/** Who receives what is returned to a holder: the character, or a clan's leader (§2.1). */
+	private static int receiverOf(Holder holder)
+	{
+		if (holder.kind() == Holder.Kind.CLAN_WAREHOUSE)
+		{
+			final Clan clan = ClanTable.getInstance().getClan(holder.id());
+			return clan == null ? 0 : clan.getLeaderId();
+		}
+		return holder.id();
+	}
+
+	/** The stacks this operation takes amounts from, distinct, in object-id order (§3.3 step 2's lock order). */
+	private List<Item> stacks() throws AssetAbort
+	{
+		final TreeMap<Integer, Item> stacks = new TreeMap<>();
+		for (Debit debit : _debits)
+		{
+			for (Asset asset : debit.assets())
+			{
+				if (asset.objectId() != null)
+				{
+					continue;
+				}
+				final Item stack = container(debit, player(debit)).getItemByItemId(asset.itemId());
+				if ((stack == null) || !stack.isStackable())
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, debit.holder() + " has no stack of item " + asset.itemId());
+				}
+				stacks.put(stack.getObjectId(), stack);
+			}
+		}
+		return new ArrayList<>(stacks.values());
+	}
+
+	/** Every stack monitor in object-id order, then every stack write lock in object-id order, held to DONE (§3.3). */
+	private Outcome holding(List<Item> stacks, int index) throws AssetAbort
+	{
+		if (index < stacks.size())
+		{
+			synchronized (stacks.get(index))
+			{
+				return holding(stacks, index + 1);
+			}
+		}
+		for (Item stack : stacks)
+		{
+			stack.writeLock().lock();
+		}
+		final List<Castle> castles = new ArrayList<>();
+		try
+		{
+			final TreeMap<Integer, Castle> byId = new TreeMap<>();
+			for (TreasuryMove move : _treasury)
+			{
+				byId.put(move.castleId(), castle(move.castleId()));
+			}
+			for (Castle castle : byId.values())
+			{
+				castle.treasuryLock().lock(); // held from the debit to DONE (§3.3 step 3)
+				castles.add(castle);
+			}
+			return finish();
+		}
+		finally
+		{
+			for (int i = castles.size() - 1; i >= 0; i--)
+			{
+				castles.get(i).treasuryLock().unlock();
+			}
+			for (int i = stacks.size() - 1; i >= 0; i--)
+			{
+				stacks.get(i).writeLock().unlock();
+			}
+		}
+	}
+
+	/** Step 2 under the locks: each amount by an atomic checked decrease that leaves at least one unit (CP-0009). */
+	private void takeParts() throws AssetAbort
+	{
+		for (Debit debit : _debits)
+		{
+			final Player player = player(debit);
+			final ItemContainer container = container(debit, player);
+			for (Asset asset : debit.assets())
+			{
+				if (asset.objectId() != null)
+				{
+					continue;
+				}
+				final Item stack = container.getItemByItemId(asset.itemId());
+				if ((stack == null) || stack.isRetired() || (container.getItemByObjectId(stack.getObjectId()) != stack))
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, debit.holder() + " no longer has its stack of item " + asset.itemId());
+				}
+				final String refusal = refusal(player, stack);
+				if (refusal != null)
+				{
+					throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, stack + ": " + refusal);
+				}
+				if (!stack.tryDecrease(asset.qty()))
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, debit.holder() + " holds " + stack.getCount() + " of item " + asset.itemId() + "; a debit leaves at least one unit");
+				}
+				_taken.add(new Taken(debit, stack, Map.of(), asset.qty()));
+			}
+		}
+	}
+
+	private void abortAfter(AssetAbort cause)
+	{
+		if (_taken.isEmpty() && _treasuryTaken.isEmpty())
+		{
+			clearMarks();
+		}
+		else
+		{
+			refund(cause);
+		}
+	}
+
+	/** An item's variables, retired (no more writes or saves, CP-0013) and copied as the row will hold them. */
+	private static Map<String, String> captureVariables(Item item)
+	{
+		final ItemVariables variables = item.getScript(ItemVariables.class);
+		if (variables == null)
+		{
+			return Map.of();
+		}
+		variables.retire();
+		final Map<String, String> copy = new TreeMap<>();
+		variables.getSet().forEach((name, value) -> copy.put(name, String.valueOf(value)));
+		return copy;
+	}
+
+	private void clearMarks()
+	{
+		try (Connection connection = _service.db().open())
+		{
+			for (int charId : _marked)
+			{
+				PendingMarks.clear(connection, charId, _op);
+			}
+		}
+		catch (SQLException e)
+		{
+			// Startup recovery removes the marks of an operation that never committed (§3.2).
+		}
+	}
+
+	private static final int REFUND_ATTEMPTS = 10;
+
+	/**
+	 * ABORTED → REFUNDED (§3.2): the refund operation {@code OpId.refundOf(op)} returns each object taken to its holder as
+	 * service mail (written from memory, unsaved state kept), clears this operation's pending marks, and is retried until
+	 * it commits; nothing it does to memory happens before its commit. If it cannot commit, the module freezes and the
+	 * retired objects stay out of every container; their rows were never changed, so a restart's recovery gives them back.
+	 */
+	private void refund(AssetAbort cause)
+	{
+		final List<Taken> taken = List.copyOf(_taken);
+		final List<TreasuryMove> treasury = List.copyOf(_treasuryTaken);
+		final TreeSet<Integer> marked = new TreeSet<>(_marked);
+		Exception last = cause;
+		for (int attempt = 0; attempt < REFUND_ATTEMPTS; attempt++)
+		{
+			try (AssetTx refund = _service.begin(_op.refund(), _module, "REFUND", _subjectRef))
+			{
+				refund.returnByMail(taken, marked, _op);
+				refund.restoreTreasuries(treasury);
+				refund.commit();
+				rowsWritten(taken);
+				for (TreasuryMove move : treasury)
+				{
+					castle(move.castleId()).creditTreasuryInMemory(move.amount()); // memory only after the refund committed
+				}
+				discardTaken();
+				_taken.clear();
+				_treasuryTaken.clear();
+				return;
+			}
+			catch (AssetAbort | SQLException e)
+			{
+				e.addSuppressed(last);
+				last = e;
+				pause();
+			}
+		}
+		try (Connection connection = _service.db().open())
+		{
+			ModuleState.freeze(connection, _module, "REFUND_FAILED", null);
+		}
+		catch (SQLException e)
+		{
+			last.addSuppressed(e);
+		}
+		throw new IllegalStateException(_op + " could not be refunded; module " + _module + " frozen", last);
+	}
+
+	/** The refund's treasury rows: written back as memory plus each debited amount (§3.2), memory credited after commit. */
+	private void restoreTreasuries(List<TreasuryMove> treasury)
+	{
+		if (treasury.isEmpty())
+		{
+			return;
+		}
+		step(execution ->
+		{
+			for (TreasuryMove move : treasury)
+			{
+				writeTreasury(execution.connection(), move.castleId(), castle(move.castleId()).getTreasury() + move.amount());
+			}
+		});
+	}
+
+	/** The refund operation's one step: each holder's objects back as one service mail, the original marks cleared. */
+	private void returnByMail(List<Taken> taken, Set<Integer> marked, OpId original)
+	{
+		final Map<Holder, List<Taken>> byHolder = new LinkedHashMap<>();
+		for (Taken t : taken)
+		{
+			byHolder.computeIfAbsent(t.debit().holder(), h -> new ArrayList<>()).add(t);
+			_characters.add(receiverOf(t.debit().holder()));
+		}
+		step(execution ->
+		{
+			final Connection connection = execution.connection();
+			for (Map.Entry<Holder, List<Taken>> entry : byHolder.entrySet())
+			{
+				final Holder holder = entry.getKey();
+				final int receiver = receiverOf(holder);
+				final int message = insertServiceMail(connection, receiver, "Returned", "An operation on your items did not complete; they are returned to you.");
+				final List<Map<String, Object>> legs = new ArrayList<>();
+				for (Taken t : entry.getValue())
+				{
+					final Item item = t.item();
+					if (t.whole())
+					{
+						ItemRows.write(connection, item, ServiceMail.SENDER, "MAIL", message, t.variables());
+						execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
+						legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+					}
+					else
+					{
+						// A part: the stack's row from memory (debit applied), the part as a new attachment row.
+						ItemRows.writeStack(connection, item);
+						try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
+						{
+							attach.setInt(1, _service.ids().next());
+							attach.setInt(2, item.getId());
+							attach.setLong(3, t.part());
+							attach.setInt(4, message);
+							attach.executeUpdate();
+						}
+						execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), null, null, t.part(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), null, null, t.part(), Leg.Direction.CREDIT));
+						legs.add(legOf(new Asset(item.getId(), t.part(), null)));
+					}
+				}
+				execution.mailed(message, receiver, MailReason.REFUND);
+				execution.facts().add(AssetFact.of("Refunded", entry.getValue().get(0).debit().custody(), "aborted_op", original.hex(), "receiver", receiver, "mail", message, "legs", legs));
+			}
+			for (int charId : marked)
+			{
+				PendingMarks.clear(connection, charId, original);
+			}
+		});
+	}
+
+	/** DONE (§3.2): each retired item leaves memory for good; its object id stays reserved by its row (§4.2 rule 8). */
+	private void discardTaken()
+	{
+		for (Taken taken : _taken)
+		{
+			if (taken.whole())
+			{
+				taken.item().stopAllTasks();
+				World.removeObject(taken.item());
+			}
+		}
+	}
+
+	/**
+	 * One exchange with a live character (§4.3 {@code exchange}; the Guild's buying and selling): the character's
+	 * {@code gives} enter custody {@code into} and custody {@code from}'s {@code pays} reach the character as service mail,
+	 * in one transaction, so either both happen or neither does (what was already taken comes back by refund).
+	 */
+	public void exchange(int charId, List<Asset> gives, int into, List<Asset> pays, int from, String subject, String content)
+	{
+		fund(into, Holder.player(charId), gives);
+		release(from, charId, pays, MailReason.PAYOUT, subject, content);
+		final List<Map<String, Object>> given = new ArrayList<>();
+		gives.forEach(asset -> given.add(legOf(asset)));
+		final List<Map<String, Object>> paid = new ArrayList<>();
+		pays.forEach(asset -> paid.add(legOf(asset)));
+		step(execution -> execution.facts().add(AssetFact.of("Exchanged", into, "operation", _op.hex(), "character", charId, "custody_in", into, "gives", given, "custody_out", from, "pays", paid)), into, from);
+	}
+
+	/** A service mail's message row (§2.1), in the operation's transaction; its attachment rows follow. */
+	private int insertServiceMail(Connection connection, int receiverCharId, String subject, String content) throws SQLException
+	{
+		final int message = _service.ids().next();
+		try (PreparedStatement insert = connection.prepareStatement("INSERT INTO messages (messageId, senderId, receiverId, subject, content, expiration, reqAdena, hasAttachments, isUnread, isDeletedBySender, isDeletedByReceiver, sendBySystem, isReturned) VALUES (?, ?, ?, ?, ?, ?, 0, 'true', 'true', 'true', 'false', ?, 'false')"))
+		{
+			insert.setInt(1, message);
+			insert.setInt(2, ServiceMail.SENDER);
+			insert.setInt(3, receiverCharId);
+			insert.setString(4, subject);
+			insert.setString(5, content);
+			insert.setLong(6, ServiceMail.EXPIRATION);
+			insert.setInt(7, ServiceMail.SEND_BY_SYSTEM);
+			insert.executeUpdate();
+		}
+		return message;
 	}
 
 	/** Debits a custody into a sink (§2.5): the asset leaves existence under the code and its reference. */
@@ -376,6 +977,102 @@ public final class AssetTx implements AutoCloseable
 		{
 			return _prior;
 		}
+		if (_debits.isEmpty() && _treasury.isEmpty())
+		{
+			return attempts();
+		}
+		take();
+		final List<Item> stacks;
+		try
+		{
+			stacks = stacks();
+		}
+		catch (AssetAbort e)
+		{
+			abortAfter(e);
+			throw e;
+		}
+		return holding(stacks, 0);
+	}
+
+	/** Under the stack locks: the amounts taken, the transaction, then DONE or the refund, before any lock is released. */
+	private Outcome finish() throws AssetAbort
+	{
+		try
+		{
+			takeParts();
+			for (TreasuryMove move : _treasury)
+			{
+				if (move.debit())
+				{
+					if (!castle(move.castleId()).tryDebitTreasury(move.amount()))
+					{
+						throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "castle " + move.castleId() + "'s treasury holds less than " + move.amount());
+					}
+					_treasuryTaken.add(move);
+				}
+			}
+		}
+		catch (AssetAbort e)
+		{
+			abortAfter(e);
+			throw e;
+		}
+		final Outcome outcome;
+		try
+		{
+			outcome = attempts();
+		}
+		catch (AssetAbort e)
+		{
+			abortAfter(e);
+			throw e;
+		}
+		if (outcome != Outcome.COMMITTED)
+		{
+			abortAfter(new AssetAbort(AssetAbort.Reason.NOT_COMMITTED, _op + " ended " + outcome + " after taking assets"));
+			return outcome;
+		}
+		rowsWritten(_taken);
+		for (TreasuryMove move : _treasury)
+		{
+			if (!move.debit())
+			{
+				castle(move.castleId()).creditTreasuryInMemory(move.amount()); // after commit, still under the treasury lock
+			}
+		}
+		discardTaken();
+		tellClients();
+		return outcome;
+	}
+
+	/** A stack whose row the transaction wrote now exists for Mobius too (CP-0019), under the write lock still held. */
+	private static void rowsWritten(List<Taken> taken)
+	{
+		for (Taken t : taken)
+		{
+			if (!t.whole())
+			{
+				t.item().markRowWritten();
+			}
+		}
+	}
+
+	/** DONE: the characters debited see their inventories as they are now. */
+	private void tellClients()
+	{
+		for (int charId : _marked)
+		{
+			final Player player = World.getPlayer(charId);
+			if (player != null)
+			{
+				player.sendItemList(false);
+			}
+		}
+	}
+
+	private Outcome attempts() throws AssetAbort
+	{
 		final AssetConfig config = _service.config();
 		for (int attempt = 0;; attempt++)
 		{
@@ -460,6 +1157,10 @@ public final class AssetTx implements AutoCloseable
 		for (Step step : _steps)
 		{
 			step.run(execution);
+		}
+		for (int charId : _marked)
+		{
+			PendingMarks.clear(connection, charId, _op); // the marks go with the operation's commit (§2.4)
 		}
 		final List<Version> versions = new ArrayList<>(_versions);
 		versions.sort(Comparator.comparing(Version::table).thenComparingLong(Version::id));

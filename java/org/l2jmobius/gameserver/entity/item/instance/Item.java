@@ -462,6 +462,33 @@ public class Item extends WorldObject
 	}
 	
 	/**
+	 * Waits for a write of this item already in progress to finish (CP-0017): takes and releases its write lock. After a
+	 * {@link #retire()} every later write is a no-op, so the Asset Service's row is the last word (asset-service.md §3.3).
+	 */
+	public void awaitWrites()
+	{
+		_dbLock.lock();
+		_dbLock.unlock();
+	}
+	
+	/**
+	 * Records that this item's row now exists (CP-0019): the Asset Service inserted it in its own transaction, from memory,
+	 * while holding this item's write lock, so Mobius's next write updates it instead of inserting a second.
+	 */
+	public void markRowWritten()
+	{
+		_existsInDb = true;
+	}
+	
+	/**
+	 * @return this item's write lock (CP-0017): the Asset Service holds a debited stack's from the debit to {@code DONE}
+	 */
+	public ReentrantLock writeLock()
+	{
+		return _dbLock;
+	}
+	
+	/**
 	 * @return whether the Asset Service has taken this item (CP-0010)
 	 */
 	public boolean isRetired()

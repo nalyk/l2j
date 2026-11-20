@@ -22,6 +22,10 @@ public final class AssetAbort extends Exception
 		NOT_ALLOWED_TO_HOLD,
 		/** The owner module is frozen (§4.2 rule 7). */
 		MODULE_FROZEN,
+		/** The item may not enter a custody (§4.4): equipped, quest, time-limited, shadow, deleted by item id... */
+		INELIGIBLE,
+		/** The character to debit is not in the world. */
+		HOLDER_ABSENT,
 		/** The receiver of a service mail no longer exists or is marked for deletion (§2.1). */
 		RECEIVER_GONE,
 		/** A custody to close still holds rows. */

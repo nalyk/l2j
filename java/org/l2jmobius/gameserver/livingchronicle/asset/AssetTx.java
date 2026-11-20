@@ -8,6 +8,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -99,6 +100,74 @@ public final class AssetTx implements AutoCloseable
 		_facts.add(fact);
 	}
 
+	/**
+	 * Moves assets from one custody to another, of the same or of two owner modules (§4.3 {@code move}): both must be
+	 * {@code OPEN}, neither owner frozen, and the receiving owner must allow the holding (INV05).
+	 */
+	public void move(int from, int to, List<Asset> assets)
+	{
+		if (from == to)
+		{
+			throw new IllegalArgumentException("a move needs two custodies");
+		}
+		final List<Asset> moved = List.copyOf(assets);
+		step(execution ->
+		{
+			final Custody source = execution.open(from);
+			final Custody target = execution.open(to);
+			execution.notFrozen(source);
+			execution.notFrozen(target);
+			execution.allowsHolding(target);
+			final List<Map<String, Object>> legs = new ArrayList<>();
+			for (Asset asset : moved)
+			{
+				execution.take(from, asset);
+				execution.give(to, asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, from, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, to, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				legs.add(legOf(asset));
+			}
+			execution.facts().add(AssetFact.of("CustodyMoved", from, "operation", _op.hex(), "from", from, "to", to, "legs", legs));
+		}, from, to);
+	}
+
+	/** Closes an empty custody for good (§3.1 {@code OPEN → CLOSED}). */
+	public void close(int custody)
+	{
+		step(execution ->
+		{
+			execution.notFrozen(execution.open(custody));
+			try (PreparedStatement rows = execution.connection().prepareStatement("SELECT COUNT(*) FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ?"))
+			{
+				rows.setInt(1, custody);
+				try (ResultSet result = rows.executeQuery())
+				{
+					result.next();
+					if (result.getLong(1) > 0)
+					{
+						throw new AssetAbort(AssetAbort.Reason.NOT_EMPTY, "custody " + custody + " still holds " + result.getLong(1) + " rows");
+					}
+				}
+			}
+			try (PreparedStatement closing = execution.connection().prepareStatement("UPDATE lc_custody SET state = 'CLOSED', closed_op = ?, closed_at = NOW(3), version = version + 1 WHERE custody_id = ?"))
+			{
+				closing.setBytes(1, _op.bytes());
+				closing.setInt(2, custody);
+				closing.executeUpdate();
+			}
+			execution.facts().add(AssetFact.of("CustodyClosed", custody, "custody", custody, "reason", "EMPTY"));
+		}, custody);
+	}
+
+	static Map<String, Object> legOf(Asset asset)
+	{
+		final Map<String, Object> leg = new LinkedHashMap<>();
+		leg.put("item", asset.itemId());
+		leg.put("object", asset.objectId());
+		leg.put("qty", asset.qty());
+		return leg;
+	}
+
 	/** Declares a step that touches the given custodies; they are locked in id order before any step runs. */
 	void step(Step step, int... custodies)
 	{
@@ -141,6 +210,10 @@ public final class AssetTx implements AutoCloseable
 			catch (AssetAbort e)
 			{
 				rollback(connection);
+				if (e.violation() != null)
+				{
+					recordViolation(e.violation(), e);
+				}
 				throw e;
 			}
 			catch (SQLException e)
@@ -330,6 +403,18 @@ public final class AssetTx implements AutoCloseable
 		throw new UncertainCommitException(_op + ": the commit's result could not be learned; module " + _module + " frozen", last);
 	}
 
+	private void recordViolation(AssetAbort.Violation violation, AssetAbort abort)
+	{
+		try (Connection connection = _service.db().open())
+		{
+			Violations.record(connection, _service.stager(), violation.custody(), violation.invariant(), violation.evidence());
+		}
+		catch (SQLException e)
+		{
+			abort.addSuppressed(e); // the operation still did not commit; the census will find the violation again
+		}
+	}
+
 	/** MariaDB counts lock waits in whole seconds; the wait is rounded up, never to zero (which would mean no wait). */
 	private static void lockWait(Connection connection, long millis) throws SQLException
 	{
@@ -457,9 +542,162 @@ public final class AssetTx implements AutoCloseable
 			_touched.add(custody);
 		}
 
+		/** The custody, locked and {@code OPEN}; otherwise the operation aborts. */
+		Custody open(int id) throws AssetAbort
+		{
+			final Custody custody = _locked.get(id);
+			if ((custody == null) || (custody.state() != Custody.State.OPEN))
+			{
+				throw new AssetAbort(AssetAbort.Reason.CUSTODY_NOT_OPEN, "custody " + id + " is " + (custody == null ? "unknown" : custody.state()));
+			}
+			return custody;
+		}
+
+		void notFrozen(Custody custody) throws SQLException, AssetAbort
+		{
+			if (ModuleState.isFrozen(_connection, custody.ownerModule()))
+			{
+				throw new AssetAbort(AssetAbort.Reason.MODULE_FROZEN, custody.ownerModule() + " owns custody " + custody.id() + " and is frozen");
+			}
+		}
+
+		void allowsHolding(Custody custody) throws SQLException, AssetAbort
+		{
+			final HoldingPolicy owner = _service.owner(custody.ownerModule());
+			if ((owner == null) || !owner.allowsHolding(_connection, custody.ownerRef()))
+			{
+				throw new AssetAbort(AssetAbort.Reason.NOT_ALLOWED_TO_HOLD, custody.ownerModule() + " " + custody.ownerRef() + " may not hold in custody " + custody.id());
+			}
+		}
+
+		/** Takes an asset out of a custody's rows: a whole object leaves its row as it is, an amount is cut from the stack. */
+		void take(int custody, Asset asset) throws SQLException, AssetAbort
+		{
+			_touched.add(custody);
+			if (asset.objectId() != null)
+			{
+				try (PreparedStatement check = _connection.prepareStatement("SELECT 1 FROM items WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? AND count = ? FOR UPDATE"))
+				{
+					check.setInt(1, asset.objectId());
+					check.setInt(2, custody);
+					check.setInt(3, asset.itemId());
+					check.setLong(4, asset.qty());
+					try (ResultSet result = check.executeQuery())
+					{
+						if (!result.next())
+						{
+							throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is not whole in custody " + custody);
+						}
+					}
+				}
+				return;
+			}
+			final long[] row = stack(custody, asset.itemId());
+			if ((row == null) || (row[1] < asset.qty()))
+			{
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "custody " + custody + " holds " + (row == null ? 0 : row[1]) + " of item " + asset.itemId() + ", not " + asset.qty());
+			}
+			final String sql = row[1] == asset.qty() ? "DELETE FROM items WHERE object_id = ?" : "UPDATE items SET count = count - " + asset.qty() + " WHERE object_id = ?";
+			try (PreparedStatement write = _connection.prepareStatement(sql))
+			{
+				write.setLong(1, row[0]);
+				expectOne(write.executeUpdate(), row[0]);
+			}
+		}
+
+		/** Puts an asset into a custody's rows: a whole object changes custody, an amount joins the custody's stack. */
+		void give(int custody, Asset asset) throws SQLException, AssetAbort
+		{
+			_touched.add(custody);
+			if (asset.objectId() != null)
+			{
+				try (PreparedStatement move = _connection.prepareStatement("UPDATE items SET loc_data = ? WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW'"))
+				{
+					move.setInt(1, custody);
+					move.setInt(2, asset.objectId());
+					expectOne(move.executeUpdate(), asset.objectId());
+				}
+				return;
+			}
+			final long[] row = stack(custody, asset.itemId());
+			if (row != null)
+			{
+				try (PreparedStatement add = _connection.prepareStatement("UPDATE items SET count = count + ? WHERE object_id = ?"))
+				{
+					add.setLong(1, asset.qty());
+					add.setLong(2, row[0]);
+					expectOne(add.executeUpdate(), row[0]);
+				}
+				return;
+			}
+			try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'ESCROW', ?, NULL, 0, 0, -1, 0)"))
+			{
+				insert.setInt(1, _service.ids().next());
+				insert.setInt(2, asset.itemId());
+				insert.setLong(3, asset.qty());
+				insert.setInt(4, custody);
+				insert.executeUpdate();
+			}
+		}
+
+		/** The custody's one row of a stackable item, locked: {object id, count}, or null. */
+		private long[] stack(int custody, int itemId) throws SQLException
+		{
+			try (PreparedStatement read = _connection.prepareStatement("SELECT object_id, count FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? ORDER BY object_id FOR UPDATE"))
+			{
+				read.setInt(1, custody);
+				read.setInt(2, itemId);
+				try (ResultSet result = read.executeQuery())
+				{
+					return result.next() ? new long[] { result.getLong(1), result.getLong(2) } : null;
+				}
+			}
+		}
+
+		private static void expectOne(int affected, long objectId) throws AssetAbort
+		{
+			if (affected != 1)
+			{
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + objectId + ": " + affected + " rows changed, not 1");
+			}
+		}
+
+		/** Advances every touched custody's version and checks INV11 for it, after the postings are written. */
 		void checkCustodies() throws SQLException, AssetAbort
 		{
-			// Filled by the custody operations.
+			for (int custody : _touched)
+			{
+				try (PreparedStatement advance = _connection.prepareStatement("UPDATE lc_custody SET version = version + 1 WHERE custody_id = ?"))
+				{
+					advance.setInt(1, custody);
+					advance.executeUpdate();
+				}
+				final Map<Integer, Long> posted = sums("SELECT item_id, SUM(IF(direction = 'CREDIT', qty, -qty)) FROM lc_ledger_posting WHERE account_kind = 'CUSTODY' AND account_id = ? GROUP BY item_id", custody);
+				final Map<Integer, Long> held = sums("SELECT item_id, SUM(count) FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? GROUP BY item_id", custody);
+				posted.values().removeIf(v -> v == 0);
+				held.values().removeIf(v -> v == 0);
+				if (!posted.equals(held))
+				{
+					throw new AssetAbort(new AssetAbort.Violation(custody, "INV11", "postings " + posted + ", rows " + held));
+				}
+			}
+		}
+
+		private Map<Integer, Long> sums(String sql, int custody) throws SQLException
+		{
+			final Map<Integer, Long> sums = new TreeMap<>();
+			try (PreparedStatement read = _connection.prepareStatement(sql))
+			{
+				read.setInt(1, custody);
+				try (ResultSet result = read.executeQuery())
+				{
+					while (result.next())
+					{
+						sums.put(result.getInt(1), result.getLong(2));
+					}
+				}
+			}
+			return sums;
 		}
 	}
 }

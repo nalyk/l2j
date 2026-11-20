@@ -42,6 +42,56 @@ public final class AssetService
 		return new AssetTx(this, op, module, action, subjectRef, priorOutcome(op));
 	}
 
+	/**
+	 * Opens a custody (§4.3 {@code open}): an operation of its own, since a custody must exist before other operations
+	 * name it. A retry of the same id returns the custody it opened.
+	 */
+	public int open(OpId op, Custody.Kind kind, String ownerModule, long ownerRef) throws SQLException, AssetAbort
+	{
+		final int[] opened = { 0 };
+		try (AssetTx tx = begin(op, ownerModule, "OPEN", ownerRef))
+		{
+			tx.step(execution ->
+			{
+				if (ModuleState.isFrozen(execution.connection(), ownerModule))
+				{
+					throw new AssetAbort(AssetAbort.Reason.MODULE_FROZEN, ownerModule + " is frozen");
+				}
+				try (PreparedStatement insert = execution.connection().prepareStatement("INSERT INTO lc_custody (kind, owner_module, owner_ref, state, version, created_op, created_at) VALUES (?, ?, ?, 'OPEN', 0, ?, NOW(3))", java.sql.Statement.RETURN_GENERATED_KEYS))
+				{
+					insert.setString(1, kind.name());
+					insert.setString(2, ownerModule);
+					insert.setLong(3, ownerRef);
+					insert.setBytes(4, op.bytes());
+					insert.executeUpdate();
+					try (ResultSet keys = insert.getGeneratedKeys())
+					{
+						keys.next();
+						opened[0] = keys.getInt(1);
+					}
+				}
+				execution.facts().add(AssetFact.of("CustodyOpened", opened[0], "custody", opened[0], "kind", kind.name(), "owner_module", ownerModule, "owner_ref", ownerRef));
+			});
+			if (tx.commit() == Outcome.COMMITTED)
+			{
+				return opened[0];
+			}
+		}
+		try (Connection connection = _db.open();
+			PreparedStatement read = connection.prepareStatement("SELECT custody_id FROM lc_custody WHERE created_op = ?"))
+		{
+			read.setBytes(1, op.bytes());
+			try (ResultSet result = read.executeQuery())
+			{
+				if (!result.next())
+				{
+					throw new IllegalStateException(op + " committed but opened no custody");
+				}
+				return result.getInt(1);
+			}
+		}
+	}
+
 	private Outcome priorOutcome(OpId op) throws SQLException
 	{
 		try (Connection connection = _db.open();

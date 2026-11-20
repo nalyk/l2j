@@ -157,5 +157,6 @@ Unde găsești ce (documentația tehnică e în engleză):
 E un proiect de fani. Lineage II e marcă înregistrată NCSoft. Proiectul nu e afiliat cu NCSoft și nici susținut de
 compania asta, iar repository-ul nu conține clientul jocului.
 
-Codul care vine din L2J Mobius își păstrează licența, notița MIT din capul fiecărui fișier. Pentru codul propriu Living
-Chronicle nu s-a ales încă o licență.
+Totul aici e sub licența MIT ([LICENSE](LICENSE)): codul care vine din L2J Mobius, care era deja MIT, și codul și
+documentele proprii Living Chronicle. Poți să-l citești, să înveți din el, să-i faci fork și să construiești pe el, cu
+condiția să păstrezi notița de copyright.

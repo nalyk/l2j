@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 11: §4.5's reconcile choice, found while implementing N4 part 1, under review; revision 10 was signed off; record in §12)
+- Status: reviewed (revision 11; signed off with one fix by Codex in amendment round 8; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -457,7 +457,8 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | ASSET-INV13 | a pending mark exists only while its operation is between `MARKED` and `DONE` | at startup (none may survive recovery); at every census |
 
 A violation of INV01-INV05, INV07, INV08, INV10-INV13 writes `Asset.InvariantViolated`, freezes the owning module through
-`lc_module_state` (the Asset Service itself when the custody's owner cannot be told), freezes the custody, and keeps the
+`lc_module_state` (the Asset Service itself when the custody's owner cannot be told), freezes the custody if it is
+`OPEN` (a `CLOSED` custody stays `CLOSED`, since §3.1 makes it terminal: its module alone freezes), and keeps the
 evidence (04 §8, 02 §4). Repair is a corrective admin operation (§4.5), never automatic. INV06 raises
 `Asset.ConservationBroken` and alarms (§2.6).
 
@@ -520,7 +521,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
 | ASSET-R14 | Living Chronicle MUST NOT create an asset except audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` exactly as the retail craft or kill computed them at the seam, `SINK_RECYCLE` within its recorded share, and the valueless `PACT_PARCHMENT` and `LEDGER_SEAL`. | AT-ASSET-14 |
-| ASSET-R15 | A violated invariant MUST freeze the owning module and the custody, write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
+| ASSET-R15 | A violated invariant MUST freeze the owning module and, if it is `OPEN`, the custody (a `CLOSED` custody stays `CLOSED`), write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
 | ASSET-R16 | Nothing credited MUST be visible to anyone before the operation committed. | AT-ASSET-16 |
 | ASSET-R17 | An ambiguous commit MUST be resolved by a locking `OpId` read, and MUST NOT be aborted on a timeout. | AT-ASSET-21 |
 | ASSET-R18 | After a GameServer restart, no login MUST be accepted before recovery completes; INV11 and INV12 MUST hold for every custody and delivery. | AT-ASSET-25 |
@@ -552,7 +553,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row and a stale row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
 | AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except audited corrections, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), `SINK_RECYCLE` at most its share of the previous day's recorded teleport-fee sink and once per pool and day, and `PACT_PARCHMENT` and `LEDGER_SEAL` of their items only; an `exchange` refused whole when either side fails |
-| AT-ASSET-15 | integration | a forged `ESCROW` row under a closed custody: module and custody frozen, evidence written, rows untouched; only a correction commits |
+| AT-ASSET-15 | integration | a forged `ESCROW` row under an open custody: module and custody frozen; under a closed custody: module frozen, the custody still `CLOSED`; evidence written, rows untouched; only a correction (taking the rows out, §4.5) commits |
 | AT-ASSET-16 | integration | no mail, client packet or cache update shows a credit before `COMMITTED` |
 | AT-ASSET-17 | unit | startup with `LazyItemsUpdate = True` refused |
 | AT-ASSET-18 | unit | each ineligible kind of item (§4.4) refused |
@@ -654,6 +655,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   correction may take rows out of a `CLOSED` custody or out of no custody, to `SINK` or into a live custody, the custody
   staying `CLOSED`; `unfreeze` checks every freezing invariant over all the module's custodies. Part 1 of N4 implements
   the INV02/03/04/05/11 checks; the rest arrive with the Mobius holders and service mail.
+- Amendment round 8 (Codex): revision 11 **SIGN-OFF WITH FIXES**: §6, ASSET-R15 and AT-ASSET-15 still froze a `CLOSED`
+  custody, which §3.1 makes terminal (24). Fixed: an `OPEN` custody freezes, a `CLOSED` one stays `CLOSED` and only its
+  module freezes, as the implementation already does (CustodyCheckTest pins it).
 - Amendment round 3 (Codex): revision 10 **SIGN-OFF**.
 - Amendment round 2 (Codex), NO SIGN-OFF: `move` restricted to one owner, though its callers cross modules. Fixed: two
   owners allowed, both predicates checked, refused if either is frozen.

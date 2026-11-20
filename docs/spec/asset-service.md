@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 12: service mail's exact fields, expiry and patch points, from planning N4 part 3, under review; revision 11 was signed off; record in §12)
+- Status: reviewed (revision 12; signed off by Codex in amendment round 9; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -666,7 +666,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 - Amendment round 8 (Codex): revision 11 **SIGN-OFF WITH FIXES**: §6, ASSET-R15 and AT-ASSET-15 still froze a `CLOSED`
   custody, which §3.1 makes terminal (24). Fixed: an `OPEN` custody freezes, a `CLOSED` one stays `CLOSED` and only its
   module freezes, as the implementation already does (CustodyCheckTest pins it).
-- Revision 12 (amendment, under review): planning N4 part 3 against the code found that the client shows a mail's expiry
+- Amendment round 9 (Codex): revision 12 **SIGN-OFF**, with the expiry rule, the claim hook and the guard placement
+  each verified against the upstream code.
+- Revision 12 (amendment): planning N4 part 3 against the code found that the client shows a mail's expiry
   as `int` epoch seconds, so "beyond any server lifetime" cannot be sent; §2.1 now fixes service mail's fields
   (`sendBySystem` = 1, `expiration` = the latest instant the client can show) and makes the deletion task never schedule
   it; §11.19, §11.21 and §11.23 name the patch points (`MailManager.adopt`, `markToDeleteChar` with

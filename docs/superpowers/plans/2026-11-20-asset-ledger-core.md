@@ -33,7 +33,7 @@ without a game server.
 - Every transaction sets `innodb_lock_wait_timeout` from `LockWaitMillis`; a deadlock (SQLState `40001`, MariaDB 1213) or lock-wait timeout (1205) is retried up to `DeadlockRetries` times.
 - `UncertainCommitLookupMillis` default 5000 (§8); after it the module is frozen, never aborted.
 - Custody ids are `INT`s; Adena (item id 57) is one stackable row per custody (§2.3).
-- New files carry the project's license header and tab indentation, as `GameClock.java` does.
+- New files follow `GameClock.java`'s style: tab indentation, Allman braces, `_field` names, no license header.
 - Tests live under `test/java/org/l2jmobius/gameserver/livingchronicle/{asset,journal}/` and run with `./build.sh test -Dtest.only=<Class>`.
 
 ## Review Focus
@@ -111,7 +111,8 @@ without a game server.
   - `AssetService(Connections db, ObjectIds ids, OutboxStager stager, AssetConfig config, Map<String, HoldingPolicy> owners)`
   - `AssetTx begin(OpId op, String module, String action, long subjectRef)` — if `lc_asset_op` holds `op` → a tx whose `commit()` returns `Outcome.ALREADY_COMMITTED` and does nothing; if it holds `op.refund()` → `Outcome.ALREADY_REFUNDED`.
   - `enum Outcome { COMMITTED, ALREADY_COMMITTED, ALREADY_REFUNDED }`
-  - `final class AssetAbort extends Exception` with `enum Reason { INSUFFICIENT, STALE_VERSION, ALREADY_SETTLED, CUSTODY_NOT_OPEN, NOT_ALLOWED_TO_HOLD, MODULE_FROZEN, UNBALANCED }` and `Reason reason()`.
+  - `final class AssetAbort extends Exception` with `enum Reason { INSUFFICIENT, STALE_VERSION, ALREADY_SETTLED, CUSTODY_NOT_OPEN, NOT_ALLOWED_TO_HOLD, MODULE_FROZEN, UNBALANCED, NOT_COMMITTED, CONTENTION, ERROR }` and `Reason reason()`; `final class UncertainCommitException extends RuntimeException` (the module is frozen; never an abort).
+  - **Execution model (decided in Task 5):** nothing touches the database before `commit()`; operations are declared as steps, and `commit()` runs them all on one connection after locking every custody they name in id order, so a deadlock victim or lock-wait timeout replays the whole transaction (up to `DeadlockRetries`).
   - `AssetTx implements AutoCloseable`: `expectVersion(String table, String idColumn, long id, int version)`, `settlementKey(String scope, String key)`, `fact(DurableFact f)`, `Outcome commit() throws AssetAbort`; `close()` rolls back anything uncommitted.
   - `record Leg(int leg, AccountKind kind, long accountId, String code, int itemId, Integer objectId, Long lifecycleId, long qty, Direction direction)` with nested enums matching the DDL.
 - Behaviour pinned by the spec: statements in the row-lock order; before `COMMIT` check INV01 per item id over the collected legs (`UNBALANCED` otherwise — a bug, not a user error); `lc_asset_op` inserted last before the stream heads; a duplicate `lc_settlement_key` (SQLState `23000`) → `ALREADY_SETTLED`; `expectVersion` does `SELECT version … FOR UPDATE` then `UPDATE … SET version = version + 1`.
@@ -128,7 +129,7 @@ without a game server.
 - Test: `.../asset/CustodyOperationsTest.java`
 
 **Interfaces:**
-- Produces on `AssetTx`: `int open(Custody.Kind kind, String ownerModule, long ownerRef)`; `void move(int from, int to, List<Asset> assets)`; `void close(int custody)`.
+- Produces: `int AssetService.open(OpId op, Custody.Kind kind, String ownerModule, long ownerRef)` — an operation of its own (a custody must exist before other operations name it); idempotent: a retry returns the custody whose `created_op` is `op`. On `AssetTx`: `void move(int from, int to, List<Asset> assets)`; `void close(int custody)`.
 - Rules pinned: custody rows locked `FOR UPDATE` in custody-id order; both must be `OPEN` (`CUSTODY_NOT_OPEN`), neither owner frozen (`MODULE_FROZEN`), destination owner's `allowsHolding` true (`NOT_ALLOWED_TO_HOLD`); a whole object moves by `UPDATE items SET loc_data = ? WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW' AND loc_data = ?` (affected rows must be 1); an amount of a stackable item decreases the source's row (`INSUFFICIENT` if it would go below 0; a row reaching 0 is deleted) and increases the destination's row of that item id, inserting one under `ids.next()` if absent; each custody's version + 1; postings DEBIT `CUSTODY from` / CREDIT `CUSTODY to`; `close` refuses a custody holding any `ESCROW` row; INV11 checked for every touched custody before `COMMIT` (Σ postings = Σ rows; `UNBALANCED` + freeze if not).
 
 - [ ] **Step 1: Failing tests:** `openWritesAnOpenCustodyAndItsFact`; `moveOfAWholeObjectChangesOnlyItsCustody`; `moveOfAdenaSplitsAndMergesRows`; `aMoveBeyondTheBalanceAbortsAndWritesNothing`; `twoMovesOutOfOneCustodyNeverOverdraw` (two threads, each moving 60 of 100 Adena: exactly one commits); `closeRefusesANonEmptyCustodyAndClosesAnEmptyOne`; `aClosedCustodyAcceptsNothing`; `postingsBalanceAndMatchRows` (query INV01 and INV11 after a run of random moves).

@@ -392,14 +392,19 @@ An item may enter a custody only if, for the holder it leaves:
 ### 4.5 Corrective admin operations
 
 `correct` moves assets out of or into a custody, or to a character by system mail, to repair a violation. It requires the violation's
-fact id and a reason, posts `ADMIN_CORRECTION` legs, is allowed on a frozen custody and a frozen module (never a `CLOSED`
-one), and writes `Asset.AdminCorrection` with the custody's holdings before and after. Moving assets changes a custody's
+fact id and a reason, posts `ADMIN_CORRECTION` legs, is allowed on a frozen custody and a frozen module, and writes `Asset.AdminCorrection` with the custody's holdings before and after. Moving assets changes a custody's
 rows and postings alike, so it cannot repair an INV11 disagreement; that takes an explicit decision, the correction's
 **reconcile** choice: `NONE`, or `RECOGNIZE_ROWS`, which accepts the rows as found and posts, per item id, an
 `ADMIN_CORRECTION` leg of the difference (from `SOURCE` into the custody where rows exceed postings, from the custody into
 `SINK` where postings exceed rows), rows untouched. Restoring rows to what the postings said is recognising them and then
-moving the excess out, so the evidence of what was found stays in the ledger. `unfreeze(module)`, with the admin and a reason, returns a module to `RUNNING` only when every
-invariant over its custodies holds (INV03, INV04, INV05, INV11), and reopens its `FROZEN` custodies, each with
+moving the excess out, so the evidence of what was found stays in the ledger. **Rows that should not exist**: a
+`CLOSED` custody holding rows (INV04) or rows under no custody (INV03, the custody id unknown) cannot be frozen or
+reopened (`CLOSED` is terminal); a correction may only take such rows **out**, each whole object or amount either to `SINK`
+(`ADMIN_CORRECTION`) or into an `OPEN` or `FROZEN` custody that may hold it, with the same legs and fact; the closed
+custody stays `CLOSED`, and nothing may be put into it. `unfreeze(module)`, with the admin and a reason, returns a module to `RUNNING` only when every
+invariant of §6 that can freeze it holds over all its custodies, `CLOSED` ones included (INV02, INV03, INV04, INV05, INV07,
+INV08, INV10, INV11, INV12, INV13, each where it applies to the module's custodies and deliveries; for the `ASSET` module also
+no row under no custody), the violation that froze it among them, and reopens its `FROZEN` custodies, each with
 `Asset.AdminCorrection`; otherwise it refuses, naming the first custody still in violation.
 
 ## 5. Facts
@@ -644,6 +649,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens
   review round 1). No other rule changed.
+- Amendment round 7 (Codex), NO SIGN-OFF: correcting a `CLOSED` custody was forbidden, leaving INV04 and orphan rows with
+  no repair (24); `unfreeze` checked four invariants, not every one that can freeze (25). Fixed (still revision 11): a
+  correction may take rows out of a `CLOSED` custody or out of no custody, to `SINK` or into a live custody, the custody
+  staying `CLOSED`; `unfreeze` checks every freezing invariant over all the module's custodies. Part 1 of N4 implements
+  the INV02/03/04/05/11 checks; the rest arrive with the Mobius holders and service mail.
 - Amendment round 3 (Codex): revision 10 **SIGN-OFF**.
 - Amendment round 2 (Codex), NO SIGN-OFF: `move` restricted to one owner, though its callers cross modules. Fixed: two
   owners allowed, both predicates checked, refused if either is frozen.

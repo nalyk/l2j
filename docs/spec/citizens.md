@@ -596,6 +596,9 @@ printing a decision's inputs, constraints, snapshot and choice, and replaying it
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF; **parked**: the report is kept verbatim in `docs/spec/reviews/citizens-round-2.md` and is
+  answered when N9-N10 (protocol library, runner, citizens) is implemented, against the code it will have. Revising further ahead of that work would grow
+  the spec without testing it.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 15 findings (12 HIGH, 3 MEDIUM). Revision 2:
   1. *Telemetry fed decisions*: fixed. Extraction no longer reads `ar_yield` in the runner; a governor outside the
      runner computes caps from telemetry lagged a day, imported as `cit_governor_cap`; a cap only masks choices, through

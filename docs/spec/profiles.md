@@ -1,6 +1,6 @@
 # SPEC-PRO — Profiles and Mobius custom modules
 
-- Status: draft (revision 7, answering six adversarial review rounds; record in §12)
+- Status: reviewed (revision 8; signed off with one fix by Codex, a different model family, in round 7; record in §12)
 - Blueprint: 02 §8 (configuration is a liability; the canonical ruleset is the default; every key has an owner, range,
   default and test), 03 §8 (Mobius H5 custom modules: canonical policy), 10 §5.4 and §9 (citizens' own bounds), 11 §3
   (the `truth` profile), 20 §1.
@@ -113,7 +113,8 @@ Before the world loads, the profile check refuses to start, naming every differe
    its spec says.
 5. in `sim`, `hobby` and `live`, the geodata directory holds every region of `geodata/geodata.lock`'s required-region
    manifest with its pinned hash (platform.md §4.4); `truth` and `dev` may run without geodata, as the lock does today.
-6. in `sim`, every `FloodProtector*LogFlooding` key of `Server.ini` is `True` (logging only: no flood limit or punishment
+6. in `sim`, every `FloodProtector*LogFlooding` key of `FloodProtector.ini` (loaded by
+   `gameserver/config/FloodProtectorConfig.java:33`) is `True` (logging only: no flood limit or punishment
    changes), the server-side oracle of the citizens' flood spacing (citizens.md AT-CIT-06).
 
 The test harness's `TestServer` runs `truth` only and refuses any other profile (retail-truth.md AT-RT-05), so a lock or
@@ -280,6 +281,9 @@ per-principal Olympiad and event limits.
 
 ## 12. Review record
 
+- Round 7 (Codex), SIGN-OFF WITH FIXES: rule 6 named `Server.ini` for the flood-logging keys, which live in
+  `FloodProtector.ini` (21). Fixed (revision 8). The geodata patch and `TestServer`'s refusal stay implementation
+  obligations (22).
 - Round 6 (Codex), NO SIGN-OFF: 17 of 20 earlier findings fixed; open: (16) a reload after a first registration read a
   newly written identity, so the snapshot differed; (17) a read-only tree cannot let upstream create `hexid.txt`, and a
   placeholder stops it saving; (20) `TruthProfile.apply` writes only the 44 custom files, so Living Chronicle keys kept

@@ -358,6 +358,9 @@ None.
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF; **parked**: the report is kept verbatim in `docs/spec/reviews/platform-round-2.md` and is
+  answered when N13 (deployment stack) is implemented, against the code it will have. Revising further ahead of that work would grow
+  the spec without testing it.
 - Revision 2 addition (from the Citizens review, round 1): the `governor` admin tool and its read-only `lc_governor`
   user; the runner's user confined to its own database.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 14 findings. Revision 2 answers each:

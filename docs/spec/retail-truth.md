@@ -393,6 +393,9 @@ The Truth Report page on the website. Developers: `./build.sh` runs the lock, th
 
 ## 12. Review record
 
+- Round 2 (Codex), NO SIGN-OFF; **parked**: the report is kept verbatim in `docs/spec/reviews/retail-truth-round-2.md` and is
+  answered when N11h (Retail Truth suites and Truth Report) is implemented, against the code it will have. Revising further ahead of that work would grow
+  the spec without testing it.
 - Round 1 (Codex, a different model family), NO SIGN-OFF, 15 findings. Revision 2:
   1. Evidence support asserted without an oracle: **fixed**. Evidence entries carry ids; each `expected` item names its
      entries and a derivation; rules E1–E6 (property match, no class 5 support, class 1 only for `client.` properties,

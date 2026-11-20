@@ -178,6 +178,9 @@ class ChronicleSchemaTest
 			statement.execute("INSERT INTO lc_chr_letter (letter_id, author_char, text, submitted_at) VALUES (1, 268477000, 'The roads of Dion are safe again.', NOW(3))");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_chr_letter SET state = 'PUBLISHED', moderator = 'gm', decided_at = NOW(3) WHERE letter_id = 1"), "published without approval");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_chr_letter SET state = 'REJECTED', moderator = 'gm', decided_at = NOW(3) WHERE letter_id = 1"), "rejected without a reason");
+			// A letter is an authoritative replay input: its identity and submission time never change, even with a valid transition.
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_chr_letter SET state = 'APPROVED', moderator = 'gm', decided_at = NOW(3), submitted_at = NOW(3) - INTERVAL 1 DAY WHERE letter_id = 1"), "a moved submission time");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_chr_letter SET state = 'APPROVED', moderator = 'gm', decided_at = NOW(3), letter_id = 77 WHERE letter_id = 1"), "a changed letter id");
 			statement.execute("UPDATE lc_chr_letter SET state = 'APPROVED', moderator = 'gm', decided_at = NOW(3) WHERE letter_id = 1");
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_chr_letter SET text = 'changed' WHERE letter_id = 1"), "editing an approved letter");
 			statement.execute("UPDATE lc_chr_letter SET state = 'PUBLISHED' WHERE letter_id = 1");

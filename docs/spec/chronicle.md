@@ -1,6 +1,6 @@
 # SPEC-CHR — Chronicle of Aden
 
-- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
+- Status: reviewed (revision 7; signed off with two fixes by Codex, a different model family, in round 6; record in §12)
 - Blueprint: 17 (Chronicle of Aden); 01 §2.6 (deterministic engine, optional narration); 02 §7 (three processes; the
   narrator an external local service), §6 (budgets); 04 §4 (publication DTOs, a separate database user), §8 (narrator
   down); 10 §8 (Genesis: the Chronicle runs from day 0); 12 §9 (Aden Remembers decides what became history); 14 §7
@@ -316,7 +316,7 @@ written with the day's `composed_at` in one transaction); a name reference by (r
 Replay writes no effect, so a replay rebuilds Chronicle's private derived state (pending rows, sagas, battles, days) and
 its effect intents, and compares those; the public record keeps its original ids and times. **Letters are inputs, not
 derived state**: an `lc_chr_letter` row is the authoritative record of a submission (author, text, submission time,
-immutable by trigger, kept for the character's life and withdrawn with it, §3.4) and its decision is a moderator's input,
+its id, author, text and submission time immutable by trigger, kept for the character's life and withdrawn with it, §3.4) and its decision is a moderator's input,
 recorded on the row and in `Chronicle.LetterDecided`; a replay reads the retained letter rows, as it reads any input, and
 neither rebuilds nor compares them. The facts below carry what the private state needs, and the decisions that depend on what
 was committed when (a composition's membership, a battle's samples) are recorded in them rather than recomputed:
@@ -419,7 +419,7 @@ was missed, idempotent).
 
 ## 11. Upstream constraints
 
-1. **No complete owner-change feed, and no Territory War or Seven Signs events**: only one owner event, `ON_CASTLE_SIEGE_OWNER_CHANGE`, dispatched asynchronously at a castle siege's mid-victory (`mechanics/events/EventType.java:128`, `mechanics/siege/Siege.java:469`); nothing for fortresses, clan halls, admin changes, a castle lost with its clan, or the siege's final outcome, so no durable ownership feed (aden-remembers.md §4.1). → Aden Remembers' seams feed history.
+1. **No complete owner-change feed, and no Territory War or Seven Signs events**: only one owner event, `ON_CASTLE_SIEGE_OWNER_CHANGE`, dispatched asynchronously at a castle siege's mid-victory (`mechanics/events/EventType.java:128`, `mechanics/siege/Siege.java:469`); and `ON_CASTLE_SIEGE_FINISH` (`Siege.java:339`), also asynchronous, whose payload is the live siege and castle, mutable state rather than a frozen ownership outcome; nothing for fortresses, clan halls, admin changes or a castle lost with its clan, so no durable ownership feed (aden-remembers.md §4.1). → Aden Remembers' seams feed history.
 2. **The daily reset runs once at startup whatever was missed, its marker saved apart** (`DailyResetManager.java:75-88`,
    `:99`, `:129-131`). → Chronicle's own day clock with catch-up.
 3. **`Item.setOwnerId(int)` carries no process and also marks ground-loot privileges** (`Item.java:299-301`, `:336`;
@@ -453,6 +453,9 @@ was missed, idempotent).
   unique key it really has (application id, day, row and character) and AT-CHR-05 retries each; ChronicleSchemaTest
   inserts a current lower-id fact then an old higher-id one; §11.1 names the one upstream owner event and its gaps
   (with the same correction in aden-remembers.md §11.1).
+- Round 6 (Codex), SIGN-OFF WITH FIXES: the letter trigger froze text and author only (38); §11.1 overstated the absence
+  of a final-outcome event (39). Fixed: V016's trigger also freezes `letter_id` and `submitted_at`, with rejection
+  assertions in ChronicleSchemaTest (red first); §11.1 names `ON_CASTLE_SIEGE_FINISH` and its limit.
 - Round 4 (Codex), NO SIGN-OFF: replay could not rebuild publication rows (their ids and times are commit-dependent); the
   delay counted from the newest id, not the newest occurrence. Revision 5: publication rows are effects with application
   ids, never regenerated, and replay rebuilds private state and intents only; the delay counts from every source fact.

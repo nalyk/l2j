@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 11; signed off with one fix by Codex in amendment round 8; record in §12)
+- Status: draft (revision 12: service mail's exact fields, expiry and patch points, from planning N4 part 3, under review; revision 11 was signed off; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -51,10 +51,13 @@ mail**, written as rows in the operation's transaction and claimed by the charac
   deletions by item id do reach it (LongTimeEvent.java:557, Hero.java:81): §4.4 keeps those item ids out of custody, and
   §2.7 classifies every such statement. `items.loc_data` is an `INT` (`dist/db_installer/sql/game/items.sql`), so
   custody ids are `INT`s.
-- **Service mail** is a `messages` row with `senderId = -1`, `sendBySystem` nonzero (so it cannot be rejected back to a
-  sender, RequestRejectPostAttachment.java:96), `reqAdena = 0` (never cash on delivery, MailMessage.java:225-227),
-  `hasAttachments = 'true'` and an `expiration` beyond any server lifetime (service mail never expires, so
-  MessageDeletionTaskManager.java:80-110 never touches it). Its life: *sent* (in the operation's transaction) →
+- **Service mail** is a `messages` row with `senderId = -1` (startup cleanup keeps owner -1 `MAIL` attachments only for
+  such a message, DatabaseIdManager.java:68), `sendBySystem` = 1 (`MessageSenderType.NEWS`, nonzero, so it cannot be
+  rejected back to a sender, RequestRejectPostAttachment.java:96), `reqAdena = 0` (never cash on delivery,
+  MailMessage.java:225-227), `hasAttachments = 'true'` and `expiration` = 2 147 483 647 000 ms (2038-01-19 03:14:07 UTC,
+  the latest instant the client can show: the mail lists send it as `int` epoch seconds, MailMessage.java:235-238,
+  ExShowReceivedPostList.java:53). It never expires: the deletion task never schedules a message with that expiration
+  (core patch §11.19), so MessageDeletionTaskManager.java:80-110 never touches it, past 2038 too. Its life: *sent* (in the operation's transaction) →
   *claimed* (by retail mail, which checks room; RequestPostAttachment.java:191-232). The receiver cannot delete it while
   it has attachments (RequestDeleteReceivedPost.java:83), and a character with unclaimed service mail cannot be deleted
   (core patch §11.21). Writing service mail, and writing a pending mark (§2.4), lock the character's `characters` row
@@ -629,18 +632,23 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 19. **Mail.** Expiry of sender -1 mail with the receiver offline destroys the attachments
     (MessageDeletionTaskManager.java:84-104): an upstream defect that service mail avoids by never expiring (§2.1), and
     recorded here for upstream. `MailManager.sendMessage` inserts on its own connection (MailManager.java:157): core patch
-    so that `MailManager` adopts a message the service already committed, idempotently by message id.
+    so that `MailManager` adopts a message the service already committed (`adopt(messageId)`: the row read as `load()`
+    reads it, put in memory if absent, the receiver told if online), idempotently by message id, and so that the deletion
+    task never schedules a service mail's expiration.
 20. **Retired items**: `Item.updateDatabase` does nothing for a retired item, and Mobius's item operations (container add,
     transfer, destroy, drop, equip, use) refuse one (core patch). → §3.3.
 21. **Character deletion** removes the character's own items (GameClient.java:439-451) and leaves owner -1 rows, so
     service mail to a deleted character could never be claimed. A deletion either marks the character (`deletetime`)
-    for later, or, with `DeleteDays = 0`, deletes it at once (GameClient.java:293) on other connections. Core patch: both
-    paths first run the deletion guard (§2.1), which locks the row, refuses while unclaimed service mail or a pending mark
-    exists, and marks the character, committed before any deleting statement; service mail and pending marks are written
-    under the same row lock. → ASSET-R27.
-23. **Claims of service mail** clear the message's attachments (RequestPostAttachment.java:191-232) and say nothing to the
-    service. Core patch: after clearing a service message's attachments, the claim sets `claimed_at` on its delivery; the
-    census repairs a claim whose patch step did not run.
+    for later, executed by CharSelectionInfo.java:266, or, with `DeleteDays = 0`, deletes it at once
+    (GameClient.java:293) on other connections. Core patch: `markToDeleteChar` runs the deletion guard (§2.1) before
+    either path, which locks the row, refuses while unclaimed service mail or a pending mark exists, and marks the
+    character, committed before any deleting statement; the later executor deletes only characters the guard marked.
+    A refusal answers the client with `CharDeleteFail(REASON_DELETION_FAILED)`. Service mail and pending marks are
+    written under the same row lock. → ASSET-R27.
+23. **Claims of service mail** clear the message's attachments (RequestPostAttachment.java:191-232, through
+    `MailMessage.removeAttachments`) and say nothing to the service. Core patch: when `removeAttachments` clears a
+    sender -1 message's attachments, it sets `claimed_at` on the message's delivery, if it has one; the census repairs a
+    claim whose patch step did not run.
 22. **Login** restores a character's items from rows (Player.java:7358-7360) with plain reads that do not wait for an
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
 
@@ -658,6 +666,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 - Amendment round 8 (Codex): revision 11 **SIGN-OFF WITH FIXES**: §6, ASSET-R15 and AT-ASSET-15 still froze a `CLOSED`
   custody, which §3.1 makes terminal (24). Fixed: an `OPEN` custody freezes, a `CLOSED` one stays `CLOSED` and only its
   module freezes, as the implementation already does (CustodyCheckTest pins it).
+- Revision 12 (amendment, under review): planning N4 part 3 against the code found that the client shows a mail's expiry
+  as `int` epoch seconds, so "beyond any server lifetime" cannot be sent; §2.1 now fixes service mail's fields
+  (`sendBySystem` = 1, `expiration` = the latest instant the client can show) and makes the deletion task never schedule
+  it; §11.19, §11.21 and §11.23 name the patch points (`MailManager.adopt`, `markToDeleteChar` with
+  `CharDeleteFail(REASON_DELETION_FAILED)`, `MailMessage.removeAttachments`). No rule changed.
 - Amendment round 3 (Codex): revision 10 **SIGN-OFF**.
 - Amendment round 2 (Codex), NO SIGN-OFF: `move` restricted to one owner, though its callers cross modules. Fixed: two
   owners allowed, both predicates checked, refused if either is frozen.

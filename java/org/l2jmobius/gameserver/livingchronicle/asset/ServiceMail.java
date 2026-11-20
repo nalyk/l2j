@@ -34,6 +34,12 @@ public final class ServiceMail
 	{
 	}
 
+	/** @return whether Living Chronicle runs (never in {@code truth}) */
+	public static boolean isActive()
+	{
+		return _active;
+	}
+
 	/** Living Chronicle runs: claims of service mail are recorded from now on. */
 	public static void activate()
 	{

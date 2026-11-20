@@ -252,3 +252,20 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: a service mail whose attachments retail has cleared has `claimed_at` set (or the census sets it).
 - Proof: `ServiceMailClaimTest.claimingTheAttachmentsSetsClaimedAt` (the claim as RequestPostAttachment performs it),
   `anotherSystemMailHasNoDeliveryAndNothingChanges`.
+
+## CP-0016 The deletion guard
+
+- Files: `java/org/l2jmobius/gameserver/network/GameClient.java`, `java/org/l2jmobius/gameserver/network/clientpackets/CharacterDelete.java`
+- Reason: deleting a character removes its own items (GameClient.java:439-455) and leaves owner -1 rows, so service mail
+  owed to a deleted character could never be claimed, and a character whose items an operation has taken but not yet
+  committed could be deleted mid-operation (asset-service.md §2.1, §11.21, ASSET-R27).
+- Change: `markToDeleteChar` marks the character through `DeletionGuard.markForDeletion`, which in one transaction locks
+  the characters row, refuses while it has unclaimed service mail or a pending mark, and otherwise sets `deletetime`;
+  with `DeleteDays = 0` the immediate deletion follows the guard's mark. A refusal answers 3, which `CharacterDelete`
+  sends as `CharDeleteFail(REASON_DELETION_FAILED)`. When Living Chronicle is not running the guard marks exactly as
+  retail did. The deletion time is now computed in `long`: upstream's `DELETE_DAYS * 86400000` overflowed `int` for 25
+  days or more.
+- Invariant: a character marked or deleted has no unclaimed service mail and no pending mark; service mail is never
+  written to a marked character (the release refuses it under the same row lock).
+- Proof: `DeletionGuardTest.aCharacterWithUnclaimedServiceMailIsNotMarked` (and marked once the mail is claimed),
+  `aCharacterWithAPendingMarkIsNotMarked`, `aMarkedCharacterReceivesNoServiceMail`; on upstream both refusals failed.

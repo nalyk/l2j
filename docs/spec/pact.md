@@ -1,6 +1,6 @@
 # SPEC-PACT — PACT and the Notarius
 
-- Status: draft (revision 7: amendments for aden-remembers.md and chronicle.md, under review; revision 5 was signed off; record in §12)
+- Status: reviewed (revision 7; its amendments for aden-remembers.md and chronicle.md signed off by Codex in amendment round 7; record in §12)
 - Blueprint: 15 (PACT and the Notarius); 03 §4.2-§4.4 (loot routing, crafting boundary, new events); 04 §3 (Asset
   Service), §5 (Codex), §7 (keyed randomness); 12 §6.2 (Crown Law Market Charters), §8 (Caravan Escort); 17
   (publication); consensus §4.
@@ -463,6 +463,7 @@ raid. Admin: `lc why pact <id>`, `lc pact review|resolve <id> <reason>`.
 
 ## 12. Review record
 
+- Amendment round 7 (Codex): revision 7 **SIGN-OFF** (the institutional fee payer and its rebate; AT-PACT-07's Guild Order case).
 - Amendment round 6 (Codex), NO SIGN-OFF: fact-journal.md rev 9, asset-service.md rev 10 and black-ledger.md rev 7 signed
   off; PACT's charter rebate had no recipient when the fee payer is an institution (Guild Orders, Caravan Escorts), which
   never receives service mail. Fixed (revision 7): an institution pays from its `institution_pool` and its rebate is moved

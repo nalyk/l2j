@@ -1006,6 +1006,46 @@ public class Castle extends AbstractResidence
 	}
 	
 	/**
+	 * Takes {@code amount} from the treasury in memory only, if it holds that much (CP-0017); the caller holds
+	 * {@link #treasuryLock()} and writes the row in its own transaction (asset-service.md §3.3).
+	 * @return whether it was taken
+	 */
+	public boolean tryDebitTreasury(long amount)
+	{
+		long old;
+		do
+		{
+			old = _treasury;
+			if (old < amount)
+			{
+				return false;
+			}
+		}
+		while (!TREASURY.compareAndSet(this, old, old - amount));
+		return true;
+	}
+	
+	/**
+	 * Adds {@code amount} to the treasury in memory only, refusing (never clamping) a credit past {@code MAX_ADENA}
+	 * (CP-0017, asset-service.md §4.2 rule 4); the caller holds {@link #treasuryLock()} and has committed the row.
+	 * @return whether it was added
+	 */
+	public boolean creditTreasuryInMemory(long amount)
+	{
+		long old;
+		do
+		{
+			old = _treasury;
+			if ((old + amount) > Inventory.MAX_ADENA)
+			{
+				return false;
+			}
+		}
+		while (!TREASURY.compareAndSet(this, old, old + amount));
+		return true;
+	}
+	
+	/**
 	 * @return the lock under which the treasury's row is written (CP-0012); the Asset Service holds it while it debits or
 	 *         credits the treasury in its own transaction (asset-service.md §3.3)
 	 */

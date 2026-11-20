@@ -269,3 +269,18 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   written to a marked character (the release refuses it under the same row lock).
 - Proof: `DeletionGuardTest.aCharacterWithUnclaimedServiceMailIsNotMarked` (and marked once the mail is claimed),
   `aCharacterWithAPendingMarkIsNotMarked`, `aMarkedCharacterReceivesNoServiceMail`; on upstream both refusals failed.
+
+## CP-0017 The taking seams
+
+- Files: `java/org/l2jmobius/gameserver/entity/itemcontainer/ItemContainer.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`
+- Reason: the Asset Service takes items out of live containers under Mobius's own locks (asset-service.md §3.3), but
+  Mobius keeps what it needs private: a container's `removeItem` is protected (its overrides unequip and clear the Adena
+  caches, Inventory.java:891, PlayerInventory.java:770), an item's write lock (`_dbLock`, Item.java:167) is private, and a
+  treasury change always writes its row (Castle.java:333-373), where the service writes the row in its own transaction.
+- Change: `ItemContainer.removeForAsset(item)` (the virtual `removeItem`, then `refreshWeight`); `Item.awaitWrites()`
+  (take and release the write lock) and `Item.writeLock()`; `Castle.tryDebitTreasury(amount)` and
+  `creditTreasuryInMemory(amount)`, compare-and-set only, a credit past `MAX_ADENA` refused. Nothing calls them but the
+  Asset Service; Mobius's behaviour is unchanged.
+- Invariant: the service takes items and treasury amounts exactly as Mobius's own code would, without new locks.
+- Proof: `TakingSeamsTest.anItemTakenForAnAssetLeavesItsContainerAsRetailRemovalDoes`,
+  `awaitingWritesWaitsForAWriteInProgress`, `aTreasuryChangesInMemoryOnlyAndRefusesAnOverdrawOrAPassOverTheCap`.

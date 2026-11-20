@@ -547,6 +547,23 @@ public abstract class ItemContainer
 	}
 	
 	/**
+	 * Takes an item out of this container for the Asset Service (CP-0017, asset-service.md §3.3), exactly as Mobius's own
+	 * removal does (an inventory unequips it and clears its Adena caches), then refreshes the weight.
+	 * @param item the item, whose monitor the caller holds
+	 * @return whether it was here and is now taken out
+	 */
+	public boolean removeForAsset(Item item)
+	{
+		final boolean removed = removeItem(item);
+		if (removed)
+		{
+			refreshWeight();
+		}
+		
+		return removed;
+	}
+	
+	/**
 	 * Refresh the weight of equipment loaded
 	 */
 	protected void refreshWeight()

@@ -220,6 +220,11 @@ public abstract class ItemContainer
 	 */
 	public Item addItem(ItemProcessType process, Item item, Player actor, Object reference)
 	{
+		if (item.isRetired())
+		{
+			return null; // CP-0010
+		}
+		
 		Item newItem = item;
 		final Item olditem = getItemByItemId(newItem.getId());
 		
@@ -340,7 +345,7 @@ public abstract class ItemContainer
 		synchronized (sourceitem)
 		{
 			// Check if this item still present in this container.
-			if (getItemByObjectId(objectId) != sourceitem)
+			if ((getItemByObjectId(objectId) != sourceitem) || sourceitem.isRetired())
 			{
 				return null;
 			}
@@ -426,6 +431,11 @@ public abstract class ItemContainer
 	{
 		synchronized (item)
 		{
+			if (item.isRetired())
+			{
+				return null; // CP-0010
+			}
+			
 			// Adjust item quantity
 			if (item.getCount() > count)
 			{

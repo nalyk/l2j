@@ -158,3 +158,22 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: every change to a stack's count is applied exactly once; a debit never empties a stack.
 - Proof: `AtomicCountTest.concurrentChangesLoseNothing` (8 threads × 20 000 increments, exact),
   `tryDecreaseRacingIncreasesLosesNothing`, `tryDecreaseLeavesAtLeastOne`, `retailClampsAreUnchanged`.
+
+## CP-0010 Retired items
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/entity/itemcontainer/ItemContainer.java`, `java/org/l2jmobius/gameserver/entity/itemcontainer/Inventory.java`, `java/org/l2jmobius/gameserver/entity/actor/Player.java`, `java/org/l2jmobius/gameserver/entity/itemcontainer/PlayerInventory.java`
+- Reason: when the Asset Service takes a whole object out of a live container, the item's old row still says where it
+  was until the operation commits, and Mobius may still hold references to the object (a scheduled equip,
+  UseItem.java:350, Player.java:2257-2267; a pending transfer; a lazy save). Any of them acting on it, or writing it,
+  would recreate a second representation of an asset that now belongs to a custody (asset-service.md §3.3, §11.20).
+- Change: `Item.retire()` / `isRetired()`. A retired item is never written (`updateDatabase` returns at once, under its
+  write lock), and is refused by `ItemContainer.addItem(Item)`, `transferItem` (checked under the source's monitor, with
+  the presence check), `destroyItem`, both `Inventory.dropItem` overloads (under the item's monitor),
+  `Inventory.setPaperdollItem` and `Player.useEquippableItem`. Nothing changes for an item that is not retired.
+  `PlayerInventory.transferItem` dereferenced the item `super.transferItem` returns, which upstream already returns as
+  null when the item left the container meanwhile (a NullPointerException in retail on that race); it now checks for
+  null, as its `destroyItem` and `dropItem` siblings already do.
+- Invariant: after `retire()`, no Mobius operation moves, destroys, drops or equips the item, and no Mobius write reaches
+  its row.
+- Proof: `RetiredItemTest.aRetiredItemIsNotTransferred`, `aRetiredItemIsNotDestroyed`, `aRetiredItemIsNotDropped`,
+  `aRetiredItemIsNotAddedToAnotherContainer`, `aRetiredItemIsNotEquipped`, `aRetiredItemIsNeverWritten`.

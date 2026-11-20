@@ -109,6 +109,9 @@ public class Item extends WorldObject
 	/** ID of who dropped the item last, used for knownlist */
 	private int _dropperObjectId = 0;
 	
+	/** Taken by the Asset Service (CP-0010): never written by Mobius again, refused by every Mobius operation. */
+	private volatile boolean _retired;
+	
 	/** Quantity of the item; changed by compare-and-set (CP-0009), so concurrent changes never lose one another. */
 	private volatile long _count;
 	private static final VarHandle COUNT;
@@ -444,6 +447,23 @@ public class Item extends WorldObject
 		
 		_count = count >= -1 ? count : 0;
 		_storedInDb = false;
+	}
+	
+	/**
+	 * Retires this item: the Asset Service has taken it out of its container (asset-service.md §3.3). From now on Mobius
+	 * never writes it ({@link #updateDatabase(boolean)} does nothing) and every container operation and equip refuses it.
+	 */
+	public void retire()
+	{
+		_retired = true;
+	}
+	
+	/**
+	 * @return whether the Asset Service has taken this item (CP-0010)
+	 */
+	public boolean isRetired()
+	{
+		return _retired;
 	}
 	
 	/**
@@ -1522,6 +1542,11 @@ public class Item extends WorldObject
 		
 		try
 		{
+			if (_retired)
+			{
+				return; // CP-0010: the Asset Service's transaction writes this item's row, nothing else does
+			}
+			
 			if (_existsInDb)
 			{
 				if ((_ownerId == 0) || (_loc == ItemLocation.VOID) || (_loc == ItemLocation.REFUND) || ((_count == 0) && (_loc != ItemLocation.LEASE)))

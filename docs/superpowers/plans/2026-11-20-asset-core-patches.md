@@ -93,3 +93,10 @@ take). Test: `TreasuryTest`.
 - [ ] Failing tests: `aCaptureNeverSeesATrackedChangeWithoutItsValue` (a capture under the save lock racing `set`);
   `aRetiredVariablesObjectRefusesWritesAndSaves`.
 - [ ] RED, patch, GREEN, revert-proof, ledger, commit; full gate; merge to `main` after the gate.
+
+## Obligations found while implementing (for part 3)
+
+- `ClanWarehouse.addItem`, `destroyItem` and `transferItem` notify scripts **before** calling `super`, so a refused
+  operation on a retired item still fires its event, and `transferItem` dereferences `getItemByObjectId(objectId)`
+  without a null check (a NullPointerException in retail when the item is gone). Part 3 debits clan warehouses: patch
+  these then, with a clan fixture to prove it.

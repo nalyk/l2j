@@ -2248,8 +2248,8 @@ public class Player extends Playable
 	
 	public void useEquippableItem(Item item, boolean abortAttack)
 	{
-		// Check if the item is null.
-		if (item == null)
+		// Check if the item is null, or taken by the Asset Service (CP-0010).
+		if ((item == null) || item.isRetired())
 		{
 			return;
 		}

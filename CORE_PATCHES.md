@@ -129,3 +129,18 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   another thread could, stays off), `cp0007AGoneNpcPutOnLateDoesNotStay` (a late caller holding a deleted NPC),
   `cp0007AStaleEntryIsDroppedWhenItFallsDue` (an entry left by any race), `cp0007AnNpcWhoseRegionWokeMeanwhileStaysOn`
   (the region waking while the manager drops the entry).
+
+## CP-0008 The escrow location
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/enums/ItemLocation.java`, `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`
+- Reason: the Asset Service keeps escrowed items as ordinary `items` rows (owner -1, `loc = 'ESCROW'`, `loc_data` = the
+  custody; asset-service.md §2.3). Mobius restores a row through `ItemLocation.valueOf` and gives up with a SEVERE log on
+  a location it does not know (Item.java:1538, 1546-1549), and startup cleanup deletes every row whose owner is neither a
+  character nor a clan unless that owner is -1 (DatabaseIdManager.java:67): one corrupted owner id would have destroyed
+  the evidence the custody check needs (§11.4, §11.5).
+- Change: `ESCROW` is added at the end of `ItemLocation` (no ordinal moves; nothing uses them), and cleanup's owner
+  query also keeps every `loc = 'ESCROW'` row whatever its owner. Every other row is cleaned up exactly as before.
+- Invariant: an `ESCROW` row is never deleted by cleanup and never loaded by a container (their restores select by
+  location); it restores as an `Item` in `ESCROW`.
+- Proof: `EscrowLocationTest.anEscrowRowRestoresAsAnItemWithItsLocation`, `cleanupKeepsEscrowRowsWhateverTheirOwner`
+  (and an ordinary orphan still deleted), `noContainerLoadsAnEscrowRow`.

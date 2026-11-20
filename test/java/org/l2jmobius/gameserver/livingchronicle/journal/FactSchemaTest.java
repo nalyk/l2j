@@ -127,9 +127,9 @@ class FactSchemaTest
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_effect_outbox (application_id, projector, fact_id, effect_index, kind, payload, state, created_at) VALUES (UNHEX('03'), 'ledger', 1, 1, 'payout', '{}', 'DONE', NOW(3))"));
 
 			// Fact types have unique names and a positive schema version.
-			statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, family, sensitivity, owner_module) VALUES (1, 'Asset.EscrowFunded', 1, 'DURABLE', 'OUTBOX', 'asset', 1, 'ASSET')");
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, family, sensitivity, owner_module) VALUES (2, 'Asset.EscrowFunded', 1, 'DURABLE', 'OUTBOX', 'asset', 1, 'ASSET')"));
-			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, family, sensitivity, owner_module) VALUES (3, 'Asset.Other', 0, 'DURABLE', 'OUTBOX', 'asset', 1, 'ASSET')"));
+			statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, family, sensitivity, owner_module) VALUES (1, 'Test.UniqueName', 1, 'DURABLE', 'OUTBOX', 'asset', 1, 'ASSET')");
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, family, sensitivity, owner_module) VALUES (2, 'Test.UniqueName', 1, 'DURABLE', 'OUTBOX', 'asset', 1, 'ASSET')"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_fact_type (type, name, schema_ver, durability, delivery, family, sensitivity, owner_module) VALUES (3, 'Test.OtherName', 0, 'DURABLE', 'OUTBOX', 'asset', 1, 'ASSET')"));
 		}
 	}
 

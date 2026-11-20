@@ -81,6 +81,8 @@ class CustodyCheckTest
 		final List<String> violations = violationsOf(_check.run(), custody);
 		assertEquals(1, violations.size());
 		assertTrue(violations.get(0).contains("INV04"), violations.get(0));
+		assertTrue(_f.frozen("CLOSER"), "the owner module freezes");
+		assertEquals("CLOSED", _f.text("SELECT state FROM lc_custody WHERE custody_id = " + custody), "a closed custody stays closed (asset-service.md §6, ASSET-R15)");
 	}
 
 	@Test

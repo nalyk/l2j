@@ -15,7 +15,12 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
+import org.l2jmobius.gameserver.entity.World;
+import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
 import org.l2jmobius.gameserver.livingchronicle.journal.DurableFact;
+import org.l2jmobius.gameserver.mechanics.variables.ItemVariables;
 
 /**
  * One asset operation (docs/spec/asset-service.md §3.2, §4.1, §4.2). The caller declares what the operation does; nothing
@@ -55,6 +60,16 @@ public final class AssetTx implements AutoCloseable
 		}
 	}
 
+	/** A debit from a Mobius holder into a custody (§4.3 {@code fund}). */
+	private record Debit(int custody, Holder holder, List<Asset> assets)
+	{
+	}
+
+	/** A whole object taken in memory (§3.3 step 1): what the transaction writes and a refund returns. */
+	private record Taken(Debit debit, Item item, Map<String, String> variables)
+	{
+	}
+
 	private record Version(String table, String idColumn, long id, int version)
 	{
 	}
@@ -73,6 +88,10 @@ public final class AssetTx implements AutoCloseable
 	private final TreeSet<Integer> _custodies = new TreeSet<>();
 	/** Characters whose rows the operation locks first (the global row-lock order starts with `characters`). */
 	private final TreeSet<Integer> _characters = new TreeSet<>();
+	private final List<Debit> _debits = new ArrayList<>();
+	private final List<Taken> _taken = new ArrayList<>();
+	/** Characters whose items this operation takes: marked before the first debit (§2.4). */
+	private final TreeSet<Integer> _marked = new TreeSet<>();
 	/** The service mails the last attempt wrote, adopted by the game after commit. */
 	private List<Integer> _mails = List.of();
 	private final List<Version> _versions = new ArrayList<>();
@@ -247,6 +266,167 @@ public final class AssetTx implements AutoCloseable
 		}, custody);
 	}
 
+	/**
+	 * Funds a custody from a live character's inventory or warehouse (§4.3 {@code fund}, §3.3 step 1): each whole object
+	 * is taken in memory under Mobius's own locks, retired, and written as an {@code ESCROW} row from memory in the
+	 * transaction. The character must be in the world; every item must be eligible (§4.4). (Amounts of a stack: part 4,
+	 * task 5.)
+	 */
+	public void fund(int custody, Holder holder, List<Asset> assets)
+	{
+		if (!holder.isCharacter())
+		{
+			throw new IllegalArgumentException("fund from " + holder.kind() + ": clan warehouses and treasuries are part 4, task 6");
+		}
+		for (Asset asset : assets)
+		{
+			if (asset.objectId() == null)
+			{
+				throw new IllegalArgumentException("fund takes whole objects; an amount of a stack is part 4, task 5");
+			}
+		}
+		final Debit debit = new Debit(custody, holder, List.copyOf(assets));
+		_debits.add(debit);
+		_characters.add(holder.id());
+		_marked.add(holder.id());
+		step(execution ->
+		{
+			final Custody target = execution.open(custody);
+			execution.notFrozen(target);
+			execution.allowsHolding(target);
+			final List<Map<String, Object>> legs = new ArrayList<>();
+			for (Taken taken : _taken)
+			{
+				if (taken.debit() != debit)
+				{
+					continue;
+				}
+				final Item item = taken.item();
+				ItemRows.write(execution.connection(), item, -1, "ESCROW", custody, taken.variables());
+				execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
+				legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+			}
+			execution.touched(custody);
+			execution.facts().add(AssetFact.of("EscrowFunded", custody, "custody", custody, "holder", holder.kind().name(), "holder_id", holder.id(), "legs", legs));
+		}, custody);
+	}
+
+	/** MARKED then TAKEN (§3.2, §3.3 step 1): marks committed, then each whole object taken out of memory. */
+	private void take() throws AssetAbort
+	{
+		try (Connection connection = _service.db().open())
+		{
+			for (int charId : _marked)
+			{
+				PendingMarks.mark(connection, charId, _op);
+			}
+		}
+		catch (SQLException e)
+		{
+			clearMarks();
+			throw new AssetAbort(AssetAbort.Reason.ERROR, _op + ": could not mark", e);
+		}
+		try
+		{
+			for (Debit debit : _debits)
+			{
+				final Player player = World.getPlayer(debit.holder().id());
+				if (player == null)
+				{
+					throw new AssetAbort(AssetAbort.Reason.HOLDER_ABSENT, "character " + debit.holder().id() + " is not in the world");
+				}
+				final ItemContainer container = debit.holder().kind() == Holder.Kind.PLAYER ? player.getInventory() : player.getWarehouse();
+				for (Asset asset : debit.assets())
+				{
+					final Item item = container.getItemByObjectId(asset.objectId());
+					if (item == null)
+					{
+						throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is not in " + debit.holder());
+					}
+					// Mobius's order: the item's monitor, then the container's (§3.3, CP-0010 refusals run under them).
+					synchronized (item)
+					{
+						synchronized (container)
+						{
+							if ((container.getItemByObjectId(asset.objectId()) != item) || item.isRetired() || (item.getId() != asset.itemId()) || (item.getCount() != asset.qty()))
+							{
+								throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is no longer as named in " + debit.holder());
+							}
+							final String refusal = Eligibility.refusal(player, item);
+							if (refusal != null)
+							{
+								throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, item + ": " + refusal);
+							}
+							item.retire();
+							container.removeForAsset(item);
+						}
+					}
+					final Map<String, String> variables = captureVariables(item);
+					item.awaitWrites();
+					_taken.add(new Taken(debit, item, variables));
+				}
+			}
+		}
+		catch (AssetAbort e)
+		{
+			if (_taken.isEmpty())
+			{
+				clearMarks();
+			}
+			else
+			{
+				refund(e);
+			}
+			throw e;
+		}
+	}
+
+	/** An item's variables, retired (no more writes or saves, CP-0013) and copied as the row will hold them. */
+	private static Map<String, String> captureVariables(Item item)
+	{
+		final ItemVariables variables = item.getScript(ItemVariables.class);
+		if (variables == null)
+		{
+			return Map.of();
+		}
+		variables.retire();
+		final Map<String, String> copy = new TreeMap<>();
+		variables.getSet().forEach((name, value) -> copy.put(name, String.valueOf(value)));
+		return copy;
+	}
+
+	private void clearMarks()
+	{
+		try (Connection connection = _service.db().open())
+		{
+			for (int charId : _marked)
+			{
+				PendingMarks.clear(connection, charId, _op);
+			}
+		}
+		catch (SQLException e)
+		{
+			// Startup recovery removes the marks of an operation that never committed (§3.2).
+		}
+	}
+
+	/** ABORTED → REFUNDED (§3.2): part 4, task 4. */
+	private void refund(AssetAbort cause)
+	{
+		throw new IllegalStateException(_op + " took assets and then aborted; refunds are part 4, task 4", cause);
+	}
+
+	/** DONE (§3.2): each retired item leaves memory for good; its object id stays reserved by its row (§4.2 rule 8). */
+	private void discardTaken()
+	{
+		for (Taken taken : _taken)
+		{
+			taken.item().stopAllTasks();
+			World.removeObject(taken.item());
+		}
+	}
+
 	/** Debits a custody into a sink (§2.5): the asset leaves existence under the code and its reference. */
 	public void sink(int custody, List<Asset> assets, SinkCode code, long reference)
 	{
@@ -376,6 +556,33 @@ public final class AssetTx implements AutoCloseable
 		{
 			return _prior;
 		}
+		if (!_debits.isEmpty())
+		{
+			take();
+		}
+		final Outcome outcome;
+		try
+		{
+			outcome = attempts();
+		}
+		catch (AssetAbort e)
+		{
+			if (!_taken.isEmpty())
+			{
+				refund(e);
+			}
+			throw e;
+		}
+		if ((outcome != Outcome.COMMITTED) && !_taken.isEmpty())
+		{
+			refund(new AssetAbort(AssetAbort.Reason.NOT_COMMITTED, _op + " ended " + outcome + " after taking assets"));
+		}
+		discardTaken();
+		return outcome;
+	}
+
+	private Outcome attempts() throws AssetAbort
+	{
 		final AssetConfig config = _service.config();
 		for (int attempt = 0;; attempt++)
 		{
@@ -460,6 +667,10 @@ public final class AssetTx implements AutoCloseable
 		for (Step step : _steps)
 		{
 			step.run(execution);
+		}
+		for (int charId : _marked)
+		{
+			PendingMarks.clear(connection, charId, _op); // the marks go with the operation's commit (§2.4)
 		}
 		final List<Version> versions = new ArrayList<>(_versions);
 		versions.sort(Comparator.comparing(Version::table).thenComparingLong(Version::id));

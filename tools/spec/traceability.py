@@ -98,7 +98,21 @@ def rows():
     return out
 
 
+def spec_statuses():
+    """Each spec's status word from its "- Status:" line (draft or reviewed)."""
+    statuses = {}
+    for spec in sorted(Path("docs/spec").glob("*.md")):
+        if spec.name == "README.md":
+            continue
+        match = re.search(r"(?m)^- Status: (\w+)", spec.read_text(encoding="utf-8"))
+        if not match:
+            sys.exit("traceability: " + spec.name + " has no status line")
+        statuses[spec.name] = match.group(1)
+    return statuses
+
+
 def main():
+    statuses = spec_statuses()
     existing = {}
     if OUT.exists():
         with OUT.open(newline="") as f:
@@ -118,6 +132,10 @@ def main():
             row[column] = old.get(column, "")
         if not row["status"]:
             row["status"] = "blueprint"
+        if row["status"] in ("specified", "reviewed"):
+            # A row is as reviewed as the least reviewed spec it cites (docs/spec/README.md).
+            specs = [s for s in row["spec"].split(";") if s]
+            row["status"] = "reviewed" if specs and all(statuses.get(s) == "reviewed" for s in specs) else "specified"
         generated.append(row)
     lost = [i for i, r in existing.items() if i not in seen and any(r.get(c) for c in FILLED if c != "status" or r.get(c) != "blueprint")]
     if lost:

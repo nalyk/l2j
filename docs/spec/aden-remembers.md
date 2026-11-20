@@ -1,6 +1,6 @@
 # SPEC-AR — Aden Remembers
 
-- Status: reviewed (revision 6; signed off with one fix by Codex, a different model family, in round 5; record in §12)
+- Status: draft (revision 7: §11.1 signed off in Chronicle's round 6; the store atoms' actor class, from the Citizens review, under review; revision 6 was signed off; record in §12)
 - Blueprint: 12 (Aden Remembers); 01 §2.5 (rumors are content); 02 §3 (game logic never branches on origin), §4, §6
   (budgets: hot-path seams ≤ 2 µs p99, never per tick); 03 §4.2 (the loot routing patch); 04 §1 (Fact Journal,
   telemetry), §3 (Asset Service), §6 (`lc why`), §7 (keyed randomness), §8 (degradation); 10 §8 (Genesis: Aden Remembers
@@ -235,7 +235,7 @@ journal family id per resource family, in a range registered to Aden Remembers; 
 rolled, and `sum_a` items relocated), `ar_npc_trade` (atom; `network/clientpackets/RequestBuyItem.java:243`,
 `RequestSellItem.java:203`; `sum_a` Adena paid, `sum_b` received), `ar_store_trade` (atom; `network/holders/
 TradeList.java:637`, `:859`; Adena), `ar_store_units_<family>` (atom; at the same two points, `sum_a` units of the family's
-items that changed hands), `ar_craft_<family>` (atom; materials of the family consumed, at their destruction in
+items that changed hands; for both store atoms the actor class is the **seller's**), `ar_craft_<family>` (atom; materials of the family consumed, at their destruction in
 `RecipeItemMaker.listItems(true)`, `managers/RecipeManager.java:642`, called at `:404` **before** the success roll at
 `:416`, so failed attempts count; and a contractual craft's `CRAFT_INPUT` legs from the Asset Service's facts, pact.md
 §4.3), `ar_teleport_fee` (atom; `entity/teleporter/TeleportHolder.java:221`, `sum_a` Adena
@@ -639,8 +639,8 @@ Nothing else shows any state.
 
 ## 11. Upstream constraints
 
-1. **No events** for drops, NPC buy and sell, store trade, crafting, teleports, owner changes, Territory War, Seven Signs,
-   Hellbound, seeds or Manor (§4.1). → telemetry and fact seams.
+1. **No events** for drops, NPC buy and sell, store trade, crafting, teleports, Territory War, Seven Signs, Hellbound,
+   seeds or Manor, and no complete owner-change feed: only one owner event, `ON_CASTLE_SIEGE_OWNER_CHANGE`, dispatched asynchronously at a castle siege's mid-victory (`mechanics/events/EventType.java:128`, `mechanics/siege/Siege.java:469`); and `ON_CASTLE_SIEGE_FINISH` (`Siege.java:339`), also asynchronous, whose payload is the live siege and castle, mutable state rather than a frozen ownership outcome; nothing for fortresses, clan halls, admin changes or a castle lost with its clan, so no durable ownership feed (§4.1). → telemetry and fact seams.
 2. **Group drops switch to custom-rates mode when the rate is not 1** (`entity/actor/templates/NpcTemplate.java:815-822`),
    and later items' odds depend on earlier thresholds. → no probability changes; relocation after the roll.
 3. **No runtime spawn-group or route API; routes restart from node 0** (`SpawnGroup.java:224`; `WalkingManager.java:73`,
@@ -670,6 +670,11 @@ asset-service.md revision 10, pact.md revision 6 and black-ledger.md revision 7 
 
 ## 12. Review record
 
+- Revision 7 (amendment, under review): §11.1 said upstream has no owner-change event; it has one,
+  `ON_CASTLE_SIEGE_OWNER_CHANGE`, dispatched only at a castle siege's mid-victory (Siege.java:469), so the claim now names
+  it and the gaps the capture seams fill (Chronicle review round 5, finding 36). No rule changed. Also: the store atoms'
+  actor class is the seller's (Citizens review round 1 (citizens.md revision 2)). Signed off with Chronicle round 6,
+  after naming `ON_CASTLE_SIEGE_FINISH` and its limit.
 - After the sign-off, the amendment reviews of the dependent specs changed four details here (the fourth: escorts are
   "registered", not "signed", matching PACT's participants), each to match what those
   specs now say: Guild Orders are PACT Purchase Orders of an institutional buyer; each telemetry window is read once

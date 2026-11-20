@@ -18,19 +18,20 @@
    Do instead: on ultra copy `build/lock-actual/<golden>` to `test/lock/<golden>`, rerun the classes whose goldens changed (`./build.sh test -Dtest.only=<Class>Test`), commit only when they reproduce byte for byte; then `scp` the goldens back.
 5. **[2026-11-19] A gate is 8 minutes: run it in the background and prepare the next step meanwhile**
    Do instead: start the gate with `run_in_background`, write the next patch as a script in the scratchpad (dry-run it on copies), apply it only after the current step is committed.
-6. **[2026-11-19] Ultra keeps files you `scp`'d even after a local `git stash`**
-   Do instead: after stashing or reverting locally, `git checkout -- <files>` on ultra too, and run `git status --short` there before every gate run.
-7. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
+6. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
    Do instead: judge the gate by `BUILD SUCCESSFUL` in `build/gate.log` and by `failures="0"` in the report XML, not by the shell's exit code.
 
-8. **[2026-11-19] A proof is trusted only after its fix is reverted and it fails**
+7. **[2026-11-19] A proof is trusted only after its fix is reverted and it fails**
    Do instead: on ultra, revert each fix (sed on the core line, or the test wrapper), drop any reverted file from CORE_PATCHES.md `Files:` there (or `check-core-ledger` stops the build before tests run), run the class, see every proof fail with its own message, then `scp` the local files back and md5-check them.
 
-9. **[2026-11-19] Intakes run in a separate worktree on ultra, and move `upstream` for every worktree**
+8. **[2026-11-19] Intakes run in a separate worktree on ultra, and move `upstream` for every worktree**
    Do instead: `git worktree add --detach ~/gits/l2j-intake n2-foundation`, run `tools/intake/intake.sh <sha> n2-foundation` there in the background, then fetch `upstream` and `intake/<sha12>` back, push both to origin (the mirror push is a fast-forward), and `git worktree remove` it. Ledger checks compare with `git merge-base HEAD upstream`, never the tip.
-10. **[2026-11-19] A reverted fix that would deadlock is not run**
+9. **[2026-11-19] A reverted fix that would deadlock is not run**
    Do instead: when a fix prevents a deadlock (a lock taken from inside the simulation), prove it by the test alone; a hung build container outlives `timeout`.
-
+10. **[2026-11-20] Parallel spec revisions: agents own files, never commit; one batch gate**
+   Do instead: one background agent per review, each told exactly which files it may touch and given its own
+   `git worktree add --detach ~/gits/l2j-<x> n1-specs` on ultra; collect their cross-spec amendments, apply them, run
+   `tools/spec/traceability.py` (row status is derived from spec status lines), one full gate, then commit the batch.
 
 ## Lock Harness Guardrails
 1. **[2026-11-19] A lock case runs whole on its own stream, aligned, in a woken arena**
@@ -69,8 +70,6 @@
    Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
 
 ## Shell & Command Reliability
-1. **[2026-11-20] An md5 list built with `$(ls a/*)` inside an ssh string breaks into lines the remote shell runs**
-   Do instead: `files=$(echo a/* b/*)` (one line) then `ssh host "md5sum $files" | diff - <(md5sum $files)`; scp every edited file (specs too) before the gate.
 1. **[2026-11-19] `git checkout -- .` on ultra leaves scp'd NEW files untracked, and push (updateInstead) then fails**
    Do instead: after committing new files, `git clean`-free fix: on ultra `rm` exactly the files listed by `git status --short` as `??` (after md5 matched), then push.
 2. **[2026-11-19] Codex verdict grep matches the echoed prompt**
@@ -80,10 +79,16 @@
    Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
 4. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
    Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
+   `$(ls a/*)` has the same newline problem: use `files=$(echo a/* b/*)`, and scp every edited file (specs and plans too)
+   before the gate, or the md5 check fails at commit.
 5. **[2026-11-19] Never wait with `pgrep -f <pattern>` from a shell whose own command line contains the pattern**
    Do instead: start the jobs with `&`, collect `$!`, and `wait` on those pids; a `while pgrep -f "codex exec …"` loop matches its own wrapper shell and never ends.
 6. **[2026-11-19] `git rev-parse --short` takes one revision**
    Do instead: loop `for r in a b; do git rev-parse --short $r; done`; with two it fails and stops an `&&` chain silently.
+
+7. **[2026-11-20] An unquoted heredoc runs every backtick in it**
+   `python3 - <<EOF` with a backticked `git log -p` in a string ran it and broke the script.
+   Do instead: always `<<'EOF'`; pass values in through `export VAR=...` and `os.environ`.
 
 ## User Directives
 1. **[2026-11-18] Fix bugs and gaps found in scope at once; do not ask**
@@ -91,4 +96,4 @@
 2. **[2026-11-19] Git hygiene CONTINUOUSLY, and validate it**
    Do instead: follow Execution & Validation item 1 after every green step, without being asked.
 3. **[2026-11-18] `main` and history belong to the user**
-   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, and again for the review answers + first intake); merge with `--no-ff -F <file>` (merge does not read `-F -`), and check `git rev-parse main^{tree}` equals the gated tree before pushing; never force-push or delete branches without it.
+   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, and again for the review answers + first intake; 2026-11-20 for N1); merge with `--no-ff -F <file>` (merge does not read `-F -`), and check `git rev-parse main^{tree}` equals the gated tree before pushing; never force-push or delete branches without it.

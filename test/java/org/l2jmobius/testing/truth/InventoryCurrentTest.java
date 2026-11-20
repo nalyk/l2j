@@ -20,8 +20,9 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * AT-RT-06 on the real datapack (docs/spec/retail-truth.md §4.5): the committed inventory equals a regeneration, and its ids
- * equal the quest directories, instance template ids, raid and grand boss ids and systems.in lines, counted independently.
+ * AT-RT-06 on the real datapack (docs/spec/retail-truth.md §4.5): the committed inventory equals a regeneration with the cases' judgments; its ids
+ * equal the quest classes, instance template ids, raid and grand boss ids and systems.in lines, counted independently; the systems the spec names
+ * are listed; every boss placement and instance reference is confirmed by a reading independent of the generator; known facts are pinned.
  */
 class InventoryCurrentTest
 {
@@ -37,13 +38,14 @@ class InventoryCurrentTest
 	{
 		final Path repo = repository();
 		final Path inventory = repo.resolve("truth/inventory");
+		final Map<String, Map<String, List<Inventory.Judgment>>> judgments = Inventory.judgments(repo.resolve("truth/cases"));
 		final Map<String, List<Map<String, String>>> generated = Inventory.generate(repo.resolve("dist/game/data"), repo.resolve("dist/db_installer/sql/game"), List.of(repo.resolve("java/org/l2jmobius/gameserver")), inventory.resolve("systems.in"));
 		final List<String> differing = new ArrayList<>();
 		for (Map.Entry<String, List<Map<String, String>>> table : generated.entrySet())
 		{
 			final Path committedFile = inventory.resolve(table.getKey() + ".csv");
 			final List<Map<String, String>> committed = Files.exists(committedFile) ? Inventory.read(committedFile) : List.of();
-			final List<Map<String, String>> merged = Inventory.merge(committed, table.getValue(), KEYS.get(table.getKey()));
+			final List<Map<String, String>> merged = Inventory.merge(committed, table.getValue(), KEYS.get(table.getKey()), judgments.getOrDefault(table.getKey(), Map.of()));
 			if (!merged.equals(committed))
 			{
 				final Path actual = Path.of(System.getProperty("lc.inventory.actual"));
@@ -110,6 +112,118 @@ class InventoryCurrentTest
 		final Map<String, Map<String, String>> quests = Inventory.read(inventory.resolve("quests.csv")).stream().collect(Collectors.toMap(r -> r.get("id"), r -> r));
 		assertTrue(quests.containsKey("717"), "Territory War quests live in a shared directory");
 		assertEquals("placeholder quest", quests.get("57").get("finding"));
+		// Spot checks an independent reviewer made by reading the templates, scripts and tables (review round 1).
+		assertEquals("dist/game/data/scripts/instances/ChambersOfDelusion/ChamberOfDelusionEast.java", instances.get("127").get("scripts"));
+		assertEquals("dist/game/data/scripts/instances/JiniaGuildHideout4/JiniaGuildHideout4.java", instances.get("146").get("scripts"));
+		assertEquals("dist/game/data/scripts/instances/SSQSanctumOfTheLordsOfDawn/SSQSanctumOfTheLordsOfDawn.java", instances.get("111").get("scripts"));
+		assertEquals("dist/game/data/scripts/quests/Q00726_LightWithinTheDarkness/Q00726_LightWithinTheDarkness.java;dist/game/data/scripts/quests/Q00727_HopeWithinTheDarkness/Q00727_HopeWithinTheDarkness.java", instances.get("88").get("scripts"));
+		assertEquals("dist/game/data/scripts/instances/Kamaloka/Kamaloka.java", instances.get("64").get("scripts"));
+		assertEquals("raidboss_spawnlist", bosses.get("25188").get("placed_by"), "Apepi");
+		assertEquals("raidboss_spawnlist", bosses.get("25143").get("placed_by"), "Fire of Wrath Shuriel");
+		assertEquals("scripts", bosses.get("29177").get("placed_by"), "Freya: her grandboss_data row is commented out; the Ice Queen's Castle script spawns her");
+		assertEquals("scripts", bosses.get("25557").get("placed_by"), "Ranger Karankawa");
+		assertEquals("scripts", bosses.get("25569").get("placed_by"), "Jax the Destroyer");
+	}
+
+	/** The world systems blueprint 11 §1.5 and docs/spec/retail-truth.md §4.5 name: systems.in may add to them, never drop one. */
+	private static final Set<String> REQUIRED_SYSTEMS = Set.of("seven_signs", "seven_signs_festival", "hellbound", "seed_of_destruction", "seed_of_infinity", "seed_of_annihilation", "castle_siege", "fortress_siege", "territory_war", "olympiad", "manor", "clan_hall_auction", "clan_hall_siege", "fishing", "underground_coliseum", "kratei_cube", "lottery", "castle_tax_treasury", "raid_boss_respawn", "clan_reputation_skills");
+
+	@Test
+	void theSystemsTheSpecNamesAreListed()
+	{
+		final Set<String> listed = Inventory.read(repository().resolve("truth/inventory/systems.csv")).stream().map(r -> r.get("key")).collect(Collectors.toSet());
+		final Set<String> absent = new TreeSet<>(REQUIRED_SYSTEMS);
+		absent.removeAll(listed);
+		assertEquals(Set.of(), absent, "systems the spec requires and the inventory does not list");
+	}
+
+	@Test
+	void everyBossPlacementIsConfirmedByAnIndependentReading() throws Exception
+	{
+		final Path repo = repository();
+		// Spawns and the Rift through a DOM parser, which never sees a comment; the tables line by line, a commented line dropped.
+		final Set<String> spawns = new TreeSet<>();
+		try (Stream<Path> files = Files.walk(repo.resolve("dist/game/data/spawns")))
+		{
+			for (Path file : files.filter(f -> f.toString().endsWith(".xml")).toList())
+			{
+				attributes(file, "npc", "id", spawns);
+			}
+		}
+		final Set<String> rift = new TreeSet<>();
+		attributes(repo.resolve("dist/game/data/DimensionalRift.xml"), "spawn", "mobId", rift);
+		final Map<String, Set<String>> placements = Map.of("spawns", spawns, "dimensional_rift", rift, "raidboss_spawnlist", tableRows(repo.resolve("dist/db_installer/sql/game/raidboss_spawnlist.sql")), "grandboss_data", tableRows(repo.resolve("dist/db_installer/sql/game/grandboss_data.sql")));
+		final List<String> wrong = new ArrayList<>();
+		for (Map<String, String> boss : Inventory.read(repo.resolve("truth/inventory/bosses.csv")))
+		{
+			final List<String> placedBy = List.of(boss.get("placed_by").split(";"));
+			for (Map.Entry<String, Set<String>> placement : placements.entrySet())
+			{
+				if (placement.getValue().contains(boss.get("id")) != placedBy.contains(placement.getKey()))
+				{
+					wrong.add(boss.get("id") + " " + placement.getKey());
+				}
+			}
+		}
+		assertEquals(List.of(), wrong, "bosses whose recorded placement an independent reading does not confirm");
+	}
+
+	@Test
+	void everyInstanceReferenceNamesItsTemplateInCode() throws IOException
+	{
+		final Path repo = repository();
+		final List<String> wrong = new ArrayList<>();
+		for (Map<String, String> instance : Inventory.read(repo.resolve("truth/inventory/instances.csv")))
+		{
+			for (String script : instance.get("scripts").isEmpty() ? new String[0] : instance.get("scripts").split(";"))
+			{
+				final String code = new String(Files.readAllBytes(repo.resolve(script)), StandardCharsets.UTF_8).replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\n]*", " ");
+				if (!Pattern.compile("(?<![\\w.-])" + instance.get("id") + "(?![\\w.])").matcher(code).find())
+				{
+					wrong.add(instance.get("id") + " " + script);
+				}
+			}
+		}
+		assertEquals(List.of(), wrong, "instance references whose source does not hold the template id outside a comment");
+	}
+
+	private static void attributes(Path xml, String element, String attribute, Set<String> into) throws Exception
+	{
+		final javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+		factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+		final org.w3c.dom.NodeList nodes = factory.newDocumentBuilder().parse(xml.toFile()).getElementsByTagName(element);
+		for (int i = 0; i < nodes.getLength(); i++)
+		{
+			final String value = ((org.w3c.dom.Element) nodes.item(i)).getAttribute(attribute);
+			if (!value.isEmpty())
+			{
+				into.add(value);
+			}
+		}
+	}
+
+	private static Set<String> tableRows(Path sql) throws IOException
+	{
+		final Set<String> ids = new TreeSet<>();
+		boolean inserting = false;
+		for (String line : Files.readAllLines(sql, StandardCharsets.UTF_8))
+		{
+			final String trimmed = line.strip();
+			if (trimmed.toUpperCase().startsWith("INSERT"))
+			{
+				inserting = true;
+			}
+			if (!inserting || trimmed.startsWith("--"))
+			{
+				continue;
+			}
+			final Matcher row = Pattern.compile("\\(\\s*(\\d+)\\s*,").matcher(trimmed.startsWith("INSERT") ? trimmed.substring(trimmed.toUpperCase().indexOf("VALUES")) : trimmed);
+			while (row.find())
+			{
+				ids.add(row.group(1));
+			}
+		}
+		return ids;
 	}
 
 	private static Set<String> generatedIds(Path csv, String key)

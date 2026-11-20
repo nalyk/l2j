@@ -249,7 +249,7 @@ CREATE TABLE lc_chr_letter (
 
 CREATE TRIGGER lc_chr_letter_insert BEFORE INSERT ON lc_chr_letter FOR EACH ROW IF NEW.state <> 'QUEUED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_chr_letter: a letter starts queued'; END IF;
 
-CREATE TRIGGER lc_chr_letter_transition BEFORE UPDATE ON lc_chr_letter FOR EACH ROW IF NEW.text <> OLD.text OR NEW.author_char <> OLD.author_char OR NOT ((OLD.state, NEW.state) IN (('QUEUED', 'APPROVED'), ('QUEUED', 'REJECTED'), ('APPROVED', 'PUBLISHED'), ('APPROVED', 'WITHDRAWN'), ('PUBLISHED', 'WITHDRAWN'))) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_chr_letter: not a transition of the letter machine'; END IF;
+CREATE TRIGGER lc_chr_letter_transition BEFORE UPDATE ON lc_chr_letter FOR EACH ROW IF NEW.letter_id <> OLD.letter_id OR NEW.text <> OLD.text OR NEW.author_char <> OLD.author_char OR NEW.submitted_at <> OLD.submitted_at OR NOT ((OLD.state, NEW.state) IN (('QUEUED', 'APPROVED'), ('QUEUED', 'REJECTED'), ('APPROVED', 'PUBLISHED'), ('APPROVED', 'WITHDRAWN'), ('PUBLISHED', 'WITHDRAWN'))) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'lc_chr_letter: not a transition of the letter machine'; END IF;
 
 -- Narrated choices and name-free flavour (chronicle.md §4.8).
 CREATE TABLE lc_chr_prose (

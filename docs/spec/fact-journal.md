@@ -1,6 +1,6 @@
 # SPEC-FACT — Fact Journal
 
-- Status: reviewed (revision 9; its telemetry amendment signed off with one test fix by Codex in amendment round 3; record in §12)
+- Status: draft (revision 10: telemetry `actor_class` values named, under review; revision 9 was signed off; record in §12)
 - Blueprint: 04 §1 (Fact Journal), §6 (`lc why`), §7 (randomness and time), §8 (failure degradation); 02 §4, §6 (budgets:
   fact capture ≤ 2 µs p99, projector lag ≤ 5 s p99 at the 800-citizen siege benchmark), §11; 03 §4.4 (immutable
   primitive snapshots at the owning operation); consensus §4.2 e, §5.
@@ -69,6 +69,7 @@ lc_fact_precise(fact_id BIGINT PK, x INT, y INT, z INT, instance_id INT, expires
 lc_telemetry_bucket(window_start TIMESTAMP, window_len INT, region_id SMALLINT, family SMALLINT, actor_class TINYINT,
                     events BIGINT UNSIGNED, sum_a BIGINT, sum_b BIGINT, unique_actors INT UNSIGNED, stalled BOOLEAN,
                     PRIMARY KEY(window_start, region_id, family, actor_class))
+                    -- actor_class: the actor's origin (actor-identity.md §3): HUMAN, SYNTHETIC_CITIZEN, NPC_FAKE, NPC, SYSTEM
 lc_projector_checkpoint(projector VARCHAR(48) PK, last_fact_id BIGINT, reducer_ver SMALLINT, config_ver INT)
 lc_effect_outbox(application_id BINARY(16) PK, projector VARCHAR(48), fact_id BIGINT, effect_index SMALLINT, kind VARCHAR(32),
                  payload JSON, state {PENDING|DONE|FAILED}, attempts INT, created_at TIMESTAMP(3), done_at TIMESTAMP(3) NULL,
@@ -506,6 +507,8 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- Revision 10 (amendment, under review): §2's telemetry `actor_class` is the actor's origin as actor-identity.md §3 defines it
+  (HUMAN, SYNTHETIC_CITIZEN, NPC_FAKE, NPC, SYSTEM), so economy accounting per class is possible (Citizens review round 1 (citizens.md revision 2)).
 - Amendment round 3 (Codex), **SIGN-OFF WITH FIXES**: the bucket retention needed its test oracle, added to AT-FACT-11.
 - Amendment round 2 (Codex), NO SIGN-OFF: a replay could pass a window's marker yet need the window later for a baseline.
   Fixed: a projector reads a window once and keeps what it needs later in its derived state and snapshots.

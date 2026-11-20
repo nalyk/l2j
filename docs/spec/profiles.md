@@ -1,6 +1,6 @@
 # SPEC-PRO — Profiles and Mobius custom modules
 
-- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
+- Status: reviewed (revision 8; signed off with one fix by Codex, a different model family, in round 7; record in §12)
 - Blueprint: 02 §8 (configuration is a liability; the canonical ruleset is the default; every key has an owner, range,
   default and test), 03 §8 (Mobius H5 custom modules: canonical policy), 10 §5.4 and §9 (citizens' own bounds), 11 §3
   (the `truth` profile), 20 §1.
@@ -28,11 +28,13 @@ dist/game/{log,console,java}.cfg, dist/login/{log,console}.cfg, dist/login/banne
 dist/game/profiles/machine_keys.csv        the files and keys machine staging may set, nothing else: database keys of both
                                            `Database.ini`; `ipconfig.xml` whole (it holds only this machine's addresses and
                                            subnets, and the canonical tree ships none, only `default-ipconfig.xml`);
-                                           `hexid.txt` whole and writable (below)
+                                           `hexid.txt` whole, provisioned once per machine (§4.2)
 dist/game/profiles/<profile>/**            overlays: for an .ini, only the keys the profile changes; any other file
                                            (XML, txt) replaced whole; same relative paths
 dist/game/profiles/canonical.sha256        the hash of every canonical file
 dist/game/data/lc/custom_policy.csv        every key of the 44 custom files: module, file, key, value per profile, reason
+dist/game/data/lc/lc_policy.csv            every Living Chronicle key (config/Custom/LivingChronicle/*.ini): module, file,
+                                           key, value per profile, generated from the module specs' §8 tables
 <server root>/config/                      the materialised tree the server reads (§4.1), read-only
 ```
 
@@ -79,8 +81,12 @@ looks for instead of the shipped `default-ipconfig.xml`; the test harness's own 
 `test/java/org/l2jmobius/testing/TestServer.java:154`), writes the result read-only, and records every file's hash. The
 expected result of materialisation is therefore canonical + overlay + staging of listed keys only; a staged change to any
 other key is a difference. For `truth` the overlay step is `TruthProfile.apply` run on
-the staged copy before it is made read-only, exactly as the lock runs it; Living Chronicle's own `.ini` files are in the
-canonical tree, so the lock's recursive golden includes them with their `truth` values. Every reader, whatever its method, then reads the profile's values. This is what `TruthProfile.apply`
+the staged copy before it is made read-only, exactly as the lock runs it. `TruthProfile.apply` covers both policy tables:
+the 44 custom files from `custom_policy.csv` (as today) and every Living Chronicle file from the `truth` column of
+`lc_policy.csv` (a harness extension: the current class writes only the 44 files, `TruthProfile.java:50`, `:69`); the
+other profiles apply their own column of each table through the overlay step. So the `truth` value of every Living
+Chronicle key is written by the materialisation, not left at its default (Aden Remembers' `Enabled`, default true, truth
+false, aden-remembers.md §8), and the lock's recursive golden includes those files with their `truth` values. Every reader, whatever its method, then reads the profile's values. This is what `TruthProfile.apply`
 already does to the behaviour lock's staged copy; the same code produces every profile.
 
 ### 4.2 The startup check
@@ -91,16 +97,28 @@ Before the world loads, the profile check refuses to start, naming every differe
    (AT-PRO-07), so changing a canonical file is a reviewed change of the manifest in the same commit (LOCK-CONFIG-0001
    locks only the materialised `truth` values of `.ini` files, not the canonical files);
 2. every materialised file equals the materialisation of the canonical tree with the profile's overlay and the listed
-   machine keys (recomputed), and no other key of a staged file differs. **`hexid.txt`** is the one file a server writes:
-   the login registration saves the server's identity there (`gameserver/LoginServerThread.java:256`, read at
-   `gameserver/config/ServerConfig.java:280`) at the path upstream hard-codes, `./config/hexid.txt`
-   (`ServerConfig.java:70`), so that one file inside the otherwise read-only tree is writable machine state, excluded from
-   the hashes and from every overlay;
+   machine keys (recomputed), and no other key of a staged file differs. **`hexid.txt`** is the server's identity
+   (`./config/hexid.txt`, hard-coded at `ServerConfig.java:70`, read at `:280`). Upstream writes it only when it does not
+   exist: every successful registration calls `saveHexid` (`gameserver/LoginServerThread.java:256`), which creates the file
+   if absent and otherwise does nothing (`ServerConfig.java:325`). So it is **provisioned once per machine**: the
+   launcher's `provision` run materialises a writable scratch tree without `hexid.txt`, starts the game server until the
+   login registration has created the file, stops it, and copies the file into the machine staging; from then on it is a
+   staged machine file like `ipconfig.xml`, read-only and hashed, and the registration writes nothing. Every other start
+   refuses a tree without it (naming the `provision` run), so the identity is in memory from the first load and a reload
+   reads the same `SERVER_ID` and `HEX_ID`;
 3. every key of the 44 custom files has the value `custom_policy.csv` gives for the profile, and every Living Chronicle key
    the value its spec's §8 gives;
 4. in `truth`, Living Chronicle starts **no module**: its bootstrap reads the profile and, for `truth`, initialises
    nothing (one gate, not a key per module); in the other profiles Aden Remembers' `Enabled` (aden-remembers.md §8) is as
    its spec says.
+5. in `sim`, `hobby` and `live`, the geodata directory holds every region of `geodata/geodata.lock`'s required-region
+   manifest with its pinned hash (platform.md §4.4); `truth` and `dev` may run without geodata, as the lock does today.
+6. in `sim`, every `FloodProtector*LogFlooding` key of `FloodProtector.ini` (loaded by
+   `gameserver/config/FloodProtectorConfig.java:33`) is `True` (logging only: no flood limit or punishment
+   changes), the server-side oracle of the citizens' flood spacing (citizens.md AT-CIT-06).
+
+The test harness's `TestServer` runs `truth` only and refuses any other profile (retail-truth.md AT-RT-05), so a lock or
+case suite cannot run under a profile whose values differ from retail's.
 
 The profile, the overlay's hash and the materialised hashes are written as a `config` fact (fact-journal.md §4.1). **Effective values**: loaders derive some values from the files (the
 multilingual loader sets `GeneralConfig.CHECK_HTML_ENCODING` false, `gameserver/config/custom/MultilingualSupportConfig.java:55`),
@@ -140,7 +158,7 @@ profiles; `dev` and `sim` equal `hobby` unless stated; `truth` is always `TruthP
 | ClassBalance | every multiplier empty (neutral) | empty | the behaviour lock |
 | CommunityBoard (`CustomCommunityBoard` and `CommunityEnableMultisells`, `…Teleports`, `…Buffs`, `…Heal` (shipped true) and `…Delevel` (shipped false), which register services on their own, `dist/game/data/scripts/handlers/bypass/communityboard/HomeBoard.java:79-88`, `:109-114`) | off | off | the board belongs to the Codex; no buff, teleport or shop bypass of the world |
 | CustomMailManager | off | **off** | a deviation, below |
-| DualboxCheck | as `TruthProfile` (0: no limit) | `DualboxCheckMaxPlayersPerIP` 2, `DualboxCheckMaxOlympiadParticipantsPerIP` 1, `DualboxCheckMaxL2EventParticipantsPerIP` 1, `DualboxCheckMaxOfflinePlayPerIP` and `…PremiumPerIP` 0, the citizen runner's address in `DualboxCheckWhitelist` as `address,RunnerAllowance` (upstream means to add that number to every limit for the address, `gameserver/managers/AntiFeedManager.java:170`, `:285-295`, but its whitelist **never matches**: entries are stored by `InetAddress.getByName(ip).hashCode()`, `gameserver/config/custom/DualboxCheckConfig.java:77`, and looked up by the address string's `hashCode()`, `AntiFeedManager.java:168-170`, `:303-304`, and an allowance of 0 is stored as −1, `DualboxCheckConfig.java:76`, which tightens the limit; the profile core patch keys both by the normalised address text and requires a positive allowance, a retail bug fix; `RunnerAllowance` is the Citizens spec's maximum of citizens online, 1000 until it is specified). **Stated plainly**: for the runner's address the per-address Olympiad and event limits are then effectively off (upstream has one allowance for every check), and the binding limits on citizens' Olympiad and event participation are the Citizens spec's per-principal policy, enforced by the runner, not by this file | explicit, not disabled; Olympiad and events limited for humans (0 would bypass the check, `gameserver/managers/OlympiadManager.java:546`); upstream keys the whitelist by address (`gameserver/config/custom/DualboxCheckConfig.java:62-77`), so the runner's per-principal limits, Olympiad and events included, are the citizens' own policy (10 §5.4, the Citizens spec) |
+| DualboxCheck | as `TruthProfile` (0: no limit) | `DualboxCheckMaxPlayersPerIP` 2, `DualboxCheckMaxOlympiadParticipantsPerIP` 1, `DualboxCheckMaxL2EventParticipantsPerIP` 1, `DualboxCheckMaxOfflinePlayPerIP` and `…PremiumPerIP` 0, the citizen runner's address in `DualboxCheckWhitelist` as `address,RunnerAllowance` (upstream means to add that number to every limit for the address, `gameserver/managers/AntiFeedManager.java:170`, `:285-295`, but its whitelist **never matches**: entries are stored by `InetAddress.getByName(ip).hashCode()`, `gameserver/config/custom/DualboxCheckConfig.java:77`, and looked up by the address string's `hashCode()`, `AntiFeedManager.java:168-170`, `:303-304`, and an allowance of 0 is stored as −1, `DualboxCheckConfig.java:76`, which tightens the limit; the profile core patch keys both by the normalised address text and requires a positive allowance, a retail bug fix; `RunnerAllowance` is the profile's `CitizensMaxOnline`, citizens.md §8). **Stated plainly**: for the runner's address the per-address Olympiad and event limits are then effectively off (upstream has one allowance for every check), and the binding limits on citizens' Olympiad and event participation are the Citizens spec's per-principal policy, enforced by the runner, not by this file | explicit, not disabled; Olympiad and events limited for humans (0 would bypass the check, `gameserver/managers/OlympiadManager.java:546`); upstream keys the whitelist by address (`gameserver/config/custom/DualboxCheckConfig.java:62-77`), so the runner's per-principal limits, Olympiad and events included, are the citizens' own policy (10 §5.4, the Citizens spec) |
 | FactionSystem, FakePlayers, FindPvP, FreeMounts, HellboundStatus | off | off | factions emerge socially; citizens replace fake players; location certainty against the Ledger; geography; Hellbound learned diegetically |
 | MultilingualSupport | off | on, `MultiLangAllowed` `en;ro;ru`, `MultiLangDefault` `en` | the Codex and Chronicle render EN, RO, RU; Mobius's own pages fall back to English until RO and RU packs exist (`dist/game/data/lang/` holds only `el`) |
 | NpcStatMultipliers | off | off | the behaviour lock |
@@ -239,10 +257,10 @@ None for players. Admin: `lc config <file> <key>` prints the canonical, overlay 
 
 | Test | Kind | What it does |
 |---|---|---|
-| AT-PRO-01 | integration | each profile: a value changed by its overlay is the one read by `ConfigReader`, by `FortSiegeManager`'s own `Properties`, by the LoginServer's `LoginConfig`, by an event's `config.xml` (replaced whole) and by `ServerConfig`'s `chatfilter.txt`; an overlay of `SkillDurationList` replaces the whole continued value; an overlay creating a file the canonical tree lacks creates it; the `config` fact (in `truth`, `materialised.json`, with no fact written) holds the hashes and the effective-value snapshot; an admin reload with identical files yields the same snapshot, `ipconfig.xml`'s lists included; the scan finds no configuration file outside the canonical set |
-| AT-PRO-02 | integration | a hand edit of a canonical file, an overlay with an unknown key, an unknown profile, no profile at all (neither server starts), a materialised file changed before an admin reload (each subcommand reading configuration: the generic one, `DynamicExpRates.xml`, `SecondaryAuth.xml`, access levels, siege schedule) and before a GUI reload; machine staging of an unlisted key; `admin_setconfig` outside `dev`: each refused with the difference named |
-| AT-PRO-03 | unit, integration | the committed `truth` overlay equals `TruthProfile`'s rule over the canonical files; LOCK-CONFIG-0001 passes on the materialised `truth` tree; a `truth` server starts no Living Chronicle module |
-| AT-PRO-04 | unit | `custom_policy.csv` covers every key of the 44 files of `TruthProfile.MODULES`; each profile's materialisation yields exactly its column, numeric keys included; "off" leaves no switch true (Community Board services, `BankingAutoConvert`) |
+| AT-PRO-01 | integration | each profile: a value changed by its overlay is the one read by `ConfigReader`, by `FortSiegeManager`'s own `Properties`, by the LoginServer's `LoginConfig`, by an event's `config.xml` (replaced whole) and by `ServerConfig`'s `chatfilter.txt`; an overlay of `SkillDurationList` replaces the whole continued value; an overlay creating a file the canonical tree lacks creates it; the `config` fact (in `truth`, `materialised.json`, with no fact written) holds the hashes and the effective-value snapshot; an admin reload with identical files yields the same snapshot, `ipconfig.xml`'s lists included; the scan finds no configuration file outside the canonical set; `hexid.txt`: the `provision` run creates it through a real registration and stages it; a later start registers with it, writes nothing (the staged file's hash unchanged) and an identical-file reload yields the same snapshot, `SERVER_ID` and `HEX_ID` included; a start without a staged `hexid.txt` is refused, naming the `provision` run |
+| AT-PRO-02 | integration | a hand edit of a canonical file, an overlay with an unknown key, an unknown profile, no profile at all (neither server starts), a materialised file changed before an admin reload (each subcommand reading configuration: the generic one, `DynamicExpRates.xml`, `SecondaryAuth.xml`, access levels, siege schedule) and before a GUI reload; machine staging of an unlisted key; `admin_setconfig` outside `dev`: each refused with the difference named; in `sim`, a required geodata region missing or with another hash (neither server starts); `TestServer` given any profile but `truth` (refused) |
+| AT-PRO-03 | unit, integration | the committed `truth` overlay equals `TruthProfile`'s rule over the canonical files; LOCK-CONFIG-0001 passes on the materialised `truth` tree; a `truth` server starts no Living Chronicle module; on the materialised `truth` tree every Living Chronicle key has `lc_policy.csv`'s `truth` value (Aden Remembers' `Enabled` false although its default is true) |
+| AT-PRO-04 | unit | `custom_policy.csv` covers every key of the 44 files of `TruthProfile.MODULES`; each profile's materialisation yields exactly its column, numeric keys included; "off" leaves no switch true (Community Board services, `BankingAutoConvert`); `lc_policy.csv` equals the profile columns of every module spec's §8 table (regenerated and compared), and each profile's materialisation yields its column for every Living Chronicle key |
 | AT-PRO-05 | unit | no spawn file of `dist/game/data/spawns` places NPC 50008 |
 | AT-PRO-07 | unit | every canonical file's hash equals `canonical.sha256`; a changed canonical file without its manifest line fails; the admin-handler scan finds no configuration assignment that is not refused outside `dev` |
 | AT-PRO-06 | integration | with no issue, the canonical text; an issue with a Law and a History entry leads with the Law entry's title line, in EN, RO and RU by the player's language; the Law row withdrawn, it leads with the History entry; all withdrawn, the previous issue's lead or the canonical text; a headline naming a withdrawn character shows it unnamed |
@@ -263,6 +281,19 @@ per-principal Olympiad and event limits.
 
 ## 12. Review record
 
+- Round 7 (Codex), SIGN-OFF WITH FIXES: rule 6 named `Server.ini` for the flood-logging keys, which live in
+  `FloodProtector.ini` (21). Fixed (revision 8). The geodata patch and `TestServer`'s refusal stay implementation
+  obligations (22).
+- Round 6 (Codex), NO SIGN-OFF: 17 of 20 earlier findings fixed; open: (16) a reload after a first registration read a
+  newly written identity, so the snapshot differed; (17) a read-only tree cannot let upstream create `hexid.txt`, and a
+  placeholder stops it saving; (20) `TruthProfile.apply` writes only the 44 custom files, so Living Chronicle keys kept
+  their defaults in `truth`. Fixed (revision 7): `hexid.txt` provisioned once per machine by a `provision` run and then
+  staged read-only (upstream writes it only when absent, `ServerConfig.java:325`), a start without it refused;
+  `lc_policy.csv` generated from the specs' §8 tables and applied by the materialisation, `TruthProfile.apply` extended to
+  it; AT-PRO-01, 03 and 04 test both. Also from the Platform and Retail Truth reviews: the startup check requires the
+  geodata manifest outside `truth` and `dev` (rule 5), and `TestServer` runs `truth` only; AT-PRO-02 tests both. From the
+  Citizens review: `RunnerAllowance` is `CitizensMaxOnline`, and `sim` sets every `FloodProtector*LogFlooding = True`
+  (logging only, the citizens' flood-spacing oracle; no limit changes).
 - Found while writing citizens.md: upstream's dualbox whitelist never matches; the allowance now rests on the core
   patch that fixes it.
 - Round 5 (Codex), NO SIGN-OFF: Living Chronicle's `data/lc` tables excluded as data; loader-derived values not

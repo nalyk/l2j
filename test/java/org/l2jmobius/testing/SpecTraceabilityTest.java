@@ -44,6 +44,9 @@ class SpecTraceabilityTest
 	private static final Map<String, String> TESTS = new HashMap<>();
 	private static final List<Map<String, String>> MATRIX = new ArrayList<>();
 	private static final Set<String> SPEC_FILES = new HashSet<>();
+	/** Each spec's status word, from its "- Status:" line: draft or reviewed. */
+	private static final Map<String, String> SPEC_STATUS = new HashMap<>();
+	private static final Pattern STATUS_LINE = Pattern.compile("(?m)^- Status: (\\w+)");
 
 	@BeforeAll
 	static void read() throws IOException
@@ -55,6 +58,9 @@ class SpecTraceabilityTest
 			{
 				SPEC_FILES.add(spec.getFileName().toString());
 				final String text = Files.readString(spec);
+				final Matcher status = STATUS_LINE.matcher(text);
+				assertTrue(status.find(), spec.getFileName() + " has no status line");
+				SPEC_STATUS.put(spec.getFileName().toString(), status.group(1));
 				final Matcher requirement = REQUIREMENT.matcher(text);
 				while (requirement.find())
 				{
@@ -164,6 +170,30 @@ class SpecTraceabilityTest
 			final boolean specified = !"blueprint".equals(row.get("status"));
 			assertEquals(specified, !row.get("requirements").isEmpty(), id + ": a row is specified exactly when it names requirements");
 		}
+	}
+
+	/**
+	 * A row's status is the least reviewed of its specs (docs/spec/README.md): a specified row is "reviewed" exactly when every
+	 * spec it cites is reviewed, so an amendment that sends a spec back to review sends its rows back too.
+	 */
+	@Test
+	void aRowIsReviewedExactlyWhenEverySpecItCitesIs()
+	{
+		final List<String> wrong = new ArrayList<>();
+		for (Map<String, String> row : MATRIX)
+		{
+			final String status = row.get("status");
+			if (!"specified".equals(status) && !"reviewed".equals(status))
+			{
+				continue;
+			}
+			final boolean allReviewed = split(row.get("spec")).stream().allMatch(spec -> "reviewed".equals(SPEC_STATUS.get(spec)));
+			if (allReviewed != "reviewed".equals(status))
+			{
+				wrong.add(row.get("id") + " is " + status + " but its specs are " + split(row.get("spec")).stream().map(spec -> spec + "=" + SPEC_STATUS.get(spec)).toList());
+			}
+		}
+		assertEquals(List.of(), wrong);
 	}
 
 	private static List<String> split(String cell)

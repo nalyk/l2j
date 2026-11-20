@@ -206,3 +206,19 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   releases the lock the row equals memory.
 - Proof: `TreasuryTest.concurrentIncomeAndWithdrawalsLoseNothingAndTheRowEqualsMemory` (upstream lost a withdrawal:
   1 006 002 for 1 006 000), `anOverdrawIsRefusedUnderRace`, `retailClampIsUnchangedAndTheLockExists`.
+
+## CP-0013 Item variables changed in one step
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/variables/AbstractVariables.java`, `java/org/l2jmobius/gameserver/mechanics/variables/ItemVariables.java`
+- Reason: every `set` overload tracked the change under the save lock and then set the value after releasing it
+  (AbstractVariables.java:53-121), so a save, or the Asset Service capturing an item's variables, could see the change
+  tracked but the value not yet set and lose it; `merge` bypassed tracking entirely (StatSet.java:82-85); and an item's
+  scheduled save (ItemVariables.java:135) could write its variables after the Asset Service had taken the item
+  (asset-service.md §3.3, §11.12).
+- Change: all ten `set` overloads, `set(name, value, markAsChanged)` and `merge` track and set in one step under the save
+  lock; new `retire()` / `isRetired()`: a retired object refuses `set`, `remove` and `merge`, and `ItemVariables` never
+  saves it. Nothing changes for variables that are not retired.
+- Invariant: a capture under the save lock sees either neither or both of a change's tracking and value; a retired
+  object's rows are written by nothing but the Asset Service's transaction.
+- Proof: `ItemVariablesTest.aCaptureNeverSeesATrackedChangeWithoutItsValue` (upstream: `true=ABSENT`, a tracked change
+  without its value), `aRetiredVariablesObjectRefusesWritesAndNeverSaves`.

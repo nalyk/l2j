@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.l2jmobius.gameserver.entity.World;
@@ -220,18 +221,7 @@ public final class AssetTx implements AutoCloseable
 				throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + receiverCharId + " is gone or marked for deletion");
 			}
 			final Connection connection = execution.connection();
-			final int message = _service.ids().next();
-			try (PreparedStatement insert = connection.prepareStatement("INSERT INTO messages (messageId, senderId, receiverId, subject, content, expiration, reqAdena, hasAttachments, isUnread, isDeletedBySender, isDeletedByReceiver, sendBySystem, isReturned) VALUES (?, ?, ?, ?, ?, ?, 0, 'true', 'true', 'true', 'false', ?, 'false')"))
-			{
-				insert.setInt(1, message);
-				insert.setInt(2, ServiceMail.SENDER);
-				insert.setInt(3, receiverCharId);
-				insert.setString(4, subject);
-				insert.setString(5, content);
-				insert.setLong(6, ServiceMail.EXPIRATION);
-				insert.setInt(7, ServiceMail.SEND_BY_SYSTEM);
-				insert.executeUpdate();
-			}
+			final int message = insertServiceMail(connection, receiverCharId, subject, content);
 			final List<Map<String, Object>> legs = new ArrayList<>();
 			for (Asset asset : released)
 			{
@@ -411,10 +401,80 @@ public final class AssetTx implements AutoCloseable
 		}
 	}
 
-	/** ABORTED → REFUNDED (§3.2): part 4, task 4. */
+	private static final int REFUND_ATTEMPTS = 10;
+
+	/**
+	 * ABORTED → REFUNDED (§3.2): the refund operation {@code OpId.refundOf(op)} returns each object taken to its holder as
+	 * service mail (written from memory, unsaved state kept), clears this operation's pending marks, and is retried until
+	 * it commits; nothing it does to memory happens before its commit. If it cannot commit, the module freezes and the
+	 * retired objects stay out of every container; their rows were never changed, so a restart's recovery gives them back.
+	 */
 	private void refund(AssetAbort cause)
 	{
-		throw new IllegalStateException(_op + " took assets and then aborted; refunds are part 4, task 4", cause);
+		final List<Taken> taken = List.copyOf(_taken);
+		final TreeSet<Integer> marked = new TreeSet<>(_marked);
+		Exception last = cause;
+		for (int attempt = 0; attempt < REFUND_ATTEMPTS; attempt++)
+		{
+			try (AssetTx refund = _service.begin(_op.refund(), _module, "REFUND", _subjectRef))
+			{
+				refund.returnByMail(taken, marked, _op);
+				refund.commit();
+				discardTaken();
+				_taken.clear();
+				return;
+			}
+			catch (AssetAbort | SQLException e)
+			{
+				e.addSuppressed(last);
+				last = e;
+				pause();
+			}
+		}
+		try (Connection connection = _service.db().open())
+		{
+			ModuleState.freeze(connection, _module, "REFUND_FAILED", null);
+		}
+		catch (SQLException e)
+		{
+			last.addSuppressed(e);
+		}
+		throw new IllegalStateException(_op + " could not be refunded; module " + _module + " frozen", last);
+	}
+
+	/** The refund operation's one step: each holder's objects back as one service mail, the original marks cleared. */
+	private void returnByMail(List<Taken> taken, Set<Integer> marked, OpId original)
+	{
+		final Map<Holder, List<Taken>> byHolder = new LinkedHashMap<>();
+		for (Taken t : taken)
+		{
+			byHolder.computeIfAbsent(t.debit().holder(), h -> new ArrayList<>()).add(t);
+			_characters.add(t.debit().holder().id());
+		}
+		step(execution ->
+		{
+			final Connection connection = execution.connection();
+			for (Map.Entry<Holder, List<Taken>> entry : byHolder.entrySet())
+			{
+				final Holder holder = entry.getKey();
+				final int message = insertServiceMail(connection, holder.id(), "Returned", "An operation on your items did not complete; they are returned to you.");
+				final List<Map<String, Object>> legs = new ArrayList<>();
+				for (Taken t : entry.getValue())
+				{
+					final Item item = t.item();
+					ItemRows.write(connection, item, ServiceMail.SENDER, "MAIL", message, t.variables());
+					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
+					legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+				}
+				execution.mailed(message, holder.id(), MailReason.REFUND);
+				execution.facts().add(AssetFact.of("Refunded", entry.getValue().get(0).debit().custody(), "aborted_op", original.hex(), "receiver", holder.id(), "mail", message, "legs", legs));
+			}
+			for (int charId : marked)
+			{
+				PendingMarks.clear(connection, charId, original);
+			}
+		});
 	}
 
 	/** DONE (§3.2): each retired item leaves memory for good; its object id stays reserved by its row (§4.2 rule 8). */
@@ -425,6 +485,24 @@ public final class AssetTx implements AutoCloseable
 			taken.item().stopAllTasks();
 			World.removeObject(taken.item());
 		}
+	}
+
+	/** A service mail's message row (§2.1), in the operation's transaction; its attachment rows follow. */
+	private int insertServiceMail(Connection connection, int receiverCharId, String subject, String content) throws SQLException
+	{
+		final int message = _service.ids().next();
+		try (PreparedStatement insert = connection.prepareStatement("INSERT INTO messages (messageId, senderId, receiverId, subject, content, expiration, reqAdena, hasAttachments, isUnread, isDeletedBySender, isDeletedByReceiver, sendBySystem, isReturned) VALUES (?, ?, ?, ?, ?, ?, 0, 'true', 'true', 'true', 'false', ?, 'false')"))
+		{
+			insert.setInt(1, message);
+			insert.setInt(2, ServiceMail.SENDER);
+			insert.setInt(3, receiverCharId);
+			insert.setString(4, subject);
+			insert.setString(5, content);
+			insert.setLong(6, ServiceMail.EXPIRATION);
+			insert.setInt(7, ServiceMail.SEND_BY_SYSTEM);
+			insert.executeUpdate();
+		}
+		return message;
 	}
 
 	/** Debits a custody into a sink (§2.5): the asset leaves existence under the code and its reference. */

@@ -238,3 +238,17 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: a committed service mail is in `MailManager` once, and is never deleted by expiry.
 - Proof: `ServiceMailAdoptionTest.aCommittedMessageIsAdoptedOnce`, `aServiceMailIsNeverScheduledForExpiry`,
   `retailMailStillExpires`.
+
+## CP-0015 Claims of service mail recorded
+
+- Files: `java/org/l2jmobius/gameserver/network/holders/MailMessage.java`
+- Reason: retail's claim (RequestPostAttachment.java:191-232) moves a mail's attachments into the receiver's inventory and
+  clears them through `MailMessage.removeAttachments`, telling nobody; the Asset Service must know a service mail was
+  claimed (its delivery's `claimed_at`, asset-service.md §2.1, §11.23, INV12), and a character's deletion is refused
+  while one is unclaimed.
+- Change: when `removeAttachments` clears a sender -1 message's attachments, it calls
+  `ServiceMail.attachmentsCleared(messageId)`, which sets `claimed_at` on the message's delivery if it has one and does
+  nothing when Living Chronicle is not running (the `truth` profile). Retail's claim is otherwise unchanged.
+- Invariant: a service mail whose attachments retail has cleared has `claimed_at` set (or the census sets it).
+- Proof: `ServiceMailClaimTest.claimingTheAttachmentsSetsClaimedAt` (the claim as RequestPostAttachment performs it),
+  `anotherSystemMailHasNoDeliveryAndNothingChanges`.

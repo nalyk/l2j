@@ -41,6 +41,7 @@ public final class AssetService
 	{
 		_adopt = adopt;
 		_db = db;
+		ServiceMail.activate(); // Living Chronicle runs: claims of service mail are recorded
 		_ids = ids;
 		_stager = stager;
 		_config = config;

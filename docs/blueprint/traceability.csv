@@ -88,24 +88,24 @@ TR-wayfarer-s-memory-market-observations,90 §2,Wayfarer's Memory: market observ
 TR-wayfarer-s-memory-shareable-pages,90 §2,Wayfarer's Memory: shareable pages,14 §1–§9,wayfarers-memory.md,MEM-R02;MEM-R06,,,,AT-MEM-02;AT-MEM-06,,reviewed
 TR-wayfarer-s-memory-personal-history,90 §2,Wayfarer's Memory: personal history,14 §1–§9,wayfarers-memory.md,MEM-R07,,,,AT-MEM-07,,reviewed
 TR-wayfarer-s-memory-no-global-wiki,90 §2,Wayfarer's Memory: no global wiki,14 §1–§9,wayfarers-memory.md,MEM-R04;MEM-R09,,,,AT-MEM-04;AT-MEM-09,,reviewed
-TR-pact-voluntary-contracts,90 §2,PACT: voluntary contracts,15 §1–§7,pact.md,PACT-R01;PACT-R09,,,,AT-PACT-01;AT-PACT-09;AT-PACT-00,,specified
-TR-pact-machine-verifiable-clauses,90 §2,PACT: machine-verifiable clauses,15 §1–§7,pact.md,PACT-R04,,,,AT-PACT-04,,specified
-TR-pact-crafting-pact,90 §2,PACT: crafting pact,15 §1–§7,pact.md,PACT-R03,,,,AT-PACT-03,,specified
-TR-pact-loot-charter,90 §2,PACT: loot charter,15 §1–§7,pact.md,PACT-R05,,,,AT-PACT-05,,specified
-TR-pact-purchase,90 §2,PACT: purchase,15 §1–§7,pact.md,PACT-R02,,,,AT-PACT-02,,specified
-TR-pact-craft-order,90 §2,PACT: craft order,15 §1–§7,pact.md,PACT-R03;PACT-R02,,,,AT-PACT-03;AT-PACT-02,,specified
-TR-pact-delivery,90 §2,PACT: delivery,15 §1–§7,pact.md,PACT-R02,,,,AT-PACT-02,,specified
-TR-pact-loans,90 §2,PACT: loans,15 §1–§7,pact.md,PACT-R02,,,,AT-PACT-02,,specified
-TR-pact-mercenary,90 §2,PACT: mercenary,15 §1–§7,pact.md,PACT-R06,,,,AT-PACT-06,,specified
-TR-pact-public-sealed,90 §2,PACT: public/sealed,15 §1–§7,pact.md,PACT-R08,,,,AT-PACT-08,,specified
-TR-pact-objective-history,90 §2,PACT: objective history,15 §1–§7,pact.md,PACT-R08,,,,AT-PACT-08,,specified
-TR-pact-default-freedom,90 §2,PACT: default freedom,15 §1–§7,pact.md,PACT-R09,,,,AT-PACT-09,,specified
-TR-notarius-town-royal-castle,90 §2,Notarius: Town / Royal / Castle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
-TR-notarius-parchment-item,90 §2,Notarius: parchment item,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
-TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote drafting + physical high-value signing,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
-TR-notarius-public-registration,90 §2,Notarius: public registration,"15 §3, §4, §8",pact.md,PACT-R08,,,,AT-PACT-08,,specified
+TR-pact-voluntary-contracts,90 §2,PACT: voluntary contracts,15 §1–§7,pact.md,PACT-R01;PACT-R09,,,,AT-PACT-01;AT-PACT-09;AT-PACT-00,,reviewed
+TR-pact-machine-verifiable-clauses,90 §2,PACT: machine-verifiable clauses,15 §1–§7,pact.md,PACT-R04,,,,AT-PACT-04,,reviewed
+TR-pact-crafting-pact,90 §2,PACT: crafting pact,15 §1–§7,pact.md,PACT-R03,,,,AT-PACT-03,,reviewed
+TR-pact-loot-charter,90 §2,PACT: loot charter,15 §1–§7,pact.md,PACT-R05,,,,AT-PACT-05,,reviewed
+TR-pact-purchase,90 §2,PACT: purchase,15 §1–§7,pact.md,PACT-R02,,,,AT-PACT-02,,reviewed
+TR-pact-craft-order,90 §2,PACT: craft order,15 §1–§7,pact.md,PACT-R03;PACT-R02,,,,AT-PACT-03;AT-PACT-02,,reviewed
+TR-pact-delivery,90 §2,PACT: delivery,15 §1–§7,pact.md,PACT-R02,,,,AT-PACT-02,,reviewed
+TR-pact-loans,90 §2,PACT: loans,15 §1–§7,pact.md,PACT-R02,,,,AT-PACT-02,,reviewed
+TR-pact-mercenary,90 §2,PACT: mercenary,15 §1–§7,pact.md,PACT-R06,,,,AT-PACT-06,,reviewed
+TR-pact-public-sealed,90 §2,PACT: public/sealed,15 §1–§7,pact.md,PACT-R08,,,,AT-PACT-08,,reviewed
+TR-pact-objective-history,90 §2,PACT: objective history,15 §1–§7,pact.md,PACT-R08,,,,AT-PACT-08,,reviewed
+TR-pact-default-freedom,90 §2,PACT: default freedom,15 §1–§7,pact.md,PACT-R09,,,,AT-PACT-09,,reviewed
+TR-notarius-town-royal-castle,90 §2,Notarius: Town / Royal / Castle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,reviewed
+TR-notarius-parchment-item,90 §2,Notarius: parchment item,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,reviewed
+TR-notarius-remote-drafting-physical-high-value-sig,90 §2,Notarius: remote drafting + physical high-value signing,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,reviewed
+TR-notarius-public-registration,90 §2,Notarius: public registration,"15 §3, §4, §8",pact.md,PACT-R08,,,,AT-PACT-08,,reviewed
 TR-notarius-escrow,90 §2,Notarius: escrow,"15 §3, §4, §8",asset-service.md;pact.md,ASSET-R01;ASSET-R02;ASSET-R03;ASSET-R04;ASSET-R07;ASSET-R08;ASSET-R09;ASSET-R10;ASSET-R11;ASSET-R20;ASSET-R22;ASSET-R16;ASSET-R27;PACT-R02,"lc_custody;lc_asset_op;lc_ledger_posting;lc_settlement_key;lc_mail_delivery;items(ESCROW,MAIL)",service mail claim (asset-service.md §9),ItemLocation.ESCROW;retired items;MailManager adoption,AT-ASSET-00;AT-ASSET-01;AT-ASSET-02;AT-ASSET-03;AT-ASSET-04;AT-ASSET-07;AT-ASSET-08;AT-ASSET-09;AT-ASSET-10;AT-ASSET-11;AT-ASSET-22;AT-ASSET-16;AT-ASSET-29;AT-ASSET-20;AT-ASSET-26;AT-ASSET-18;AT-PACT-02,,specified
-TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,specified
+TR-notarius-lifecycle,90 §2,Notarius: lifecycle,"15 §3, §4, §8",pact.md,PACT-R01,,,,AT-PACT-01;AT-PACT-00,,reviewed
 TR-black-ledger-writ,90 §2,Black Ledger: Writ,16 §1–§14,black-ledger.md,BL-R01;BL-R03,,,,AT-BL-00;AT-BL-01;AT-BL-03,,reviewed
 TR-black-ledger-magistrate-guard-captain,90 §2,Black Ledger: Magistrate/Guard Captain,16 §1–§14,black-ledger.md,BL-R03,,,,AT-BL-03,,reviewed
 TR-black-ledger-black-contract,90 §2,Black Ledger: Black Contract,16 §1–§14,black-ledger.md,BL-R01;BL-R02,,,,AT-BL-00;AT-BL-01;AT-BL-02,,reviewed
@@ -179,7 +179,7 @@ TR-citizens-of-aden-and-the-genesis-epoch,90 §4,Citizens of Aden and the Genesi
 TR-relationship-ledger,90 §4,relationship ledger,10 §7,citizens.md,CIT-R05,cit_relation;cit_observation,,,AT-CIT-05,,specified
 TR-crown-law,90 §4,Crown Law,12 §6.2,asset-service.md;aden-remembers.md,ASSET-R05;ASSET-R13;AR-R07,lc_custody(POOL);castle.treasury;lc_law,Crown Law (§4.5),Chamberlain crown_law; Castle.setTaxPercent clamp; teleport levy,AT-ASSET-05;AT-ASSET-13;AT-AR-07,treasury commitments only; laws themselves are Aden Remembers,specified
 TR-caravans,90 §4,caravans,12 §8,asset-service.md;aden-remembers.md,ASSET-R14;ASSET-R25;AR-R04;AR-R05,"lc_custody(MANIFEST);lc_ledger_posting(TOWN_SUPPLY,RAID_SHARE,ROAD_LOSS);lc_caravan;lc_caravan_route;lc_caravan_escort;lc_guild_town",Guild and caravans (§4.6),WalkingManager routes,AT-ASSET-14;AT-ASSET-27;AT-AR-04;AT-AR-05,manifest custody only; routes and escorts are Aden Remembers and PACT,specified
-TR-caravan-escort-and-treaty-contracts,90 §4,Caravan Escort and Treaty contracts,15 §2,pact.md,PACT-R07,,,,AT-PACT-07,,specified
+TR-caravan-escort-and-treaty-contracts,90 §4,Caravan Escort and Treaty contracts,15 §2,pact.md,PACT-R07,,,,AT-PACT-07,,reviewed
 TR-cursed-weapon-writs,90 §4,cursed-weapon writs,16 §2,black-ledger.md,BL-R03,,,,AT-BL-03,,reviewed
 TR-citizen-bounties,90 §4,citizen bounties,16 §2,citizens.md,CIT-R05;CIT-R06,cit_relation;cit_oob_message,,,AT-CIT-05;AT-CIT-06,,specified
 TR-wanted-boards,90 §4,wanted boards,16 §2,chronicle.md,CHR-R01,lc_pub_visible,,,AT-CHR-01,,reviewed

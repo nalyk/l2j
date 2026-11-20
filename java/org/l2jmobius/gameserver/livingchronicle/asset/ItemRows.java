@@ -19,7 +19,19 @@ final class ItemRows
 	{
 	}
 
+	/** A stack's row as Mobius would write it now (§3.3 step 2): where it is and its count in memory, inserted if absent. */
+	static void writeStack(Connection connection, Item stack) throws SQLException
+	{
+		writeRow(connection, stack, stack.getOwnerId(), stack.getItemLocation().name(), stack.getLocationSlot());
+	}
+
 	static void write(Connection connection, Item item, int ownerId, String loc, int locData, Map<String, String> variables) throws SQLException
+	{
+		writeRow(connection, item, ownerId, loc, locData);
+		writeMetadata(connection, item, variables);
+	}
+
+	private static void writeRow(Connection connection, Item item, int ownerId, String loc, int locData) throws SQLException
 	{
 		try (PreparedStatement row = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, custom_type1, custom_type2, mana_left, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE owner_id = VALUES(owner_id), item_id = VALUES(item_id), count = VALUES(count), enchant_level = VALUES(enchant_level), loc = VALUES(loc), loc_data = VALUES(loc_data), custom_type1 = VALUES(custom_type1), custom_type2 = VALUES(custom_type2), mana_left = VALUES(mana_left), time = VALUES(time)"))
 		{
@@ -36,6 +48,10 @@ final class ItemRows
 			row.setLong(11, item.getTime());
 			row.executeUpdate();
 		}
+	}
+
+	private static void writeMetadata(Connection connection, Item item, Map<String, String> variables) throws SQLException
+	{
 		delete(connection, "item_attributes", "itemId", item.getObjectId());
 		if (item.getAugmentation() != null)
 		{

@@ -300,3 +300,15 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Proof: `LoginWaitTest.aLoginWaitsWhileAnOperationOfTheCharacterIsPending` (upstream loaded it at once),
   `aLoginIsRefusedIfTheMarkOutlivesTheBound` (upstream loaded it), `anUnmarkedLoginDoesNotWait`,
   `markingCommitsOnItsOwnConnection`.
+
+## CP-0019 A row the Asset Service wrote
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: when the Asset Service takes part of a stack that Mobius has never saved, its transaction must insert the
+  stack's row from memory (else a crash would leave the taken part in escrow and no debited stack in the database:
+  Adena from nowhere, asset-service.md §3.3 step 2); Mobius then must know the row exists, or its next write would
+  insert a second one (Item.java `insertIntoDb`, `_existsInDb`, private).
+- Change: `Item.markRowWritten()` sets `_existsInDb`; the service calls it after its commit, holding the stack's write
+  lock. Nothing else calls it.
+- Invariant: after the service has written a stack's row, Mobius updates that row and never inserts another.
+- Proof: `StackDebitTest.aStackNeverSavedGetsItsRowInTheOperationAndMobiusKnowsIt`.

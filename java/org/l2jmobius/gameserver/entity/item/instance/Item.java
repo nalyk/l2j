@@ -472,6 +472,15 @@ public class Item extends WorldObject
 	}
 	
 	/**
+	 * Records that this item's row now exists (CP-0019): the Asset Service inserted it in its own transaction, from memory,
+	 * while holding this item's write lock, so Mobius's next write updates it instead of inserting a second.
+	 */
+	public void markRowWritten()
+	{
+		_existsInDb = true;
+	}
+	
+	/**
 	 * @return this item's write lock (CP-0017): the Asset Service holds a debited stack's from the debit to {@code DONE}
 	 */
 	public ReentrantLock writeLock()

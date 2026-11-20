@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.itemcontainer.Inventory;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
 import org.l2jmobius.gameserver.livingchronicle.journal.DurableFact;
 import org.l2jmobius.gameserver.mechanics.variables.ItemVariables;
@@ -61,14 +62,21 @@ public final class AssetTx implements AutoCloseable
 		}
 	}
 
-	/** A debit from a Mobius holder into a custody (§4.3 {@code fund}). */
-	private record Debit(int custody, Holder holder, List<Asset> assets)
+	/** A debit from a Mobius holder into a custody (§4.3 {@code fund}, custody set) or a sink ({@code charge}, sink set). */
+	private record Debit(int custody, Holder holder, List<Asset> assets, SinkCode sink)
 	{
 	}
 
-	/** A whole object taken in memory (§3.3 step 1): what the transaction writes and a refund returns. */
-	private record Taken(Debit debit, Item item, Map<String, String> variables)
+	/**
+	 * What was taken in memory: a whole object (§3.3 step 1, {@code part} 0) or {@code part} units of a stack (step 2);
+	 * what the transaction writes and a refund returns.
+	 */
+	private record Taken(Debit debit, Item item, Map<String, String> variables, long part)
 	{
+		boolean whole()
+		{
+			return part == 0;
+		}
 	}
 
 	private record Version(String table, String idColumn, long id, int version)
@@ -268,14 +276,7 @@ public final class AssetTx implements AutoCloseable
 		{
 			throw new IllegalArgumentException("fund from " + holder.kind() + ": clan warehouses and treasuries are part 4, task 6");
 		}
-		for (Asset asset : assets)
-		{
-			if (asset.objectId() == null)
-			{
-				throw new IllegalArgumentException("fund takes whole objects; an amount of a stack is part 4, task 5");
-			}
-		}
-		final Debit debit = new Debit(custody, holder, List.copyOf(assets));
+		final Debit debit = new Debit(custody, holder, List.copyOf(assets), null);
 		_debits.add(debit);
 		_characters.add(holder.id());
 		_marked.add(holder.id());
@@ -292,14 +293,54 @@ public final class AssetTx implements AutoCloseable
 					continue;
 				}
 				final Item item = taken.item();
-				ItemRows.write(execution.connection(), item, -1, "ESCROW", custody, taken.variables());
-				execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
-				legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+				if (taken.whole())
+				{
+					ItemRows.write(execution.connection(), item, -1, "ESCROW", custody, taken.variables());
+					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
+					legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+				}
+				else
+				{
+					ItemRows.writeStack(execution.connection(), item); // the stack as Mobius would write it now, debit applied
+					execution.give(custody, custody, new Asset(item.getId(), taken.part(), null));
+					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), null, null, taken.part(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), null, null, taken.part(), Leg.Direction.CREDIT));
+					legs.add(legOf(new Asset(item.getId(), taken.part(), null)));
+				}
 			}
 			execution.touched(custody);
 			execution.facts().add(AssetFact.of("EscrowFunded", custody, "custody", custody, "holder", holder.kind().name(), "holder_id", holder.id(), "legs", legs));
 		}, custody);
+	}
+
+	/**
+	 * Charges a live character's Adena into a sink (§4.3 {@code charge}, §2.5): part of its Adena stack, taken as §3.3
+	 * step 2 orders it, never its last unit.
+	 */
+	public void charge(Holder holder, long amount, SinkCode sink)
+	{
+		if (!holder.isCharacter())
+		{
+			throw new IllegalArgumentException("charge from " + holder.kind() + ": part 4, task 6");
+		}
+		final Debit debit = new Debit(-1, holder, List.of(new Asset(Inventory.ADENA_ID, amount, null)), sink);
+		_debits.add(debit);
+		_characters.add(holder.id());
+		_marked.add(holder.id());
+		step(execution ->
+		{
+			for (Taken taken : _taken)
+			{
+				if (taken.debit() != debit)
+				{
+					continue;
+				}
+				ItemRows.writeStack(execution.connection(), taken.item());
+				execution.legs().add(new Leg(holder.account(), holder.id(), null, taken.item().getId(), null, null, taken.part(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, 0, sink.name(), taken.item().getId(), null, null, taken.part(), Leg.Direction.CREDIT));
+			}
+		});
 	}
 
 	/** MARKED then TAKEN (§3.2, §3.3 step 1): marks committed, then each whole object taken out of memory. */
@@ -321,14 +362,14 @@ public final class AssetTx implements AutoCloseable
 		{
 			for (Debit debit : _debits)
 			{
-				final Player player = World.getPlayer(debit.holder().id());
-				if (player == null)
-				{
-					throw new AssetAbort(AssetAbort.Reason.HOLDER_ABSENT, "character " + debit.holder().id() + " is not in the world");
-				}
-				final ItemContainer container = debit.holder().kind() == Holder.Kind.PLAYER ? player.getInventory() : player.getWarehouse();
+				final Player player = player(debit);
+				final ItemContainer container = container(debit, player);
 				for (Asset asset : debit.assets())
 				{
+					if (asset.objectId() == null)
+					{
+						continue; // an amount: taken under the stack locks (§3.3 step 2)
+					}
 					final Item item = container.getItemByObjectId(asset.objectId());
 					if (item == null)
 					{
@@ -354,7 +395,7 @@ public final class AssetTx implements AutoCloseable
 					}
 					final Map<String, String> variables = captureVariables(item);
 					item.awaitWrites();
-					_taken.add(new Taken(debit, item, variables));
+					_taken.add(new Taken(debit, item, variables, 0));
 				}
 			}
 		}
@@ -369,6 +410,115 @@ public final class AssetTx implements AutoCloseable
 				refund(e);
 			}
 			throw e;
+		}
+	}
+
+	private static Player player(Debit debit) throws AssetAbort
+	{
+		final Player player = World.getPlayer(debit.holder().id());
+		if (player == null)
+		{
+			throw new AssetAbort(AssetAbort.Reason.HOLDER_ABSENT, "character " + debit.holder().id() + " is not in the world");
+		}
+		return player;
+	}
+
+	private static ItemContainer container(Debit debit, Player player)
+	{
+		return debit.holder().kind() == Holder.Kind.PLAYER ? player.getInventory() : player.getWarehouse();
+	}
+
+	/** The stacks this operation takes amounts from, distinct, in object-id order (§3.3 step 2's lock order). */
+	private List<Item> stacks() throws AssetAbort
+	{
+		final TreeMap<Integer, Item> stacks = new TreeMap<>();
+		for (Debit debit : _debits)
+		{
+			for (Asset asset : debit.assets())
+			{
+				if (asset.objectId() != null)
+				{
+					continue;
+				}
+				final Item stack = container(debit, player(debit)).getItemByItemId(asset.itemId());
+				if ((stack == null) || !stack.isStackable())
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, debit.holder() + " has no stack of item " + asset.itemId());
+				}
+				stacks.put(stack.getObjectId(), stack);
+			}
+		}
+		return new ArrayList<>(stacks.values());
+	}
+
+	/** Every stack monitor in object-id order, then every stack write lock in object-id order, held to DONE (§3.3). */
+	private Outcome holding(List<Item> stacks, int index) throws AssetAbort
+	{
+		if (index < stacks.size())
+		{
+			synchronized (stacks.get(index))
+			{
+				return holding(stacks, index + 1);
+			}
+		}
+		for (Item stack : stacks)
+		{
+			stack.writeLock().lock();
+		}
+		try
+		{
+			return finish();
+		}
+		finally
+		{
+			for (int i = stacks.size() - 1; i >= 0; i--)
+			{
+				stacks.get(i).writeLock().unlock();
+			}
+		}
+	}
+
+	/** Step 2 under the locks: each amount by an atomic checked decrease that leaves at least one unit (CP-0009). */
+	private void takeParts() throws AssetAbort
+	{
+		for (Debit debit : _debits)
+		{
+			final Player player = player(debit);
+			final ItemContainer container = container(debit, player);
+			for (Asset asset : debit.assets())
+			{
+				if (asset.objectId() != null)
+				{
+					continue;
+				}
+				final Item stack = container.getItemByItemId(asset.itemId());
+				if ((stack == null) || stack.isRetired() || (container.getItemByObjectId(stack.getObjectId()) != stack))
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, debit.holder() + " no longer has its stack of item " + asset.itemId());
+				}
+				final String refusal = Eligibility.refusal(player, stack);
+				if (refusal != null)
+				{
+					throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, stack + ": " + refusal);
+				}
+				if (!stack.tryDecrease(asset.qty()))
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, debit.holder() + " holds " + stack.getCount() + " of item " + asset.itemId() + "; a debit leaves at least one unit");
+				}
+				_taken.add(new Taken(debit, stack, Map.of(), asset.qty()));
+			}
+		}
+	}
+
+	private void abortAfter(AssetAbort cause)
+	{
+		if (_taken.isEmpty())
+		{
+			clearMarks();
+		}
+		else
+		{
+			refund(cause);
 		}
 	}
 
@@ -420,6 +570,7 @@ public final class AssetTx implements AutoCloseable
 			{
 				refund.returnByMail(taken, marked, _op);
 				refund.commit();
+				rowsWritten(taken);
 				discardTaken();
 				_taken.clear();
 				return;
@@ -462,10 +613,29 @@ public final class AssetTx implements AutoCloseable
 				for (Taken t : entry.getValue())
 				{
 					final Item item = t.item();
-					ItemRows.write(connection, item, ServiceMail.SENDER, "MAIL", message, t.variables());
-					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
-					execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
-					legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+					if (t.whole())
+					{
+						ItemRows.write(connection, item, ServiceMail.SENDER, "MAIL", message, t.variables());
+						execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
+						legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+					}
+					else
+					{
+						// A part: the stack's row from memory (debit applied), the part as a new attachment row.
+						ItemRows.writeStack(connection, item);
+						try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
+						{
+							attach.setInt(1, _service.ids().next());
+							attach.setInt(2, item.getId());
+							attach.setLong(3, t.part());
+							attach.setInt(4, message);
+							attach.executeUpdate();
+						}
+						execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), null, null, t.part(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), null, null, t.part(), Leg.Direction.CREDIT));
+						legs.add(legOf(new Asset(item.getId(), t.part(), null)));
+					}
 				}
 				execution.mailed(message, holder.id(), MailReason.REFUND);
 				execution.facts().add(AssetFact.of("Refunded", entry.getValue().get(0).debit().custody(), "aborted_op", original.hex(), "receiver", holder.id(), "mail", message, "legs", legs));
@@ -482,8 +652,11 @@ public final class AssetTx implements AutoCloseable
 	{
 		for (Taken taken : _taken)
 		{
-			taken.item().stopAllTasks();
-			World.removeObject(taken.item());
+			if (taken.whole())
+			{
+				taken.item().stopAllTasks();
+				World.removeObject(taken.item());
+			}
 		}
 	}
 
@@ -634,9 +807,35 @@ public final class AssetTx implements AutoCloseable
 		{
 			return _prior;
 		}
-		if (!_debits.isEmpty())
+		if (_debits.isEmpty())
 		{
-			take();
+			return attempts();
+		}
+		take();
+		final List<Item> stacks;
+		try
+		{
+			stacks = stacks();
+		}
+		catch (AssetAbort e)
+		{
+			abortAfter(e);
+			throw e;
+		}
+		return holding(stacks, 0);
+	}
+
+	/** Under the stack locks: the amounts taken, the transaction, then DONE or the refund, before any lock is released. */
+	private Outcome finish() throws AssetAbort
+	{
+		try
+		{
+			takeParts();
+		}
+		catch (AssetAbort e)
+		{
+			abortAfter(e);
+			throw e;
 		}
 		final Outcome outcome;
 		try
@@ -645,18 +844,43 @@ public final class AssetTx implements AutoCloseable
 		}
 		catch (AssetAbort e)
 		{
-			if (!_taken.isEmpty())
-			{
-				refund(e);
-			}
+			abortAfter(e);
 			throw e;
 		}
-		if ((outcome != Outcome.COMMITTED) && !_taken.isEmpty())
+		if (outcome != Outcome.COMMITTED)
 		{
-			refund(new AssetAbort(AssetAbort.Reason.NOT_COMMITTED, _op + " ended " + outcome + " after taking assets"));
+			abortAfter(new AssetAbort(AssetAbort.Reason.NOT_COMMITTED, _op + " ended " + outcome + " after taking assets"));
+			return outcome;
 		}
+		rowsWritten(_taken);
 		discardTaken();
+		tellClients();
 		return outcome;
+	}
+
+	/** A stack whose row the transaction wrote now exists for Mobius too (CP-0019), under the write lock still held. */
+	private static void rowsWritten(List<Taken> taken)
+	{
+		for (Taken t : taken)
+		{
+			if (!t.whole())
+			{
+				t.item().markRowWritten();
+			}
+		}
+	}
+
+	/** DONE: the characters debited see their inventories as they are now. */
+	private void tellClients()
+	{
+		for (int charId : _marked)
+		{
+			final Player player = World.getPlayer(charId);
+			if (player != null)
+			{
+				player.sendItemList(false);
+			}
+		}
 	}
 
 	private Outcome attempts() throws AssetAbort

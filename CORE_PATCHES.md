@@ -129,3 +129,96 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   another thread could, stays off), `cp0007AGoneNpcPutOnLateDoesNotStay` (a late caller holding a deleted NPC),
   `cp0007AStaleEntryIsDroppedWhenItFallsDue` (an entry left by any race), `cp0007AnNpcWhoseRegionWokeMeanwhileStaysOn`
   (the region waking while the manager drops the entry).
+
+## CP-0008 The escrow location
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/enums/ItemLocation.java`, `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`
+- Reason: the Asset Service keeps escrowed items as ordinary `items` rows (owner -1, `loc = 'ESCROW'`, `loc_data` = the
+  custody; asset-service.md §2.3). Mobius restores a row through `ItemLocation.valueOf` and gives up with a SEVERE log on
+  a location it does not know (Item.java:1538, 1546-1549), and startup cleanup deletes every row whose owner is neither a
+  character nor a clan unless that owner is -1 (DatabaseIdManager.java:67): one corrupted owner id would have destroyed
+  the evidence the custody check needs (§11.4, §11.5).
+- Change: `ESCROW` is added at the end of `ItemLocation` (no ordinal moves; nothing uses them), and cleanup's owner
+  query also keeps every `loc = 'ESCROW'` row whatever its owner. Every other row is cleaned up exactly as before.
+- Invariant: an `ESCROW` row is never deleted by cleanup and never loaded by a container (their restores select by
+  location); it restores as an `Item` in `ESCROW`.
+- Proof: `EscrowLocationTest.anEscrowRowRestoresAsAnItemWithItsLocation`, `cleanupKeepsEscrowRowsWhateverTheirOwner`
+  (and an ordinary orphan still deleted), `noContainerLoadsAnEscrowRow`.
+
+## CP-0009 Atomic stack counts
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: `Item.changeCount` reads `_count`, computes and writes it back with no lock (Item.java:451-474), and Mobius calls
+  it without the item's monitor (`ItemContainer.addItem`, :230 and :268; the destination of `transferItem`, :376, under
+  the source's monitor), so two concurrent changes of one stack can lose one of them, in Mobius today. The Asset Service
+  must also take part of a stack without ever racing a retail change (asset-service.md §3.3, §11.15).
+- Change: `_count` is `volatile` and `changeCount` updates it by compare-and-set with exactly the clamps it had (Adena
+  at `MAX_ADENA`, every count at 0); new `tryDecrease(quantity)` takes the quantity atomically only if at least one unit
+  remains. No lock is added, so no lock order changes.
+- Invariant: every change to a stack's count is applied exactly once; a debit never empties a stack.
+- Proof: `AtomicCountTest.concurrentChangesLoseNothing` (8 threads × 20 000 increments, exact),
+  `tryDecreaseRacingIncreasesLosesNothing`, `tryDecreaseLeavesAtLeastOne`, `retailClampsAreUnchanged`.
+
+## CP-0010 Retired items
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/entity/itemcontainer/ItemContainer.java`, `java/org/l2jmobius/gameserver/entity/itemcontainer/Inventory.java`, `java/org/l2jmobius/gameserver/entity/actor/Player.java`, `java/org/l2jmobius/gameserver/entity/itemcontainer/PlayerInventory.java`
+- Reason: when the Asset Service takes a whole object out of a live container, the item's old row still says where it
+  was until the operation commits, and Mobius may still hold references to the object (a scheduled equip,
+  UseItem.java:350, Player.java:2257-2267; a pending transfer; a lazy save). Any of them acting on it, or writing it,
+  would recreate a second representation of an asset that now belongs to a custody (asset-service.md §3.3, §11.20).
+- Change: `Item.retire()` / `isRetired()`. A retired item is never written (`updateDatabase` returns at once, under its
+  write lock), and is refused by `ItemContainer.addItem(Item)`, `transferItem` (checked under the source's monitor, with
+  the presence check), `destroyItem`, both `Inventory.dropItem` overloads (under the item's monitor),
+  `Inventory.setPaperdollItem` and `Player.useEquippableItem`. Nothing changes for an item that is not retired.
+  `PlayerInventory.transferItem` dereferenced the item `super.transferItem` returns, which upstream already returns as
+  null when the item left the container meanwhile (a NullPointerException in retail on that race); it now checks for
+  null, as its `destroyItem` and `dropItem` siblings already do.
+- Invariant: after `retire()`, no Mobius operation moves, destroys, drops or equips the item, and no Mobius write reaches
+  its row.
+- Proof: `RetiredItemTest.aRetiredItemIsNotTransferred`, `aRetiredItemIsNotDestroyed`, `aRetiredItemIsNotDropped`,
+  `aRetiredItemIsNotAddedToAnotherContainer`, `aRetiredItemIsNotEquipped`, `aRetiredItemIsNeverWritten`.
+
+## CP-0011 Object ids released after their row is deleted
+
+- Files: `java/org/l2jmobius/gameserver/managers/ItemManager.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: `ItemManager.destroyItem` released the item's object id at once (ItemManager.java:177), before its caller
+  deleted the row (`ItemContainer.java:235`, `:385`, `:450`), and a failed delete is only logged (Item.java:1769): the id
+  manager could hand the id to a new item while a row still held it. The Asset Service keeps escrowed and mailed rows by
+  object id, so an id must stay reserved exactly while a row has it (asset-service.md §11.6, ASSET-R24, INV10).
+- Change: `destroyItem` asks the item to release its id when its row is gone (`releaseObjectIdWhenRowDeleted`): at once
+  if the item has no row, as before; otherwise inside `removeFromDb`, right after the `items` row's DELETE succeeded,
+  under the item's write lock. A failed delete releases nothing.
+- Invariant: an object id is in use while any `items` row has it.
+- Proof: `IdReleaseTest.aDestroyedItemsIdIsReservedUntilItsRowIsDeleted`, `aFailedDeleteKeepsTheIdReserved` (the delete
+  refused by a trigger: row kept, id kept), `anItemWithoutARowIsReleasedAtOnce` (retail's immediate release).
+
+## CP-0012 The castle treasury
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`
+- Reason: `addToTreasuryNoTax` read, changed and wrote `_treasury` with no lock (Castle.java:333-373), so tax income
+  racing a chamberlain's withdrawal could lose one of them or overdraw the treasury, and the row was written from
+  whatever `_treasury` held at that moment. The Asset Service debits and credits treasuries for Crown Law and must
+  serialise with Mobius on them (asset-service.md §3.3, §11.10).
+- Change: `_treasury` is `volatile` and changed by compare-and-set, with retail's refusal of an overdraw (`false`) and its
+  clamp at `MAX_ADENA` unchanged; the row is written under a new `treasuryLock()` from the value in memory once the lock
+  is held, so the last writer writes the last value. `addToTreasury` (the tax skims) is unchanged and funnels into it.
+- Invariant: every treasury change is applied exactly once, the treasury is never below 0, and after the last writer
+  releases the lock the row equals memory.
+- Proof: `TreasuryTest.concurrentIncomeAndWithdrawalsLoseNothingAndTheRowEqualsMemory` (upstream lost a withdrawal:
+  1 006 002 for 1 006 000), `anOverdrawIsRefusedUnderRace`, `retailClampIsUnchangedAndTheLockExists`.
+
+## CP-0013 Item variables changed in one step
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/variables/AbstractVariables.java`, `java/org/l2jmobius/gameserver/mechanics/variables/ItemVariables.java`
+- Reason: every `set` overload tracked the change under the save lock and then set the value after releasing it
+  (AbstractVariables.java:53-121), so a save, or the Asset Service capturing an item's variables, could see the change
+  tracked but the value not yet set and lose it; `merge` bypassed tracking entirely (StatSet.java:82-85); and an item's
+  scheduled save (ItemVariables.java:135) could write its variables after the Asset Service had taken the item
+  (asset-service.md §3.3, §11.12).
+- Change: all ten `set` overloads, `set(name, value, markAsChanged)` and `merge` track and set in one step under the save
+  lock; new `retire()` / `isRetired()`: a retired object refuses `set`, `remove` and `merge`, and `ItemVariables` never
+  saves it. Nothing changes for variables that are not retired.
+- Invariant: a capture under the save lock sees either neither or both of a change's tracking and value; a retired
+  object's rows are written by nothing but the Asset Service's transaction.
+- Proof: `ItemVariablesTest.aCaptureNeverSeesATrackedChangeWithoutItsValue` (upstream: `true=ABSENT`, a tracked change
+  without its value), `aRetiredVariablesObjectRefusesWritesAndNeverSaves`.

@@ -40,6 +40,8 @@ public abstract class AbstractVariables extends StatSet
 	protected final Set<String> _modified = new HashSet<>(4);
 	protected final Set<String> _deleted = new HashSet<>(4);
 	protected final Lock _saveLock = new ReentrantLock();
+	/** Taken by the Asset Service with its item (CP-0013): refuses every write and every save from then on. */
+	private volatile boolean _retired;
 	
 	protected AbstractVariables()
 	{
@@ -53,71 +55,137 @@ public abstract class AbstractVariables extends StatSet
 	@Override
 	public void set(String name, boolean value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, byte value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, short value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, int value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, long value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, float value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, double value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, String value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, Enum<?> value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
 	}
 	
 	@Override
 	public void set(String name, Object value)
 	{
-		trackChange(name);
-		super.set(name, value);
+		setTracked(name, () -> super.set(name, value));
+	}
+	
+	/**
+	 * Tracks and applies one change in a single step under the save lock (CP-0013), so no save or capture ever sees a
+	 * change tracked without its value; a retired object refuses it.
+	 * @param name the name of the variable
+	 * @param put the change itself
+	 */
+	private void setTracked(String name, Runnable put)
+	{
+		_saveLock.lock();
+		try
+		{
+			if (_retired)
+			{
+				return;
+			}
+			
+			trackChange(name);
+			put.run();
+		}
+		finally
+		{
+			_saveLock.unlock();
+		}
+	}
+	
+	/**
+	 * Retires these variables (CP-0013): the Asset Service has taken their item; from now on every write is refused and
+	 * nothing is saved, since the service's own transaction writes their rows.
+	 */
+	public void retire()
+	{
+		_saveLock.lock();
+		try
+		{
+			_retired = true;
+		}
+		finally
+		{
+			_saveLock.unlock();
+		}
+	}
+	
+	/**
+	 * @return whether the Asset Service has taken these variables' item (CP-0013)
+	 */
+	public boolean isRetired()
+	{
+		return _retired;
+	}
+	
+	/**
+	 * Adds every entry of {@code newSet}, each tracked (CP-0013: upstream's {@code merge} bypassed tracking).
+	 */
+	@Override
+	public void merge(StatSet newSet)
+	{
+		_saveLock.lock();
+		try
+		{
+			if (_retired)
+			{
+				return;
+			}
+			
+			for (String name : newSet.getSet().keySet())
+			{
+				trackChange(name);
+			}
+			super.merge(newSet);
+		}
+		finally
+		{
+			_saveLock.unlock();
+		}
 	}
 	
 	/**
@@ -156,12 +224,25 @@ public abstract class AbstractVariables extends StatSet
 	 */
 	public void set(String name, String value, boolean markAsChanged)
 	{
-		if (markAsChanged)
+		_saveLock.lock();
+		try
 		{
-			trackChange(name);
+			if (_retired)
+			{
+				return;
+			}
+			
+			if (markAsChanged)
+			{
+				trackChange(name);
+			}
+			
+			super.set(name, value);
 		}
-		
-		super.set(name, value);
+		finally
+		{
+			_saveLock.unlock();
+		}
 	}
 	
 	/**
@@ -204,6 +285,11 @@ public abstract class AbstractVariables extends StatSet
 		
 		try
 		{
+			if (_retired)
+			{
+				return; // CP-0013
+			}
+			
 			_hasChanges.compareAndSet(false, true);
 			
 			// First remove from map.

@@ -32,5 +32,7 @@ public enum ItemLocation
 	LEASE,
 	REFUND,
 	MAIL,
-	FREIGHT
+	FREIGHT,
+	/** Held by a Living Chronicle custody (owner -1, loc_data = custody id); never loaded by a container, never cleaned up. */
+	ESCROW
 }

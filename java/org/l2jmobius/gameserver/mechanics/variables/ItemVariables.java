@@ -175,6 +175,11 @@ public class ItemVariables extends AbstractVariables
 		
 		try
 		{
+			if (isRetired())
+			{
+				return false; // CP-0013: the Asset Service's transaction writes these rows
+			}
+			
 			try (Connection con = DatabaseFactory.getConnection())
 			{
 				if (!_deleted.isEmpty())

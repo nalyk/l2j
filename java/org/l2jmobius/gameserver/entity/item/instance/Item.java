@@ -23,6 +23,8 @@ package org.l2jmobius.gameserver.entity.item.instance;
 import static org.l2jmobius.gameserver.entity.itemcontainer.Inventory.ADENA_ID;
 import static org.l2jmobius.gameserver.entity.itemcontainer.Inventory.MAX_ADENA;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -107,8 +109,26 @@ public class Item extends WorldObject
 	/** ID of who dropped the item last, used for knownlist */
 	private int _dropperObjectId = 0;
 	
-	/** Quantity of the item */
-	private long _count;
+	/** Set by {@link #releaseObjectIdWhenRowDeleted()}: the object id is released right after this item's row is deleted (CP-0011). */
+	private boolean _releaseIdOnDelete;
+	
+	/** Taken by the Asset Service (CP-0010): never written by Mobius again, refused by every Mobius operation. */
+	private volatile boolean _retired;
+	
+	/** Quantity of the item; changed by compare-and-set (CP-0009), so concurrent changes never lose one another. */
+	private volatile long _count;
+	private static final VarHandle COUNT;
+	static
+	{
+		try
+		{
+			COUNT = MethodHandles.lookup().findVarHandle(Item.class, "_count", long.class);
+		}
+		catch (ReflectiveOperationException e)
+		{
+			throw new ExceptionInInitializerError(e);
+		}
+	}
 	/** Initial Quantity of the item */
 	private long _initCount;
 	/** Remaining time (in miliseconds) */
@@ -433,6 +453,74 @@ public class Item extends WorldObject
 	}
 	
 	/**
+	 * Retires this item: the Asset Service has taken it out of its container (asset-service.md §3.3). From now on Mobius
+	 * never writes it ({@link #updateDatabase(boolean)} does nothing) and every container operation and equip refuses it.
+	 */
+	public void retire()
+	{
+		_retired = true;
+	}
+	
+	/**
+	 * @return whether the Asset Service has taken this item (CP-0010)
+	 */
+	public boolean isRetired()
+	{
+		return _retired;
+	}
+	
+	/**
+	 * Releases this destroyed item's object id as soon as no row holds it (CP-0011): at once if the item has no row,
+	 * otherwise right after {@link #updateDatabase()} has deleted the row, never if that delete fails, so the id manager
+	 * never hands out an id a row still uses (asset-service.md §11.6).
+	 */
+	public void releaseObjectIdWhenRowDeleted()
+	{
+		_dbLock.lock();
+		try
+		{
+			if (_existsInDb)
+			{
+				_releaseIdOnDelete = true;
+			}
+			else
+			{
+				IdManager.getInstance().releaseId(getObjectId());
+			}
+		}
+		finally
+		{
+			_dbLock.unlock();
+		}
+	}
+	
+	/**
+	 * Takes {@code quantity} from this stack atomically, only if at least one unit remains (CP-0009, the Asset Service's
+	 * debit of part of a stack; taking a whole stack is a whole-object debit).
+	 * @param quantity a positive quantity
+	 * @return whether it was taken
+	 */
+	public boolean tryDecrease(long quantity)
+	{
+		if (quantity <= 0)
+		{
+			throw new IllegalArgumentException("a decrease is positive, not " + quantity);
+		}
+		long old;
+		do
+		{
+			old = _count;
+			if ((old - quantity) < 1)
+			{
+				return false;
+			}
+		}
+		while (!COUNT.compareAndSet(this, old, old - quantity));
+		_storedInDb = false;
+		return true;
+	}
+	
+	/**
 	 * @return Returns the count.
 	 */
 	public long getCount()
@@ -455,21 +543,19 @@ public class Item extends WorldObject
 			return;
 		}
 		
-		final long old = _count;
 		final long max = _itemId == ADENA_ID ? MAX_ADENA : Long.MAX_VALUE;
-		if ((count > 0) && (_count > (max - count)))
+		long old;
+		long next;
+		do
 		{
-			setCount(max);
+			old = _count;
+			next = ((count > 0) && (old > (max - count))) ? max : old + count; // the same clamps as before, applied atomically
+			if (next < 0)
+			{
+				next = 0;
+			}
 		}
-		else
-		{
-			setCount(_count + count);
-		}
-		
-		if (_count < 0)
-		{
-			setCount(0);
-		}
+		while (!COUNT.compareAndSet(this, old, next));
 		
 		_storedInDb = false;
 		
@@ -1484,6 +1570,11 @@ public class Item extends WorldObject
 		
 		try
 		{
+			if (_retired)
+			{
+				return; // CP-0010: the Asset Service's transaction writes this item's row, nothing else does
+			}
+			
 			if (_existsInDb)
 			{
 				if ((_ownerId == 0) || (_loc == ItemLocation.VOID) || (_loc == ItemLocation.REFUND) || ((_count == 0) && (_loc != ItemLocation.LEASE)))
@@ -1746,6 +1837,11 @@ public class Item extends WorldObject
 				ps.executeUpdate();
 				_existsInDb = false;
 				_storedInDb = false;
+				if (_releaseIdOnDelete)
+				{
+					_releaseIdOnDelete = false;
+					IdManager.getInstance().releaseId(getObjectId()); // CP-0011: the row is gone, the id is free
+				}
 			}
 			
 			try (PreparedStatement ps = con.prepareStatement("DELETE FROM item_attributes WHERE itemId = ?"))

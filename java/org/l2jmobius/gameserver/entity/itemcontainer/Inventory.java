@@ -801,7 +801,7 @@ public abstract class Inventory extends ItemContainer
 		
 		synchronized (item)
 		{
-			if (!_items.contains(item))
+			if (!_items.contains(item) || item.isRetired())
 			{
 				return null;
 			}
@@ -837,7 +837,7 @@ public abstract class Inventory extends ItemContainer
 		
 		synchronized (item)
 		{
-			if (!_items.contains(item))
+			if (!_items.contains(item) || item.isRetired())
 			{
 				return null;
 			}
@@ -1071,6 +1071,11 @@ public abstract class Inventory extends ItemContainer
 	 */
 	public synchronized Item setPaperdollItem(int slot, Item item)
 	{
+		if ((item != null) && item.isRetired())
+		{
+			return null; // CP-0010: a scheduled equip reaching a retired item puts nothing on
+		}
+		
 		final Item old = _paperdoll[slot];
 		if (old != item)
 		{

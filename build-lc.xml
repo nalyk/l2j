@@ -20,6 +20,7 @@
 	<property name="runtime.game" location="${build}/runtime/game" />
 	<property name="lock.dir" location="test/lock" />
 	<property name="lock.actual" location="${build}/lock-actual" />
+	<property name="inventory.actual" location="${build}/inventory-actual" />
 	<property name="truth.agent" location="${build}/lc-truth-agent.jar" />
 	<!-- Which test classes run. The gate runs them all; ./build.sh test -Dtest.only=AiLockTest runs one while working on it. -->
 	<property name="test.only" value="*Test" />
@@ -79,6 +80,7 @@
 	<target name="test" depends="compile-tests, stage" description="Run the test suite, one JVM per test class.">
 		<delete dir="${test.reports}" quiet="true" />
 		<delete dir="${lock.actual}" quiet="true" />
+		<delete dir="${inventory.actual}" quiet="true" />
 		<mkdir dir="${test.reports}" />
 		<!-- Tests run under the JVM flags production runs under, read from the file production reads. -->
 		<loadfile property="server.jvmargs" srcFile="${datapack}/game/java.cfg" />
@@ -111,10 +113,16 @@
 					<jvmarg value="-XX:+UnlockExperimentalVMOptions" />
 					<jvmarg value="-XX:hashCode=2" />
 					<sysproperty key="lc.sql.dir" value="${datapack}/db_installer/sql" />
+					<!-- Living Chronicle's own schema (docs/spec), applied by tests on top of the stock one. -->
+					<sysproperty key="lc.migrations.dir" value="${basedir}/sql/migrations" />
+					<!-- The specs and the traceability matrix, which a test keeps consistent. -->
+					<sysproperty key="lc.docs.dir" value="${basedir}/docs" />
 					<sysproperty key="lc.classes.dir" value="${build.bin}" />
 					<!-- Behaviour-lock goldens are read from the checkout; what a run observed goes to the build directory. -->
 					<sysproperty key="lc.lock.dir" value="${lock.dir}" />
 					<sysproperty key="lc.lock.actual" value="${lock.actual}" />
+					<!-- The H5 content inventory (docs/spec/retail-truth.md §4.5): a regeneration that differs is written here. -->
+					<sysproperty key="lc.inventory.actual" value="${inventory.actual}" />
 				</fork>
 			</testclasses>
 		</junitlauncher>

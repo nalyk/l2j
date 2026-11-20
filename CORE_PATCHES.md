@@ -191,3 +191,18 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: an object id is in use while any `items` row has it.
 - Proof: `IdReleaseTest.aDestroyedItemsIdIsReservedUntilItsRowIsDeleted`, `aFailedDeleteKeepsTheIdReserved` (the delete
   refused by a trigger: row kept, id kept), `anItemWithoutARowIsReleasedAtOnce` (retail's immediate release).
+
+## CP-0012 The castle treasury
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`
+- Reason: `addToTreasuryNoTax` read, changed and wrote `_treasury` with no lock (Castle.java:333-373), so tax income
+  racing a chamberlain's withdrawal could lose one of them or overdraw the treasury, and the row was written from
+  whatever `_treasury` held at that moment. The Asset Service debits and credits treasuries for Crown Law and must
+  serialise with Mobius on them (asset-service.md §3.3, §11.10).
+- Change: `_treasury` is `volatile` and changed by compare-and-set, with retail's refusal of an overdraw (`false`) and its
+  clamp at `MAX_ADENA` unchanged; the row is written under a new `treasuryLock()` from the value in memory once the lock
+  is held, so the last writer writes the last value. `addToTreasury` (the tax skims) is unchanged and funnels into it.
+- Invariant: every treasury change is applied exactly once, the treasury is never below 0, and after the last writer
+  releases the lock the row equals memory.
+- Proof: `TreasuryTest.concurrentIncomeAndWithdrawalsLoseNothingAndTheRowEqualsMemory` (upstream lost a withdrawal:
+  1 006 002 for 1 006 000), `anOverdrawIsRefusedUnderRace`, `retailClampIsUnchangedAndTheLockExists`.

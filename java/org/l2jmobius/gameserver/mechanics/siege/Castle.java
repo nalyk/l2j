@@ -20,6 +20,8 @@
  */
 package org.l2jmobius.gameserver.mechanics.siege;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -80,7 +83,21 @@ public class Castle extends AbstractResidence
 	private Calendar _siegeTimeRegistrationEndDate; // Last siege end date + 1 day.
 	private int _taxPercent = 0;
 	private double _taxRate = 0;
-	private long _treasury = 0;
+	/** Changed by compare-and-set (CP-0012); its row is written under {@link #treasuryLock()}. */
+	private volatile long _treasury = 0;
+	private static final VarHandle TREASURY;
+	static
+	{
+		try
+		{
+			TREASURY = MethodHandles.lookup().findVarHandle(Castle.class, "_treasury", long.class);
+		}
+		catch (ReflectiveOperationException e)
+		{
+			throw new ExceptionInInitializerError(e);
+		}
+	}
+	private final ReentrantLock _treasuryLock = new ReentrantLock();
 	private boolean _showNpcCrest = false;
 	private SiegeZone _zone = null;
 	private ResidenceTeleportZone _teleZone;
@@ -337,26 +354,32 @@ public class Castle extends AbstractResidence
 			return false;
 		}
 		
-		long amount = amountValue;
-		if (amount < 0)
+		// CP-0012: retail's overdraw refusal and clamp, applied atomically, so concurrent changes neither lose one another
+		// nor overdraw the treasury.
+		long old;
+		long next;
+		do
 		{
-			amount *= -1;
-			if (_treasury < amount)
+			old = _treasury;
+			if (amountValue < 0)
 			{
-				return false;
+				final long amount = -amountValue;
+				if (old < amount)
+				{
+					return false;
+				}
+				next = old - amount;
 			}
-			
-			_treasury -= amount;
+			else
+			{
+				next = (old + amountValue) > Inventory.MAX_ADENA ? Inventory.MAX_ADENA : old + amountValue;
+			}
 		}
-		else if ((_treasury + amount) > Inventory.MAX_ADENA)
-		{
-			_treasury = Inventory.MAX_ADENA;
-		}
-		else
-		{
-			_treasury += amount;
-		}
+		while (!TREASURY.compareAndSet(this, old, next));
 		
+		// The row is written under the treasury lock from the value in memory when the lock is held, so the last writer
+		// writes the last value (the Asset Service writes the row under the same lock).
+		_treasuryLock.lock();
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("UPDATE castle SET treasury = ? WHERE id = ?"))
 		{
@@ -367,6 +390,10 @@ public class Castle extends AbstractResidence
 		catch (Exception e)
 		{
 			LOGGER.log(Level.WARNING, e.getMessage(), e);
+		}
+		finally
+		{
+			_treasuryLock.unlock();
 		}
 		
 		return true;
@@ -976,6 +1003,15 @@ public class Castle extends AbstractResidence
 	public double getTaxRate()
 	{
 		return _taxRate;
+	}
+	
+	/**
+	 * @return the lock under which the treasury's row is written (CP-0012); the Asset Service holds it while it debits or
+	 *         credits the treasury in its own transaction (asset-service.md §3.3)
+	 */
+	public ReentrantLock treasuryLock()
+	{
+		return _treasuryLock;
 	}
 	
 	public long getTreasury()

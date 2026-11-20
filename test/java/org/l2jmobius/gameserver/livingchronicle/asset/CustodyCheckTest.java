@@ -112,5 +112,7 @@ class CustodyCheckTest
 		assertTrue(violations.get(0).contains("INV03"), violations.get(0));
 		assertTrue(_f.frozen(Violations.ASSET_MODULE));
 		assertEquals(7, _f.number("SELECT count FROM items WHERE object_id = 899999002"), "never deleted");
+		_check.run();
+		assertEquals(1, _f.facts("InvariantViolated", missing), "an unrepaired violation is reported again, not recorded again");
 	}
 }

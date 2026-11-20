@@ -72,9 +72,14 @@ public final class AssetService
 				}
 				execution.facts().add(AssetFact.of("CustodyOpened", opened[0], "custody", opened[0], "kind", kind.name(), "owner_module", ownerModule, "owner_ref", ownerRef));
 			});
-			if (tx.commit() == Outcome.COMMITTED)
+			final Outcome outcome = tx.commit();
+			if (outcome == Outcome.COMMITTED)
 			{
 				return opened[0];
+			}
+			if (outcome == Outcome.ALREADY_REFUNDED)
+			{
+				throw new AssetAbort(AssetAbort.Reason.NOT_COMMITTED, op + " was refunded; opening again needs a new attempt id");
 			}
 		}
 		try (Connection connection = _db.open();
@@ -109,7 +114,7 @@ public final class AssetService
 			try
 			{
 				final java.util.List<Custody> custodies = new java.util.ArrayList<>();
-				try (PreparedStatement read = connection.prepareStatement("SELECT custody_id, kind, owner_ref, state, version FROM lc_custody WHERE owner_module = ? AND state <> 'CLOSED' ORDER BY custody_id FOR UPDATE"))
+				try (PreparedStatement read = connection.prepareStatement("SELECT custody_id, kind, owner_ref, state, version FROM lc_custody WHERE owner_module = ? ORDER BY custody_id FOR UPDATE"))
 				{
 					read.setString(1, module);
 					try (ResultSet result = read.executeQuery())
@@ -136,6 +141,18 @@ public final class AssetService
 							reopen.executeUpdate();
 						}
 						facts.add(AssetFact.of("AdminCorrection", custody.id(), "admin", adminCharId, "reason", reason, "custody", custody.id(), "unfrozen", true));
+					}
+				}
+				if (Violations.ASSET_MODULE.equals(module))
+				{
+					try (PreparedStatement orphans = connection.prepareStatement("SELECT COUNT(*) FROM items i LEFT JOIN lc_custody c ON c.custody_id = i.loc_data WHERE i.loc = 'ESCROW' AND c.custody_id IS NULL");
+						ResultSet result = orphans.executeQuery())
+					{
+						result.next();
+						if (result.getLong(1) > 0)
+						{
+							throw new IllegalStateException(module + " stays frozen: " + result.getLong(1) + " ESCROW rows under no custody (INV03)");
+						}
 					}
 				}
 				ModuleState.unfreeze(connection, module);

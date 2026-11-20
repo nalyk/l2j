@@ -42,6 +42,19 @@ public final class AssetTx implements AutoCloseable
 		void run(Execution execution) throws SQLException, AssetAbort;
 	}
 
+	/** Found inside the transaction: the operation, or its refund, has already committed (§3.2). */
+	private static final class Prior extends Exception
+	{
+		private static final long serialVersionUID = 1L;
+		final Outcome _outcome;
+
+		Prior(Outcome outcome)
+		{
+			super(outcome.name(), null, false, false);
+			_outcome = outcome;
+		}
+	}
+
 	private record Version(String table, String idColumn, long id, int version)
 	{
 	}
@@ -62,6 +75,8 @@ public final class AssetTx implements AutoCloseable
 	private final List<Key> _keys = new ArrayList<>();
 	private final List<DurableFact> _facts = new ArrayList<>();
 	private boolean _ended;
+	/** The owner modules of the custodies the last attempt locked: frozen with the operation's module on an unresolved commit. */
+	private final TreeSet<String> _owners = new TreeSet<>();
 
 	AssetTx(AssetService service, OpId op, String module, String action, long subjectRef, Outcome prior)
 	{
@@ -121,8 +136,8 @@ public final class AssetTx implements AutoCloseable
 			final List<Map<String, Object>> legs = new ArrayList<>();
 			for (Asset asset : moved)
 			{
-				execution.take(from, asset);
-				execution.give(to, asset);
+				execution.take(from, asset, false);
+				execution.give(to, from, asset);
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, from, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, to, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
 				legs.add(legOf(asset));
@@ -155,6 +170,7 @@ public final class AssetTx implements AutoCloseable
 				closing.setInt(2, custody);
 				closing.executeUpdate();
 			}
+			execution.touched(custody); // INV11 before closing: postings with no rows are a disagreement, not an empty custody
 			execution.facts().add(AssetFact.of("CustodyClosed", custody, "custody", custody, "reason", "EMPTY"));
 		}, custody);
 	}
@@ -169,7 +185,7 @@ public final class AssetTx implements AutoCloseable
 			final List<Map<String, Object>> legs = new ArrayList<>();
 			for (Asset asset : sunk)
 			{
-				execution.take(custody, asset);
+				execution.take(custody, asset, true);
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.SINK, reference, code.name(), asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
 				legs.add(legOf(asset));
@@ -207,9 +223,10 @@ public final class AssetTx implements AutoCloseable
 		step(execution ->
 		{
 			final Custody locked = execution.custody(custody);
-			if ((locked == null) || (locked.state() == Custody.State.CLOSED))
+			// Rows under a CLOSED custody (INV04) or under no custody (INV03) may only be taken out; the custody stays as it is.
+			if (((locked == null) || (locked.state() == Custody.State.CLOSED)) && !added.isEmpty())
 			{
-				throw new AssetAbort(AssetAbort.Reason.CUSTODY_NOT_OPEN, "custody " + custody + " is " + (locked == null ? "unknown" : "CLOSED"));
+				throw new AssetAbort(AssetAbort.Reason.CUSTODY_NOT_OPEN, "custody " + custody + " is " + (locked == null ? "unknown" : "CLOSED") + ": nothing may be put into it");
 			}
 			final Connection connection = execution.connection();
 			final Map<Integer, Long> before = CustodyInvariants.held(connection, custody);
@@ -235,13 +252,13 @@ public final class AssetTx implements AutoCloseable
 			}
 			for (Asset asset : added)
 			{
-				execution.give(custody, asset);
+				execution.give(custody, custody, asset);
 				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, violationFactId, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
 			}
 			for (Asset asset : removed)
 			{
-				execution.take(custody, asset);
+				execution.take(custody, asset, true);
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.SINK, violationFactId, code, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
 			}
@@ -299,15 +316,27 @@ public final class AssetTx implements AutoCloseable
 			{
 				throw new AssetAbort(AssetAbort.Reason.ERROR, "no connection for " + _op, e);
 			}
+			Long previousWait = null;
 			try
 			{
+				previousWait = sessionLockWait(connection);
 				connection.setAutoCommit(false);
 				lockWait(connection, config.lockWaitMillis());
 				execute(connection);
 			}
+			catch (Prior e)
+			{
+				rollback(connection, previousWait);
+				return e._outcome;
+			}
+			catch (RuntimeException | Error e)
+			{
+				rollback(connection, previousWait);
+				throw e;
+			}
 			catch (AssetAbort e)
 			{
-				rollback(connection);
+				rollback(connection, previousWait);
 				if (e.violation() != null)
 				{
 					recordViolation(e.violation(), e);
@@ -316,7 +345,7 @@ public final class AssetTx implements AutoCloseable
 			}
 			catch (SQLException e)
 			{
-				rollback(connection);
+				rollback(connection, previousWait);
 				if (contention(e))
 				{
 					if (attempt < config.deadlockRetries())
@@ -336,15 +365,24 @@ public final class AssetTx implements AutoCloseable
 				close(connection); // never rolled back: the server may have committed
 				return resolve(e);
 			}
+			restoreLockWait(connection, previousWait);
 			close(connection);
 			return Outcome.COMMITTED;
 		}
 	}
 
-	private void execute(Connection connection) throws SQLException, AssetAbort
+	private void execute(Connection connection) throws SQLException, AssetAbort, Prior
 	{
 		final Execution execution = new Execution(connection, _service, _op);
 		execution.lockCustodies(_custodies);
+		_owners.clear();
+		for (int custody : _custodies)
+		{
+			if (execution.custody(custody) != null)
+			{
+				_owners.add(execution.custody(custody).ownerModule());
+			}
+		}
 		for (Step step : _steps)
 		{
 			step.run(execution);
@@ -355,6 +393,18 @@ public final class AssetTx implements AutoCloseable
 		{
 			checkVersion(connection, version);
 		}
+		// A refund that committed after begin() makes this attempt final (§3.2); read under a lock so a racing one is seen.
+		try (PreparedStatement refund = connection.prepareStatement("SELECT op_id FROM lc_asset_op WHERE op_id = ? FOR UPDATE"))
+		{
+			refund.setBytes(1, _op.refund().bytes());
+			try (ResultSet result = refund.executeQuery())
+			{
+				if (result.next())
+				{
+					throw new Prior(Outcome.ALREADY_REFUNDED);
+				}
+			}
+		}
 		try (PreparedStatement insert = connection.prepareStatement("INSERT INTO lc_asset_op (op_id, module, action, subject_ref, committed_at) VALUES (?, ?, ?, ?, NOW(3))"))
 		{
 			insert.setBytes(1, _op.bytes());
@@ -362,6 +412,14 @@ public final class AssetTx implements AutoCloseable
 			insert.setString(3, _action);
 			insert.setLong(4, _subjectRef);
 			insert.executeUpdate();
+		}
+		catch (SQLException e)
+		{
+			if (e.getErrorCode() == DUPLICATE_KEY)
+			{
+				throw new Prior(Outcome.ALREADY_COMMITTED); // another attempt of the same id committed meanwhile
+			}
+			throw e;
 		}
 		final List<Key> keys = new ArrayList<>(_keys);
 		keys.sort(Comparator.comparing(Key::scope).thenComparing(Key::key));
@@ -467,6 +525,7 @@ public final class AssetTx implements AutoCloseable
 		{
 			try (Connection connection = _service.db().open())
 			{
+				final Long previousWait = sessionLockWait(connection);
 				connection.setAutoCommit(false);
 				lockWait(connection, Math.max(1, (deadline - System.nanoTime()) / 1_000_000L));
 				try (PreparedStatement read = connection.prepareStatement("SELECT op_id FROM lc_asset_op WHERE op_id = ? FOR UPDATE"))
@@ -476,6 +535,7 @@ public final class AssetTx implements AutoCloseable
 					{
 						final boolean committed = result.next();
 						connection.rollback();
+						restoreLockWait(connection, previousWait);
 						if (committed)
 						{
 							return Outcome.COMMITTED;
@@ -487,18 +547,25 @@ public final class AssetTx implements AutoCloseable
 			catch (SQLException e)
 			{
 				last = e;
+				pause();
 			}
 		}
 		while (System.nanoTime() < deadline);
 		try (Connection connection = _service.db().open())
 		{
-			ModuleState.freeze(connection, _module, "UNCERTAIN_COMMIT", null);
+			// The operation's module and every owner of a custody it touched: owners' modules are what operations check.
+			final TreeSet<String> modules = new TreeSet<>(_owners);
+			modules.add(_module);
+			for (String module : modules)
+			{
+				ModuleState.freeze(connection, module, "UNCERTAIN_COMMIT", null);
+			}
 		}
 		catch (SQLException e)
 		{
 			last.addSuppressed(e);
 		}
-		throw new UncertainCommitException(_op + ": the commit's result could not be learned; module " + _module + " frozen", last);
+		throw new UncertainCommitException(_op + ": the commit's result could not be learned; modules frozen: " + _module + " " + _owners, last);
 	}
 
 	private void recordViolation(AssetAbort.Violation violation, AssetAbort abort)
@@ -510,6 +577,45 @@ public final class AssetTx implements AutoCloseable
 		catch (SQLException e)
 		{
 			abort.addSuppressed(e); // the operation still did not commit; the census will find the violation again
+		}
+	}
+
+	private static Long sessionLockWait(Connection connection) throws SQLException
+	{
+		try (Statement statement = connection.createStatement();
+			ResultSet result = statement.executeQuery("SELECT @@session.innodb_lock_wait_timeout"))
+		{
+			result.next();
+			return result.getLong(1);
+		}
+	}
+
+	/** A pooled connection goes back with the lock wait it came with, so Mobius's own statements keep the server's. */
+	private static void restoreLockWait(Connection connection, Long previous)
+	{
+		if (previous == null)
+		{
+			return;
+		}
+		try (Statement statement = connection.createStatement())
+		{
+			statement.execute("SET SESSION innodb_lock_wait_timeout = " + previous);
+		}
+		catch (SQLException e)
+		{
+			// The connection is unusable and will be discarded.
+		}
+	}
+
+	private static void pause()
+	{
+		try
+		{
+			Thread.sleep(50);
+		}
+		catch (InterruptedException e)
+		{
+			Thread.currentThread().interrupt();
 		}
 	}
 
@@ -534,7 +640,7 @@ public final class AssetTx implements AutoCloseable
 		return false;
 	}
 
-	private static void rollback(Connection connection)
+	private static void rollback(Connection connection, Long previousWait)
 	{
 		try
 		{
@@ -544,6 +650,7 @@ public final class AssetTx implements AutoCloseable
 		{
 			// The connection is unusable: InnoDB rolls the transaction back when the session ends.
 		}
+		restoreLockWait(connection, previousWait);
 		close(connection);
 	}
 
@@ -668,63 +775,85 @@ public final class AssetTx implements AutoCloseable
 			}
 		}
 
-		/** Takes an asset out of a custody's rows: a whole object leaves its row as it is, an amount is cut from the stack. */
-		void take(int custody, Asset asset) throws SQLException, AssetAbort
+		/**
+		 * Takes an asset out of a custody's rows. A whole object is checked and locked; when it leaves existence
+		 * ({@code removing}: a sink, a correction out) its row and metadata rows are deleted, otherwise ({@code move}) the
+		 * row stays for {@link #give} to move. An amount is cut from the custody's rows of the item, in object-id order.
+		 */
+		void take(int custody, Asset asset, boolean removing) throws SQLException, AssetAbort
 		{
 			_touched.add(custody);
 			if (asset.objectId() != null)
 			{
-				try (PreparedStatement check = _connection.prepareStatement("SELECT 1 FROM items WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? AND count = ? FOR UPDATE"))
+				final long[] row = lockRow(asset.objectId(), custody, asset.itemId());
+				if ((row == null) || (row[1] != asset.qty()))
 				{
-					check.setInt(1, asset.objectId());
-					check.setInt(2, custody);
-					check.setInt(3, asset.itemId());
-					check.setLong(4, asset.qty());
-					try (ResultSet result = check.executeQuery())
-					{
-						if (!result.next())
-						{
-							throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is not whole in custody " + custody);
-						}
-					}
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is not whole in custody " + custody);
+				}
+				if (removing)
+				{
+					deleteObject(asset.objectId());
 				}
 				return;
 			}
-			final long[] row = stack(custody, asset.itemId());
-			if ((row == null) || (row[1] < asset.qty()))
+			final List<long[]> rows = stacks(custody, asset.itemId());
+			long available = 0;
+			for (long[] row : rows)
 			{
-				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "custody " + custody + " holds " + (row == null ? 0 : row[1]) + " of item " + asset.itemId() + ", not " + asset.qty());
+				available += row[1];
 			}
-			final String sql = row[1] == asset.qty() ? "DELETE FROM items WHERE object_id = ?" : "UPDATE items SET count = count - " + asset.qty() + " WHERE object_id = ?";
-			try (PreparedStatement write = _connection.prepareStatement(sql))
+			if (available < asset.qty())
 			{
-				write.setLong(1, row[0]);
-				expectOne(write.executeUpdate(), row[0]);
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "custody " + custody + " holds " + available + " of item " + asset.itemId() + ", not " + asset.qty());
+			}
+			long remaining = asset.qty();
+			for (long[] row : rows)
+			{
+				if (remaining == 0)
+				{
+					break;
+				}
+				final long cut = Math.min(remaining, row[1]);
+				if (cut == row[1])
+				{
+					deleteObject(row[0]);
+				}
+				else
+				{
+					try (PreparedStatement write = _connection.prepareStatement("UPDATE items SET count = count - ? WHERE object_id = ?"))
+					{
+						write.setLong(1, cut);
+						write.setLong(2, row[0]);
+						expectOne(write.executeUpdate(), row[0]);
+					}
+				}
+				remaining -= cut;
 			}
 		}
 
-		/** Puts an asset into a custody's rows: a whole object changes custody, an amount joins the custody's stack. */
-		void give(int custody, Asset asset) throws SQLException, AssetAbort
+		/** Puts an asset into a custody's rows: a whole object changes custody from {@code source}, an amount joins the custody's first row of the item. */
+		void give(int custody, int source, Asset asset) throws SQLException, AssetAbort
 		{
 			_touched.add(custody);
 			if (asset.objectId() != null)
 			{
-				try (PreparedStatement move = _connection.prepareStatement("UPDATE items SET loc_data = ? WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW'"))
+				try (PreparedStatement move = _connection.prepareStatement("UPDATE items SET loc_data = ? WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW' AND loc_data = ?"))
 				{
 					move.setInt(1, custody);
 					move.setInt(2, asset.objectId());
+					move.setInt(3, source);
 					expectOne(move.executeUpdate(), asset.objectId());
 				}
 				return;
 			}
-			final long[] row = stack(custody, asset.itemId());
-			if (row != null)
+			final List<long[]> rows = stacks(custody, asset.itemId());
+			if (!rows.isEmpty())
 			{
 				try (PreparedStatement add = _connection.prepareStatement("UPDATE items SET count = count + ? WHERE object_id = ?"))
 				{
 					add.setLong(1, asset.qty());
-					add.setLong(2, row[0]);
-					expectOne(add.executeUpdate(), row[0]);
+					add.setLong(2, rows.get(0)[0]);
+					expectOne(add.executeUpdate(), rows.get(0)[0]);
 				}
 				return;
 			}
@@ -738,17 +867,68 @@ public final class AssetTx implements AutoCloseable
 			}
 		}
 
-		/** The custody's one row of a stackable item, locked: {object id, count}, or null. */
-		private long[] stack(int custody, int itemId) throws SQLException
+		/**
+		 * The custody's rows of an item, each locked by its primary key in object-id order: candidates are read without a
+		 * lock (the custody row's lock already keeps other operations off this custody), then locked and re-checked, so no
+		 * range of a secondary index is locked. {object id, count} per row.
+		 */
+		private List<long[]> stacks(int custody, int itemId) throws SQLException
 		{
-			try (PreparedStatement read = _connection.prepareStatement("SELECT object_id, count FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? ORDER BY object_id FOR UPDATE"))
+			final List<Long> candidates = new ArrayList<>();
+			try (PreparedStatement read = _connection.prepareStatement("SELECT object_id FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? ORDER BY object_id"))
 			{
 				read.setInt(1, custody);
 				read.setInt(2, itemId);
 				try (ResultSet result = read.executeQuery())
 				{
-					return result.next() ? new long[] { result.getLong(1), result.getLong(2) } : null;
+					while (result.next())
+					{
+						candidates.add(result.getLong(1));
+					}
 				}
+			}
+			final List<long[]> rows = new ArrayList<>();
+			for (long objectId : candidates)
+			{
+				final long[] row = lockRow(objectId, custody, itemId);
+				if (row != null)
+				{
+					rows.add(row);
+				}
+			}
+			return rows;
+		}
+
+		/** Locks one row by primary key and returns {object id, count} if it is still the custody's row of the item. */
+		private long[] lockRow(long objectId, int custody, int itemId) throws SQLException
+		{
+			try (PreparedStatement read = _connection.prepareStatement("SELECT count FROM items WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? FOR UPDATE"))
+			{
+				read.setLong(1, objectId);
+				read.setInt(2, custody);
+				read.setInt(3, itemId);
+				try (ResultSet result = read.executeQuery())
+				{
+					return result.next() ? new long[] { objectId, result.getLong(1) } : null;
+				}
+			}
+		}
+
+		/** An object leaves existence: its row and its metadata rows (§2.3), in the transaction. */
+		private void deleteObject(long objectId) throws SQLException, AssetAbort
+		{
+			for (String table : new String[] { "item_attributes", "item_elementals", "item_variables" })
+			{
+				try (PreparedStatement delete = _connection.prepareStatement("DELETE FROM " + table + " WHERE " + (table.equals("item_variables") ? "id" : "itemId") + " = ?"))
+				{
+					delete.setLong(1, objectId);
+					delete.executeUpdate();
+				}
+			}
+			try (PreparedStatement delete = _connection.prepareStatement("DELETE FROM items WHERE object_id = ?"))
+			{
+				delete.setLong(1, objectId);
+				expectOne(delete.executeUpdate(), objectId);
 			}
 		}
 

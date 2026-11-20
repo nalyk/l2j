@@ -9,7 +9,7 @@ import java.util.TreeMap;
 import java.util.function.Function;
 
 /**
- * The invariants over one custody (docs/spec/asset-service.md §6): INV03 (its ESCROW rows are owned by -1), INV04 (a
+ * The invariants over one custody (docs/spec/asset-service.md §6): INV02 (no escrowed object also on the ground), INV03 (its ESCROW rows are owned by -1), INV04 (a
  * CLOSED custody holds nothing), INV05 (its owner allows the holding), INV11 (its postings equal its rows per item id).
  * Each check reads on the caller's connection and returns the evidence of a violation, or null.
  */
@@ -22,6 +22,11 @@ final class CustodyInvariants
 	/** The first violation over the custody, as "INVnn: evidence", or null. */
 	static String violation(Connection connection, Custody custody, Function<String, HoldingPolicy> owners) throws SQLException
 	{
+		final long twice = count(connection, "SELECT COUNT(*) FROM items i JOIN itemsonground g ON g.object_id = i.object_id WHERE i.loc = 'ESCROW' AND i.loc_data = ?", custody.id());
+		if (twice > 0)
+		{
+			return "INV02: " + twice + " escrowed objects also lie on the ground";
+		}
 		final long foreign = count(connection, "SELECT COUNT(*) FROM items WHERE loc = 'ESCROW' AND loc_data = ? AND (owner_id IS NULL OR owner_id <> -1)", custody.id());
 		if (foreign > 0)
 		{

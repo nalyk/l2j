@@ -265,4 +265,17 @@ class CustodyOperationsTest
 		assertEquals(0, _f.number("SELECT COUNT(*) FROM (SELECT op_id, item_id, SUM(IF(direction = 'DEBIT', qty, -qty)) AS d FROM lc_ledger_posting GROUP BY op_id, item_id HAVING d <> 0) unbalanced"), "INV01");
 		assertNotEquals(0, _f.number("SELECT COUNT(*) FROM lc_ledger_posting"));
 	}
+
+	@Test
+	void twoRowsOfOneStackableItemAreTakenTogether() throws Exception
+	{
+		final int from = _f.open("TEST");
+		final int to = _f.open("TEST");
+		_f.seed(from, ADENA, 100, false);
+		_f.seed(from, ADENA, 50, false);
+		assertEquals(Outcome.COMMITTED, move(from, to, new Asset(ADENA, 120, null)));
+		assertEquals(30, _f.held(from, ADENA));
+		assertEquals(120, _f.held(to, ADENA));
+		assertEquals(30, _f.posted(from, ADENA));
+	}
 }

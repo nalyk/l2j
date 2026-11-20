@@ -383,4 +383,127 @@ class AssetTxTest
 		holder.close();
 		assertEquals(Outcome.COMMITTED, outcome.get(30, TimeUnit.SECONDS));
 	}
+
+	record UnknownFact(String stream) implements DurableFact
+	{
+		@Override
+		public String typeName()
+		{
+			return "Asset.NoSuchType";
+		}
+
+		@Override
+		public int schemaVersion()
+		{
+			return 1;
+		}
+
+		@Override
+		public int sensitivity()
+		{
+			return 1;
+		}
+
+		@Override
+		public String payloadJson()
+		{
+			return "{}";
+		}
+	}
+
+	@Test
+	void anUncheckedExceptionInsideTheTransactionReleasesItsLocks() throws Exception
+	{
+		try (Connection connection = _database.connect();
+			Statement statement = connection.createStatement())
+		{
+			statement.execute("INSERT INTO lc_test_owner VALUES (5, 0)");
+		}
+		try (AssetTx tx = SERVICE.begin(op(), "TEST", "BAD", 1))
+		{
+			tx.expectVersion("lc_test_owner", "id", 5, 0); // locks the row
+			tx.fact(new UnknownFact("test.bad"));
+			assertThrows(IllegalStateException.class, tx::commit);
+		}
+		final AssetService quick = service(new AssetConfig(15, 5000, 50, 0));
+		try (AssetTx tx = quick.begin(op(), "TEST", "AFTER", 1))
+		{
+			tx.expectVersion("lc_test_owner", "id", 5, 0);
+			assertEquals(Outcome.COMMITTED, tx.commit(), "the failed attempt's lock is gone");
+		}
+	}
+
+	@Test
+	void twoAttemptsOfOneIdRacingEndAsOneCommitAndOneAlreadyCommitted() throws Exception
+	{
+		final OpId op = op();
+		final AssetTx first = SERVICE.begin(op, "TEST", "RACE", 1);
+		final AssetTx second = SERVICE.begin(op, "TEST", "RACE", 1);
+		assertEquals(Outcome.COMMITTED, first.commit());
+		assertEquals(Outcome.ALREADY_COMMITTED, second.commit());
+		assertEquals(1, opRows(op));
+	}
+
+	@Test
+	void aRefundCommittedAfterBeginIsHonoured() throws Exception
+	{
+		final OpId op = op();
+		final AssetTx attempt = SERVICE.begin(op, "TEST", "LATE", 1);
+		try (AssetTx refund = SERVICE.begin(op.refund(), "TEST", "REFUND", 1))
+		{
+			refund.commit();
+		}
+		assertEquals(Outcome.ALREADY_REFUNDED, attempt.commit());
+		assertEquals(0, opRows(op));
+	}
+
+	@Test
+	void anUncertainCommitFreezesTheOwnersOfEveryCustodyItTouched() throws Exception
+	{
+		final AssetService service = new AssetService(AssetTxTest::faulty, IDS::incrementAndGet, new OutboxStager(Clock.systemUTC(), () -> 0L, () -> 1), new AssetConfig(15, 100, 50, 0), Map.of("OWNER5", (c, r) -> true));
+		final int custody = service.open(OpId.of("OWNER5", 1, "OPEN", 0), Custody.Kind.POOL, "OWNER5", 1);
+		FAULT.set(Fault.THROW_AND_HANG);
+		try (AssetTx tx = service.begin(OpId.of("CALLER5", 1, "CLOSE", 0), "CALLER5", "CLOSE", custody))
+		{
+			tx.close(custody);
+			assertThrows(UncertainCommitException.class, tx::commit);
+		}
+		try (Connection connection = _database.connect())
+		{
+			assertTrue(ModuleState.isFrozen(connection, "CALLER5"));
+			assertTrue(ModuleState.isFrozen(connection, "OWNER5"), "the custody's owner, whose operations a freeze must stop");
+		}
+		final Connection hung = HUNG.getAndSet(null);
+		hung.rollback();
+		hung.close();
+	}
+
+	@Test
+	void aPooledConnectionGetsItsLockWaitBack() throws Exception
+	{
+		final Connection pooled = _database.connect();
+		final long before;
+		try (Statement statement = pooled.createStatement();
+			ResultSet result = statement.executeQuery("SELECT @@session.innodb_lock_wait_timeout"))
+		{
+			result.next();
+			before = result.getLong(1);
+		}
+		final Connection shared = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]
+		{
+			Connection.class
+		}, (proxy, method, args) -> method.getName().equals("close") ? null : method.invoke(pooled, args));
+		final AssetService service = new AssetService(() -> shared, IDS::incrementAndGet, new OutboxStager(Clock.systemUTC(), () -> 0L, () -> 1), AssetConfig.defaults(), Map.of());
+		try (AssetTx tx = service.begin(op(), "TEST", "POOL", 1))
+		{
+			tx.commit();
+		}
+		try (Statement statement = pooled.createStatement();
+			ResultSet result = statement.executeQuery("SELECT @@session.innodb_lock_wait_timeout"))
+		{
+			result.next();
+			assertEquals(before, result.getLong(1), "Mobius's statements on a pooled connection keep the server's lock wait");
+		}
+		pooled.close();
+	}
 }

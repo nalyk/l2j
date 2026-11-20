@@ -69,7 +69,8 @@ public final class CustodyCheck
 					continue;
 				}
 				violations.add("custody " + custody.id() + ": " + violation);
-				if (custody.state() != Custody.State.FROZEN)
+				// Recorded once: a frozen custody, or a closed one whose owner is already frozen, is reported but not recorded again.
+				if ((custody.state() == Custody.State.OPEN) || ((custody.state() == Custody.State.CLOSED) && !ModuleState.isFrozen(connection, custody.ownerModule())))
 				{
 					Violations.record(connection, _stager, custody.id(), invariant(violation), violation);
 				}
@@ -78,7 +79,10 @@ public final class CustodyCheck
 			{
 				final String violation = "INV03: " + orphan.getValue() + " ESCROW rows under no custody";
 				violations.add("custody " + orphan.getKey() + ": " + violation);
-				Violations.record(connection, _stager, orphan.getKey(), "INV03", violation);
+				if (!ModuleState.isFrozen(connection, Violations.ASSET_MODULE))
+				{
+					Violations.record(connection, _stager, orphan.getKey(), "INV03", violation);
+				}
 			}
 			connection.setAutoCommit(false);
 			_stager.stage(connection, null, List.of(new AssetFact("Asset.RecoveryCompleted", "asset.recovery", Json.object(Map.of("custodies_checked", custodies.size(), "violations", violations.size())))));

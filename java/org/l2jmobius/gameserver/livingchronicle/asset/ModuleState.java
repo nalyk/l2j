@@ -9,7 +9,11 @@ import java.sql.SQLException;
  * The freeze switch every Living Chronicle module honours ({@code lc_module_state}, blueprint 04 §8): a module with no row
  * runs. A violated invariant freezes the owning module; only a corrective admin operation, and then {@code unfreeze}, end it.
  * <p>
- * Each call runs in the caller's connection and transaction. A freeze keeps the reason and evidence of the first violation:
+ * Each call runs in the caller's connection and transaction. {@link #isFrozen} is a plain read: a module freeze that
+ * commits while an operation is in flight lets that one operation commit, and every later one refuses. A locking read is
+ * not used because, for a module with no row yet, it takes a gap lock that would block the freeze itself (a hung
+ * transaction then makes the uncertain-commit freeze impossible). The custody's own freeze has no such window: it is
+ * written under the custody row's lock, which the operation holds. A freeze keeps the reason and evidence of the first violation:
  * a later one adds nothing a person repairing the first needs more.
  * </p>
  */

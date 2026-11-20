@@ -25,7 +25,7 @@ class SinkAndCorrectionTest
 	static void start() throws Exception
 	{
 		final HoldingPolicy always = (connection, ref) -> true;
-		_f = new AssetFixtures(700_000_000, Map.of("TEST", always, "COLD", always, "BROKEN", always));
+		_f = new AssetFixtures(700_000_000, Map.of("TEST", always, "COLD", always, "BROKEN", always, "SHUT", always, "SHUT2", always, "TWICE", always));
 	}
 
 	@Test
@@ -142,5 +142,90 @@ class SinkAndCorrectionTest
 			tx.correct(custody, List.of(new Asset(ADENA, 1, null)), List.of(), Reconcile.NONE, 1, "why", 268_000_001);
 			assertEquals(AssetAbort.Reason.CUSTODY_NOT_OPEN, assertThrows(AssetAbort.class, tx::commit).reason());
 		}
+	}
+
+	@Test
+	void aSinkOrACorrectionOfAWholeObjectDeletesItsRow() throws Exception
+	{
+		final int custody = _f.open("TEST");
+		final int sword = _f.seed(custody, AssetFixtures.SWORD, 1, true);
+		final int other = _f.seed(custody, AssetFixtures.SWORD, 1, true);
+		try (AssetTx tx = _f.service.begin(_f.op("CRAFT"), "PACT", "CRAFT", 1))
+		{
+			tx.sink(custody, List.of(new Asset(AssetFixtures.SWORD, 1, sword)), SinkCode.CRAFT_INPUT, 1);
+			assertEquals(Outcome.COMMITTED, tx.commit());
+		}
+		assertEquals(0, _f.number("SELECT COUNT(*) FROM items WHERE object_id = " + sword));
+		try (AssetTx tx = _f.service.begin(_f.op("CORRECT"), "ASSET", "CORRECT", custody))
+		{
+			tx.correct(custody, List.of(), List.of(new Asset(AssetFixtures.SWORD, 1, other)), Reconcile.NONE, 5, "removed", 268_000_001);
+			assertEquals(Outcome.COMMITTED, tx.commit());
+		}
+		assertEquals(0, _f.number("SELECT COUNT(*) FROM items WHERE object_id = " + other));
+		assertFalse(_f.frozen("TEST"), "a valid operation never freezes its owner");
+	}
+
+	@Test
+	void unfreezeChecksClosedCustodiesToo() throws Exception
+	{
+		final int custody = _f.open("SHUT");
+		try (AssetTx tx = _f.service.begin(_f.op("CLOSE"), "SHUT", "CLOSE", custody))
+		{
+			tx.close(custody);
+			tx.commit();
+		}
+		_f.execute("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data) VALUES (-1, 799999001, 57, 3, 0, 'ESCROW', " + custody + ")");
+		try (Connection connection = _f.database.connect())
+		{
+			ModuleState.freeze(connection, "SHUT", "INV04", null);
+		}
+		assertThrows(IllegalStateException.class, () -> _f.service.unfreeze("SHUT", 268_000_001, "try"), "a closed custody holding rows keeps its module frozen");
+	}
+
+	@Test
+	void rowsUnderAClosedCustodyOrNoCustodyAreTakenOutByACorrectionThatLeavesItClosed() throws Exception
+	{
+		final int custody = _f.open("SHUT2");
+		try (AssetTx tx = _f.service.begin(_f.op("CLOSE"), "SHUT2", "CLOSE", custody))
+		{
+			tx.close(custody);
+			tx.commit();
+		}
+		_f.execute("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data) VALUES (-1, 799999101, 57, 9, 0, 'ESCROW', " + custody + ")");
+		try (AssetTx tx = _f.service.begin(_f.op("CORRECT"), "ASSET", "CORRECT", custody))
+		{
+			tx.correct(custody, List.of(new Asset(ADENA, 1, null)), List.of(), Reconcile.NONE, 11, "nothing goes into a closed custody", 268_000_001);
+			assertEquals(AssetAbort.Reason.CUSTODY_NOT_OPEN, assertThrows(AssetAbort.class, tx::commit).reason());
+		}
+		try (AssetTx tx = _f.service.begin(_f.op("CORRECT"), "ASSET", "CORRECT", custody))
+		{
+			tx.correct(custody, List.of(), List.of(new Asset(ADENA, 9, null)), Reconcile.RECOGNIZE_ROWS, 11, "rows found under a closed custody", 268_000_001);
+			assertEquals(Outcome.COMMITTED, tx.commit());
+		}
+		assertEquals(0, _f.held(custody, ADENA));
+		assertEquals(0, _f.posted(custody, ADENA), "recognised, then taken out: the ledger shows both");
+		assertEquals("CLOSED", _f.text("SELECT state FROM lc_custody WHERE custody_id = " + custody));
+		final int nowhere = 2_000_000_100;
+		_f.execute("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data) VALUES (-1, 799999102, 57, 4, 0, 'ESCROW', " + nowhere + ")");
+		try (AssetTx tx = _f.service.begin(_f.op("CORRECT"), "ASSET", "CORRECT", nowhere))
+		{
+			tx.correct(nowhere, List.of(), List.of(new Asset(ADENA, 4, null)), Reconcile.RECOGNIZE_ROWS, 12, "rows under no custody", 268_000_001);
+			assertEquals(Outcome.COMMITTED, tx.commit());
+		}
+		assertEquals(0, _f.held(nowhere, ADENA));
+	}
+
+	@Test
+	void unfreezeRefusesAnEscrowObjectThatIsAlsoOnTheGround() throws Exception
+	{
+		final int custody = _f.open("TWICE");
+		final int sword = _f.seed(custody, AssetFixtures.SWORD, 1, true);
+		_f.execute("INSERT INTO itemsonground (object_id, item_id, count, x, y, z) VALUES (" + sword + ", " + AssetFixtures.SWORD + ", 1, 0, 0, 0)");
+		try (Connection connection = _f.database.connect())
+		{
+			ModuleState.freeze(connection, "TWICE", "INV02", null);
+		}
+		final IllegalStateException refused = assertThrows(IllegalStateException.class, () -> _f.service.unfreeze("TWICE", 268_000_001, "try"));
+		assertTrue(refused.getMessage().contains("INV02"), refused.getMessage());
 	}
 }

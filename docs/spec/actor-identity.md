@@ -1,6 +1,6 @@
 # SPEC-ACTOR — Actor Identity
 
-- Status: reviewed (revision 6; its Signal clarification signed off with aden-signal.md in Signal's round 5; record in §12)
+- Status: draft (revision 7: the `lc citizen export` command for the citizen runner, under review; revision 6 was signed off; record in §12)
 - Blueprint: 04 §2 (Actor Identity); 02 §3 (game logic never branches on "is this a citizen"), §12 (never trust the client);
   10 (Citizens of Aden); 13 §… (Signal reports human / synthetic / mixed); 17 (history's humans-only filter); consensus §3.
 - DDL: `sql/migrations/V007__lc_actor.sql` (after the Fact Journal, before the Asset Service).
@@ -195,7 +195,9 @@ None of its own: policy rows are module configuration, versioned (§2.2). Nothin
 ## 9. Interface
 
 None for players. Admin: `lc citizen provision <login> <profile> <principal>`, `lc actor <char>` (prints the snapshot and
-the account row), `lc policy <module>`.
+the account row), `lc policy <module>`, `lc citizen export <file>` (writes, for every `SYNTHETIC_CITIZEN` account,
+account id, login, principal id, retired and `identity_ver`, for the runner's identity import, citizens.md §4.6: the only
+path by which the runner learns an identity change).
 
 ## 10. Requirements
 
@@ -243,6 +245,7 @@ the account row), `lc policy <module>`.
 
 ## 12. Review record
 
+- Revision 7 (amendment, under review): §9 adds `lc citizen export`, the runner's only source of identity changes (Citizens review round 1 (citizens.md revision 2)).
 - Revision 6 signed off with aden-signal.md in Signal's round 5, with §3's explanatory passage qualified the same way.
 - Revision 6 (after the round-5 sign-off): Aden Signal lets a viewer choose not to be offered citizens, which by
   construction changes that viewer's candidate lists by origin. ACTOR-R09 and AT-ACTOR-09 now state that exception (the

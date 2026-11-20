@@ -1,6 +1,6 @@
 # Retail Truth cases
 
-One file per case, `cases/RT-<DOMAIN>-<NNNN>.yaml`, in the format of blueprint 11 §1.3. A case says what retail does,
+One file per case, `cases/RT-<DOMAIN>-<NNNN>.yaml`, in the format of docs/spec/retail-truth.md §2.1 (blueprint 11 §1.3). A case says what retail does,
 with evidence of the classes in §1.2, and how the server compares: `EXACT`, `FUNCTIONAL`, `APPROXIMATE`, `BROKEN`,
 `MISSING` or `UNKNOWN`. It is not the behaviour lock (`test/lock`), which says only what the server does now.
 

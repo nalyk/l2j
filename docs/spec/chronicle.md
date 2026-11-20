@@ -1,6 +1,6 @@
 # SPEC-CHR — Chronicle of Aden
 
-- Status: draft (revision 5, answering four adversarial review rounds; record in §12)
+- Status: draft (revision 6, answering five adversarial review rounds; record in §12)
 - Blueprint: 17 (Chronicle of Aden); 01 §2.6 (deterministic engine, optional narration); 02 §7 (three processes; the
   narrator an external local service), §6 (budgets); 04 §4 (publication DTOs, a separate database user), §8 (narrator
   down); 10 §8 (Genesis: the Chronicle runs from day 0); 12 §9 (Aden Remembers decides what became history); 14 §7
@@ -307,11 +307,18 @@ EN, RO and RU; a missing translation is a test failure, not a fallback.
 
 ## 5. Facts
 
-**Publication rows are outputs, not derived state.** Each `lc_pub_row`, issue, monument row and token is written once, as an
-**effect** of the projector's decision (fact-journal.md §4.4: an application id from (projector, fact, effect index),
-stored on the row and unique), and never regenerated: replay writes no effect, so a replay rebuilds Chronicle's private
-derived state (pending rows, sagas, battles, days, letters) and its effect intents, and compares those; the public record
-keeps its original ids and times. The facts below carry what the private state needs, and the decisions that depend on what
+**Publication rows are outputs, not derived state.** Each `lc_pub_row`, issue, monument row and name reference is written
+once, as an **effect** of the projector's decision (fact-journal.md §4.4), and never regenerated. Its retry receipt is a
+unique key on the row, checked in the effect's transaction: Chronicle's publication rows and monuments store the
+application id from (projector, fact, effect index) (`uk_pub_row_application`, `uk_chr_monument_application`; Chronicle
+always sets it, the column is nullable only for other modules' rows); an issue is found by its day (`uk_chr_issue_day`,
+written with the day's `composed_at` in one transaction); a name reference by (row, character) (`uk_pub_name_ref_row`).
+Replay writes no effect, so a replay rebuilds Chronicle's private derived state (pending rows, sagas, battles, days) and
+its effect intents, and compares those; the public record keeps its original ids and times. **Letters are inputs, not
+derived state**: an `lc_chr_letter` row is the authoritative record of a submission (author, text, submission time,
+immutable by trigger, kept for the character's life and withdrawn with it, §3.4) and its decision is a moderator's input,
+recorded on the row and in `Chronicle.LetterDecided`; a replay reads the retained letter rows, as it reads any input, and
+neither rebuilds nor compares them. The facts below carry what the private state needs, and the decisions that depend on what
 was committed when (a composition's membership, a battle's samples) are recorded in them rather than recomputed:
 
 | Fact | Payload |
@@ -402,7 +409,7 @@ was missed, idempotent).
 | AT-CHR-02 | integration | a location-related row refused before its delay from its source fact; raising the tactical delay raises the database floor; a replay dated from its battle's end; cells below the minimum absent |
 | AT-CHR-03 | integration | each basis resolves only while it holds and only on its row types; a withdrawal unnames the character in an archived issue at once and withdraws its milestones, letters and saga entries; opting in again resolves no old token and gives a new, unlinked page; two rows naming one character share no token; for one event with a human and a citizen swapped in a role, every per-event and per-name response is identical, and the humans-only view changes at most a monthly aggregate |
 | AT-CHR-04 | unit | the narrator protocol: only valid choice indices are kept, any free text discarded, in EN, RO and RU; every alternative and flavour sentence of every template is checked by a test that it holds for every row its template serves (a reversed relationship has no alternative); narrator down gives the first alternatives |
-| AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a restart after an empty day's composition does not reconsider it, and a row committed afterwards goes to the next issue; a replay from facts rebuilds the same private state (days, sagas, battles, letters, pending rows) and the same effect intents, and writes no publication row; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
+| AT-CHR-05 | integration, restart | downtime over three days closes three days at startup in order; a restart after an empty day's composition does not reconsider it, and a row committed afterwards goes to the next issue; a replay from facts and the retained letter rows rebuilds the same private state (days, sagas, battles, pending rows) and the same effect intents, and writes no publication row; each effect retried after its commit finds its receipt (a Chronicle row by application id, an issue by day, a name reference by row and character) and writes nothing; a row committed after composition goes to the next issue; a crash before the composition commit recomposes; letters past the cap carry over; a reading is a `FEE_GAZETTE` sink and opens its issue |
 | AT-CHR-06 | integration, restart, fault | a monument raised once under a crash at each step, only after its row is written; re-spawned after a restart; retirement order; a withdrawn history row's monument retires |
 | AT-CHR-07 | integration | a player just outside the town zone, though visible to the crier, does not hear it; one proclamation per interval per crier across a restart; each once |
 | AT-CHR-08 | integration, restart | a saga through craft, trade, private store, warehouse, mail, death drop, PvP kills with a saga weapon and with saga armor, a siege and crystallisation; a ground-loot privilege records no owner; a restart keeps the flag of a live saga item; a reused object id starts nothing for the old saga |
@@ -412,7 +419,7 @@ was missed, idempotent).
 
 ## 11. Upstream constraints
 
-1. **No owner-change, Territory War or Seven Signs events** (aden-remembers.md §4.1). → Aden Remembers' seams feed history.
+1. **No complete owner-change feed, and no Territory War or Seven Signs events**: only one owner event, `ON_CASTLE_SIEGE_OWNER_CHANGE`, dispatched asynchronously at a castle siege's mid-victory (`mechanics/events/EventType.java:128`, `mechanics/siege/Siege.java:469`); nothing for fortresses, clan halls, admin changes, a castle lost with its clan, or the siege's final outcome, so no durable ownership feed (aden-remembers.md §4.1). → Aden Remembers' seams feed history.
 2. **The daily reset runs once at startup whatever was missed, its marker saved apart** (`DailyResetManager.java:75-88`,
    `:99`, `:129-131`). → Chronicle's own day clock with catch-up.
 3. **`Item.setOwnerId(int)` carries no process and also marks ground-loot privileges** (`Item.java:299-301`, `:336`;
@@ -439,6 +446,13 @@ was missed, idempotent).
 
 ## 12. Review record
 
+- Round 5 (Codex), NO SIGN-OFF: 28 earlier findings fixed; open: private letters could not be replayed (no fact carries a
+  submission; findings 16, 27, 28, 31, 33); §5's receipt wording exceeded the schema (issues and name references have no
+  application id; 34); no reversed-order test of the delay trigger (35); the claim of no owner-change event was too broad
+  (36). Revision 6: letters are authoritative input rows, read by replay, never rebuilt; each effect's receipt is the
+  unique key it really has (application id, day, row and character) and AT-CHR-05 retries each; ChronicleSchemaTest
+  inserts a current lower-id fact then an old higher-id one; §11.1 names the one upstream owner event and its gaps
+  (with the same correction in aden-remembers.md §11.1).
 - Round 4 (Codex), NO SIGN-OFF: replay could not rebuild publication rows (their ids and times are commit-dependent); the
   delay counted from the newest id, not the newest occurrence. Revision 5: publication rows are effects with application
   ids, never regenerated, and replay rebuilds private state and intents only; the delay counts from every source fact.

@@ -23,26 +23,39 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 /**
- * The H5 content inventory of docs/spec/retail-truth.md §4.5: quests, instances, bosses and world systems, generated from a datapack, with the judged columns ({@link #JUDGED}) kept across regenerations by {@link #merge}.
+ * The H5 content inventory of docs/spec/retail-truth.md §4.5: quests, instances, bosses and world systems, generated from a datapack, each row's status and cases derived from the case files that name it ({@link #judgments}) and its notes kept across regenerations by {@link #merge}.
  */
 public final class Inventory
 {
-	/** The columns the generator never decides: kept across regenerations. */
-	public static final List<String> JUDGED = List.of("status", "cases", "notes");
+	/** The column people write: kept across regenerations. {@code status} and {@code cases} are derived from the case files. */
+	public static final List<String> KEPT = List.of("notes");
+	/** The statuses of docs/spec/retail-truth.md §3, most severe first: a row several cases judge shows the first any of them has. */
+	public static final List<String> SEVERITY = List.of("MISSING", "BROKEN", "APPROXIMATE", "UNKNOWN", "FUNCTIONAL", "EXACT");
 	/** The statuses of docs/spec/retail-truth.md §3. */
-	public static final Set<String> STATUSES = Set.of("EXACT", "FUNCTIONAL", "APPROXIMATE", "BROKEN", "MISSING", "UNKNOWN");
+	public static final Set<String> STATUSES = Set.copyOf(SEVERITY);
+	/** The inventory's tables, which a case's {@code inventory} entries name as {@code <table>:<key>}. */
+	public static final Set<String> TABLES = Set.of("quests", "instances", "bosses", "systems");
+
+	/** One case's judgment of an inventory row. */
+	public record Judgment(String caseId, String status)
+	{
+	}
 
 	private static final Pattern QUEST = Pattern.compile("Q(\\d{5})_(\\w+)\\.java");
 	/** An int or int[] constant whose name is a template or instance id (TEMPLATE_ID, INSTANCE_IDS, TEMPLATE_ID_HARD...). */
-	private static final Pattern CONSTANT = Pattern.compile("\\bfinal\\s+int(?:\\s*\\[\\s*\\])?\\s+\\w*(?:TEMPLATE|INSTANCE)_?IDS?(?:_\\w+)?\\s*=\\s*(\\{[^}]*\\}|\\d+)\\s*;");
-	/** A map put of a template id, bare or in a dungeon holder: .put(npc, 13), .put(npc, new FortDungeon(22)). */
-	private static final Pattern MAP_PUT = Pattern.compile("\\.put\\(\\s*\\d+\\s*,\\s*(?:new\\s+\\w*Dungeon\\(\\s*)?(\\d+)");
-	/** A number standing alone: not part of a coordinate (-25152), a decimal or a longer token. */
+	private static final Pattern CONSTANT = Pattern.compile("\\bfinal\\s+int(?:\\s*\\[\\s*\\])?\\s+\\w*(?:TEMPLATE|INSTANCE)_?IDS?(?:_\\w+)?\\s*=\\s*(?:new\\s+int\\s*\\[\\s*\\]\\s*)?(\\{[^}]*\\}|\\d+)\\s*;");
+	/** A put of a template id, bare or in a dungeon holder, into a map named for dungeons, instances or templates: CASTLE_DUNGEON.put(npc, 13), _fortDungeons.put(npc, new FortDungeon(22)). */
+	private static final Pattern MAP_PUT = Pattern.compile("\\b\\w*(?i:dungeon|instance|template)\\w*\\s*\\.put\\(\\s*\\d+\\s*,\\s*(?:new\\s+\\w*Dungeon\\(\\s*)?(\\d+)(?![\\w.])");
+	/** A number standing alone: not part of a coordinate (-25152), a decimal or a longer token (101_000). */
 	private static final Pattern TOKEN = Pattern.compile("(?<![-\\w.])(\\d+)(?![\\w.])");
+	/** The arguments of a location constructor: coordinates, never an id. */
+	private static final Pattern LOCATION = Pattern.compile("new\\s+\\w*Location\\s*\\([^()]*\\)");
 	private static final Pattern SQL_COMMENT = Pattern.compile("--[^\\n]*|/\\*.*?\\*/", Pattern.DOTALL);
-	private static final Pattern SQL_ROW = Pattern.compile("(?m)^\\s*\\((\\d+),");
-	private static final Pattern LITERAL = Pattern.compile("createDynamicInstance\\(\\s*(\\d+)");
-	private static final Pattern NUMBER = Pattern.compile("\\b\\d+\\b");
+	/** A table row's first value: a tuple opening after VALUES or after the comma that ends the previous tuple, on any line. */
+	private static final Pattern SQL_ROW = Pattern.compile("(?i)(?:\\bVALUES\\s*|\\)\\s*,\\s*)\\(\\s*(\\d+)\\s*,");
+	private static final Pattern XML_COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
+	private static final Pattern LITERAL = Pattern.compile("createDynamicInstance\\(\\s*(\\d+)(?![\\w.])");
+	private static final Pattern NUMBER = Pattern.compile("(?<![\\w.])\\d+(?![\\w.])");
 
 	private Inventory()
 	{
@@ -164,7 +177,7 @@ public final class Inventory
 		final Set<String> spawned = new TreeSet<>();
 		for (Path spawn : walk(data.resolve("spawns"), ".xml"))
 		{
-			collect(Pattern.compile("<npc\\s+id=\"(\\d+)\""), text(spawn), spawned);
+			collect(Pattern.compile("<npc\\s+id=\"(\\d+)\""), XML_COMMENT.matcher(text(spawn)).replaceAll(""), spawned);
 		}
 		final Set<String> raidRows = new TreeSet<>();
 		collect(SQL_ROW, SQL_COMMENT.matcher(text(sql.resolve("raidboss_spawnlist.sql"))).replaceAll(""), raidRows);
@@ -174,12 +187,12 @@ public final class Inventory
 		final Path riftFile = data.resolve("DimensionalRift.xml");
 		if (Files.exists(riftFile))
 		{
-			collect(Pattern.compile("mobId=\"(\\d+)\""), text(riftFile), rift);
+			collect(Pattern.compile("mobId=\"(\\d+)\""), XML_COMMENT.matcher(text(riftFile)).replaceAll(""), rift);
 		}
 		final Set<String> named = new TreeSet<>();
 		for (String source : scripts.values())
 		{
-			collect(TOKEN, source, named);
+			collect(TOKEN, LOCATION.matcher(source).replaceAll(" "), named);
 		}
 		final TreeMap<Integer, Map<String, String>> rows = new TreeMap<>();
 		for (Path stats : walk(data.resolve("stats/npcs"), ".xml"))
@@ -286,10 +299,99 @@ public final class Inventory
 	}
 
 	/**
-	 * Merges a regeneration into the committed rows: judged columns kept, new rows as generated, hand rows kept.
-	 * @throws IllegalStateException when a generated row a case judged would disappear
+	 * Reads every case's judgments of inventory rows: its {@code status} and the rows its {@code inventory} entries name ({@code <table>:<key>}, as a flow list {@code [a, b]} or a block list of {@code - a}).
+	 * @param cases the directory of case files ({@code truth/cases}); absent, no case judges anything
+	 * @return by table, by row key, the judgments in case-id order
+	 * @throws IllegalStateException when a case's id is not its file's name, its status is not one of the six, or an entry names a table the inventory does not have
 	 */
-	public static List<Map<String, String>> merge(List<Map<String, String>> committed, List<Map<String, String>> generated, String key)
+	public static Map<String, Map<String, List<Judgment>>> judgments(Path cases)
+	{
+		final Map<String, Map<String, List<Judgment>>> judged = new TreeMap<>();
+		for (Path file : walk(cases, ".yaml"))
+		{
+			final String name = file.getFileName().toString().replaceFirst("\\.yaml$", "");
+			String id = null;
+			String status = null;
+			final List<String> rows = new ArrayList<>();
+			boolean inInventory = false;
+			for (String raw : text(file).split("\n"))
+			{
+				final String line = raw.replaceFirst("\\s+#.*$", "").replaceFirst("^#.*$", "").stripTrailing();
+				if (line.isEmpty())
+				{
+					continue;
+				}
+				final Matcher entry = Pattern.compile("^\\s+-\\s+(\\S+)$").matcher(line);
+				if (inInventory && entry.matches())
+				{
+					rows.add(entry.group(1));
+					continue;
+				}
+				inInventory = false;
+				final Matcher field = Pattern.compile("^(\\w+):\\s*(.*)$").matcher(line);
+				if (!field.matches())
+				{
+					continue; // a nested line of another field
+				}
+				final String value = field.group(2).strip();
+				switch (field.group(1))
+				{
+					case "id" -> id = value;
+					case "status" -> status = value;
+					case "inventory" ->
+					{
+						if (value.isEmpty())
+						{
+							inInventory = true;
+						}
+						else if (value.startsWith("[") && value.endsWith("]"))
+						{
+							for (String item : value.substring(1, value.length() - 1).split(","))
+							{
+								if (!item.isBlank())
+								{
+									rows.add(item.strip());
+								}
+							}
+						}
+						else
+						{
+							throw new IllegalStateException(file + ": inventory must be a list of <table>:<key>, not '" + value + "'");
+						}
+					}
+					default ->
+					{
+					}
+				}
+			}
+			if (!name.equals(id))
+			{
+				throw new IllegalStateException(file + ": its id '" + id + "' is not its file's name");
+			}
+			if (!STATUSES.contains(status))
+			{
+				throw new IllegalStateException(file + ": the status '" + status + "' is not one of " + SEVERITY);
+			}
+			for (String row : rows)
+			{
+				final int colon = row.indexOf(':');
+				final String table = colon < 0 ? row : row.substring(0, colon);
+				if (colon < 0 || !TABLES.contains(table) || colon == row.length() - 1)
+				{
+					throw new IllegalStateException(file + ": '" + row + "' does not name a row as <table>:<key>, the table one of " + TABLES);
+				}
+				judged.computeIfAbsent(table, k -> new TreeMap<>()).computeIfAbsent(row.substring(colon + 1), k -> new ArrayList<>()).add(new Judgment(id, status));
+			}
+		}
+		return judged;
+	}
+
+	/**
+	 * Merges a regeneration into the committed rows. The generator's columns come from the regeneration; {@code notes} is kept; {@code status} and {@code cases} are derived from the cases that name the row, never kept from the committed file; {@code HAND} rows are kept; every row is in key order.
+	 * @param judged this table's judgments by row key ({@link #judgments})
+	 * @throws IllegalStateException when a committed row has an unknown status or source, a key is held twice, a case names a row that is in neither the regeneration nor the committed hand rows, or a hand row is not MISSING by its cases
+	 */
+	public static List<Map<String, String>> merge(List<Map<String, String>> committed, List<Map<String, String>> generated, String key, Map<String, List<Judgment>> judged)
 	{
 		final Map<String, Map<String, String>> old = index(committed, key, "committed");
 		index(generated, key, "generated");
@@ -297,49 +399,111 @@ public final class Inventory
 		{
 			if (!STATUSES.contains(row.get("status")))
 			{
-				throw new IllegalStateException(key + " " + row.get(key) + " has the status '" + row.get("status") + "', not one of " + STATUSES);
+				throw new IllegalStateException(key + " " + row.get(key) + " has the status '" + row.get("status") + "', not one of " + SEVERITY);
 			}
-			if ("HAND".equals(row.get("source")) && (!"MISSING".equals(row.get("status")) || row.getOrDefault("cases", "").isBlank()))
+			if (!"GENERATED".equals(row.get("source")) && !"HAND".equals(row.get("source")))
 			{
-				throw new IllegalStateException("hand row " + row.get(key) + " must be MISSING with the case that proves it");
+				throw new IllegalStateException(key + " " + row.get(key) + " has the source '" + row.get("source") + "', neither GENERATED nor HAND");
 			}
 		}
 		final List<Map<String, String>> merged = new ArrayList<>();
-		final Set<String> seen = new TreeSet<>();
 		for (Map<String, String> row : generated)
 		{
 			final Map<String, String> result = new LinkedHashMap<>(row);
 			final Map<String, String> previous = old.get(row.get(key));
-			if (previous != null)
+			if (previous != null && "GENERATED".equals(previous.get("source")))
 			{
-				for (String column : JUDGED)
+				for (String column : KEPT)
 				{
 					result.put(column, previous.getOrDefault(column, result.get(column)));
 				}
 			}
 			merged.add(result);
-			seen.add(row.get(key));
 		}
+		final Set<String> generatedKeys = new TreeSet<>(generated.stream().map(r -> r.get(key)).toList());
 		for (Map<String, String> row : committed)
 		{
-			if (seen.contains(row.get(key)))
-			{
-				continue;
-			}
 			if ("HAND".equals(row.get("source")))
 			{
-				merged.add(row);
-			}
-			else if (!"UNKNOWN".equals(row.get("status")))
-			{
-				throw new IllegalStateException(key + " " + row.get(key) + " was judged " + row.get("status") + " and is no longer in the datapack: resolve the finding, do not drop the row");
+				if (generatedKeys.contains(row.get(key)))
+				{
+					throw new IllegalStateException("hand row " + row.get(key) + " is now in the datapack: the content is no longer missing; judge the generated row again and remove the hand row");
+				}
+				merged.add(new LinkedHashMap<>(row));
 			}
 		}
-		if (merged.stream().allMatch(r -> r.get(key).matches("\\d+")))
+		final Set<String> present = new TreeSet<>();
+		for (Map<String, String> row : merged)
 		{
-			merged.sort(Comparator.comparingLong(r -> Long.parseLong(r.get(key))));
+			present.add(row.get(key));
+			final List<Judgment> cases = judged.getOrDefault(row.get(key), List.of());
+			row.put("status", cases.stream().map(Judgment::status).min(Comparator.comparingInt(SEVERITY::indexOf)).orElse("UNKNOWN"));
+			row.put("cases", String.join(";", cases.stream().map(Judgment::caseId).sorted().toList()));
+			if ("HAND".equals(row.get("source")) && (cases.isEmpty() || !"MISSING".equals(row.get("status"))))
+			{
+				throw new IllegalStateException("hand row " + row.get(key) + " must be judged MISSING by the cases that name it, and is " + (cases.isEmpty() ? "named by none" : row.get("status")));
+			}
 		}
+		for (Map.Entry<String, List<Judgment>> judgment : judged.entrySet())
+		{
+			if (!present.contains(judgment.getKey()))
+			{
+				throw new IllegalStateException(judgment.getValue() + " judge " + key + " " + judgment.getKey() + ", which is no longer in the inventory: resolve the finding (re-point or refute the case), do not drop the row");
+			}
+		}
+		final boolean numeric = merged.stream().allMatch(r -> r.get(key).matches("\\d+"));
+		merged.sort(numeric ? Comparator.comparingLong(r -> Long.parseLong(r.get(key))) : Comparator.comparing(r -> r.get(key)));
 		return merged;
+	}
+
+	/**
+	 * Java source without its comments: a {@code //} or {@code /* *}{@code /} comment becomes a space, while string, character and text-block literals are kept whole, so a comment marker inside one opens nothing.
+	 */
+	static String withoutComments(String java)
+	{
+		final StringBuilder out = new StringBuilder(java.length());
+		int i = 0;
+		final int n = java.length();
+		while (i < n)
+		{
+			final char c = java.charAt(i);
+			if (java.startsWith("\"\"\"", i))
+			{
+				final int end = java.indexOf("\"\"\"", i + 3);
+				final int stop = end < 0 ? n : end + 3;
+				out.append(java, i, stop);
+				i = stop;
+			}
+			else if (c == '"' || c == '\'')
+			{
+				int j = i + 1;
+				while (j < n && java.charAt(j) != c && java.charAt(j) != '\n')
+				{
+					j += java.charAt(j) == '\\' ? 2 : 1;
+				}
+				final int stop = Math.min(n, j + 1);
+				out.append(java, i, stop);
+				i = stop;
+			}
+			else if (java.startsWith("//", i))
+			{
+				final int end = java.indexOf('\n', i);
+				out.append(' ');
+				i = end < 0 ? n : end;
+			}
+			else if (java.startsWith("/*", i))
+			{
+				final int end = java.indexOf("*/", i + 2);
+				out.append(' ');
+				i = end < 0 ? n : end + 2;
+			}
+			else
+			{
+				out.append(c);
+				i++;
+			}
+		}
+		return out.toString();
 	}
 
 	private static Map<String, Map<String, String>> index(List<Map<String, String>> rows, String key, String what)
@@ -490,7 +654,7 @@ public final class Inventory
 		final Map<Path, String> sources = new TreeMap<>();
 		for (Path file : walk(root, ".java"))
 		{
-			sources.put(file, text(file));
+			sources.put(file, withoutComments(text(file)));
 		}
 		return sources;
 	}

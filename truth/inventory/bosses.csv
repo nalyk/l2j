@@ -193,7 +193,7 @@ id,name,level,type,placed_by,finding,source,status,cases,notes
 25504,Nellis' Vengeful Spirit,39,RaidBoss,raidboss_spawnlist,,GENERATED,UNKNOWN,,
 25506,Rayito the Looter,37,RaidBoss,raidboss_spawnlist,,GENERATED,UNKNOWN,,
 25509,Dark Shaman Varangka,53,RaidBoss,,"placed by no spawn, table or script",GENERATED,UNKNOWN,,
-25512,Gigantic Chaos Golem,52,GrandBoss,scripts,,GENERATED,UNKNOWN,,
+25512,Gigantic Chaos Golem,52,GrandBoss,grandboss_data;scripts,,GENERATED,UNKNOWN,,
 25514,Queen Shyeed,80,RaidBoss,,"placed by no spawn, table or script",GENERATED,UNKNOWN,,
 25523,Plague Golem,73,RaidBoss,raidboss_spawnlist;scripts,,GENERATED,UNKNOWN,,
 25524,Flamestone Giant,76,RaidBoss,raidboss_spawnlist;scripts,,GENERATED,UNKNOWN,,

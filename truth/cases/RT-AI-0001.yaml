@@ -1,8 +1,9 @@
-# Retail Truth case (docs/blueprint/11-RETAIL-TRUTH.md §1.3). Seeded by the behaviour lock, which found the behaviour;
+# Retail Truth case (docs/spec/retail-truth.md §2.1, revision 2 format). Seeded by the behaviour lock, which found the behaviour;
 # what retail does is not established, so the status is UNKNOWN until evidence of the classes in §1.2 is attached.
 id: RT-AI-0001
 feature: monster_reaction_to_an_attack_that_does_no_damage
 chronicle: ct26_highfive
+region: any         # no evidence yet of a regional difference
 client_build: null
 evidence: []
 preconditions:
@@ -23,7 +24,8 @@ evidence_wanted:
   - "Captured retail traffic or video of a passive monster attacked with misses only (class 4 or 3)."
   - "Official guides on aggression (class 2)."
 status: UNKNOWN
-server_commit: null
+fixed: false
+inventory: []
 notes: >
   Found while building the AI lock. A retail difference would be a correction to the AI (an evaded attack counting
   as an attack), recorded against this case with its evidence.

@@ -84,6 +84,11 @@ class ChronicleSchemaTest
 			// Source facts: one two days ago, one now.
 			statement.execute(fact(1, "NOW(3) - INTERVAL 2 DAY"));
 			statement.execute(fact(2, "NOW(3)"));
+			// Reversed order: a current fact with the lower id, an old one with the higher id. The delay counts from the newest
+			// occurrence in the whole range, not from the range's last id (review round 5, finding 35).
+			statement.execute(fact(10, "NOW(3)"));
+			statement.execute(fact(11, "NOW(3) - INTERVAL 2 DAY"));
+			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_pub_row (pub_row_id, pub_type, written_at, event_at, fields, source_fact_from, source_fact_to) VALUES (90, 'chr_history', NOW(3), NOW(3) - INTERVAL 2 DAY, '{\"kind\":\"siege\"}', 10, 11)"), "the newest occurrence is the lower id");
 
 			// Rows are written only once due, counted from their newest source fact.
 			assertThrows(SQLException.class, () -> statement.execute(row(1, "'chr_history'", "NOW(3) - INTERVAL 2 DAY", 2)), "dated before its newest source fact");

@@ -213,7 +213,8 @@ service's answers; what players learn by other means (seeing the subject themsel
   never outlive what they depend on: a grant's ≤ its item's, a copy's ≤ the earliest of its items'. A grant does not extend an item's life; a new
   disclosure of an old trace gets the old item and its old expiry. The database enforces this at insert, and refuses any
   later change of an expiry (§2.2).
-- At `expires_at` the purge job deletes traces with their evidence, items with their grants, and every row of every
+- At `expires_at` the purge job (a step of the Fact Journal's maintenance job and under its database identity, which alone
+  deletes expiring rows, fact-journal.md §8; platform.md §4.3's `lc_maint`) deletes traces with their evidence, items with their grants, and every row of every
   registered copy (all its dependencies), in one transaction per batch; `intel.read` refuses an expired item even before
   it is deleted. Copies are registered in the same transaction that writes the referring row (`registerCopies` takes the
   module's transaction). No module keeps an intel payload in memory beyond the request that read it.
@@ -419,6 +420,8 @@ prints the trace, its evidence (forensics only), the budget and area state, and 
 
 ## 12. Review record
 
+- Revision 8 note (no rule changed): the purge job is named as a step of the Fact Journal's maintenance job, under its
+  identity, so Platform's database users (platform.md §4.3) match fact-journal.md §8's "alone deletes expiring rows".
 - Revision 8 (after the revision-7 sign-off): the `NAME_TOKEN`, `PUB_REF`, `REPLAY_FRAMES`, `MODERATED_TEXT` and
   `SAGA_ITEM` rules; characters always as name tokens; rows in Chronicle's store, written when due by the clock; the
   tactical delay written into the registry at startup; §2's rule list completed with the three `LEDGER_*` rules §4.7 and

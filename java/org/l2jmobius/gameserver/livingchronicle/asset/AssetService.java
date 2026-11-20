@@ -92,6 +92,67 @@ public final class AssetService
 		}
 	}
 
+	/**
+	 * Returns a frozen module to {@code RUNNING} (§3.1 {@code FROZEN → OPEN}, §4.5): only when every invariant over each of
+	 * its custodies holds; its frozen custodies reopen, each with {@code Asset.AdminCorrection}. One transaction.
+	 * @throws IllegalStateException naming the first custody whose invariant is still broken
+	 */
+	public void unfreeze(String module, int adminCharId, String reason) throws SQLException
+	{
+		if ((reason == null) || reason.isBlank())
+		{
+			throw new IllegalArgumentException("an unfreeze needs a reason");
+		}
+		try (Connection connection = _db.open())
+		{
+			connection.setAutoCommit(false);
+			try
+			{
+				final java.util.List<Custody> custodies = new java.util.ArrayList<>();
+				try (PreparedStatement read = connection.prepareStatement("SELECT custody_id, kind, owner_ref, state, version FROM lc_custody WHERE owner_module = ? AND state <> 'CLOSED' ORDER BY custody_id FOR UPDATE"))
+				{
+					read.setString(1, module);
+					try (ResultSet result = read.executeQuery())
+					{
+						while (result.next())
+						{
+							custodies.add(new Custody(result.getInt(1), Custody.Kind.valueOf(result.getString(2)), module, result.getLong(3), Custody.State.valueOf(result.getString(4)), result.getInt(5)));
+						}
+					}
+				}
+				final java.util.List<org.l2jmobius.gameserver.livingchronicle.journal.DurableFact> facts = new java.util.ArrayList<>();
+				for (Custody custody : custodies)
+				{
+					final String violation = CustodyInvariants.violation(connection, custody, this::owner);
+					if (violation != null)
+					{
+						throw new IllegalStateException(module + " stays frozen: custody " + custody.id() + " " + violation);
+					}
+					if (custody.state() == Custody.State.FROZEN)
+					{
+						try (PreparedStatement reopen = connection.prepareStatement("UPDATE lc_custody SET state = 'OPEN', version = version + 1 WHERE custody_id = ?"))
+						{
+							reopen.setInt(1, custody.id());
+							reopen.executeUpdate();
+						}
+						facts.add(AssetFact.of("AdminCorrection", custody.id(), "admin", adminCharId, "reason", reason, "custody", custody.id(), "unfrozen", true));
+					}
+				}
+				ModuleState.unfreeze(connection, module);
+				if (!facts.isEmpty())
+				{
+					_stager.stage(connection, null, facts);
+				}
+				connection.commit();
+			}
+			catch (SQLException | RuntimeException e)
+			{
+				connection.rollback();
+				throw e;
+			}
+		}
+	}
+
 	private Outcome priorOutcome(OpId op) throws SQLException
 	{
 		try (Connection connection = _db.open();

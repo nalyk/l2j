@@ -159,6 +159,104 @@ public final class AssetTx implements AutoCloseable
 		}, custody);
 	}
 
+	/** Debits a custody into a sink (§2.5): the asset leaves existence under the code and its reference. */
+	public void sink(int custody, List<Asset> assets, SinkCode code, long reference)
+	{
+		final List<Asset> sunk = List.copyOf(assets);
+		step(execution ->
+		{
+			execution.notFrozen(execution.open(custody));
+			final List<Map<String, Object>> legs = new ArrayList<>();
+			for (Asset asset : sunk)
+			{
+				execution.take(custody, asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, reference, code.name(), asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				legs.add(legOf(asset));
+			}
+			execution.facts().add(AssetFact.of("FeeCharged", custody, "holder", "CUSTODY", "custody", custody, "code", code.name(), "reference", reference, "legs", legs));
+		}, custody);
+	}
+
+	/**
+	 * A corrective admin operation (§4.5): allowed on a {@code FROZEN} custody and a frozen module, never on a
+	 * {@code CLOSED} one. {@code in} (amounts only) enters from SOURCE, {@code out} leaves to SINK, both under the code
+	 * {@code ADMIN_CORRECTION} referencing the violation fact; {@code reconcile} decides what to do about rows that disagree
+	 * with postings. Writes {@code Asset.AdminCorrection} with the custody's holdings before and after.
+	 */
+	public void correct(int custody, List<Asset> in, List<Asset> out, Reconcile reconcile, long violationFactId, String reason, int adminCharId)
+	{
+		if ((reason == null) || reason.isBlank())
+		{
+			throw new IllegalArgumentException("a correction needs a reason");
+		}
+		if (violationFactId <= 0)
+		{
+			throw new IllegalArgumentException("a correction names the violation it repairs");
+		}
+		for (Asset asset : in)
+		{
+			if (asset.objectId() != null)
+			{
+				throw new IllegalArgumentException("a correction creates amounts, not objects");
+			}
+		}
+		final List<Asset> added = List.copyOf(in);
+		final List<Asset> removed = List.copyOf(out);
+		final String code = "ADMIN_CORRECTION";
+		step(execution ->
+		{
+			final Custody locked = execution.custody(custody);
+			if ((locked == null) || (locked.state() == Custody.State.CLOSED))
+			{
+				throw new AssetAbort(AssetAbort.Reason.CUSTODY_NOT_OPEN, "custody " + custody + " is " + (locked == null ? "unknown" : "CLOSED"));
+			}
+			final Connection connection = execution.connection();
+			final Map<Integer, Long> before = CustodyInvariants.held(connection, custody);
+			if (reconcile == Reconcile.RECOGNIZE_ROWS)
+			{
+				final Map<Integer, Long> posted = CustodyInvariants.posted(connection, custody);
+				final TreeSet<Integer> items = new TreeSet<>(before.keySet());
+				items.addAll(posted.keySet());
+				for (int item : items)
+				{
+					final long difference = before.getOrDefault(item, 0L) - posted.getOrDefault(item, 0L);
+					if (difference > 0)
+					{
+						execution.legs().add(new Leg(Leg.AccountKind.SOURCE, violationFactId, code, item, null, null, difference, Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item, null, null, difference, Leg.Direction.CREDIT));
+					}
+					else if (difference < 0)
+					{
+						execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item, null, null, -difference, Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.SINK, violationFactId, code, item, null, null, -difference, Leg.Direction.CREDIT));
+					}
+				}
+			}
+			for (Asset asset : added)
+			{
+				execution.give(custody, asset);
+				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, violationFactId, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+			}
+			for (Asset asset : removed)
+			{
+				execution.take(custody, asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, violationFactId, code, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+			}
+			execution.touched(custody);
+			execution.facts().add(AssetFact.of("AdminCorrection", custody, "admin", adminCharId, "violation", violationFactId, "reason", reason, "custody", custody, "reconcile", reconcile.name(), "before", byItem(before), "after", byItem(CustodyInvariants.held(connection, custody))));
+		}, custody);
+	}
+
+	private static Map<String, Object> byItem(Map<Integer, Long> holdings)
+	{
+		final Map<String, Object> out = new LinkedHashMap<>();
+		holdings.forEach((item, qty) -> out.put(String.valueOf(item), qty));
+		return out;
+	}
+
 	static Map<String, Object> legOf(Asset asset)
 	{
 		final Map<String, Object> leg = new LinkedHashMap<>();
@@ -672,32 +770,12 @@ public final class AssetTx implements AutoCloseable
 					advance.setInt(1, custody);
 					advance.executeUpdate();
 				}
-				final Map<Integer, Long> posted = sums("SELECT item_id, SUM(IF(direction = 'CREDIT', qty, -qty)) FROM lc_ledger_posting WHERE account_kind = 'CUSTODY' AND account_id = ? GROUP BY item_id", custody);
-				final Map<Integer, Long> held = sums("SELECT item_id, SUM(count) FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? GROUP BY item_id", custody);
-				posted.values().removeIf(v -> v == 0);
-				held.values().removeIf(v -> v == 0);
-				if (!posted.equals(held))
+				final String evidence = CustodyInvariants.inv11(_connection, custody);
+				if (evidence != null)
 				{
-					throw new AssetAbort(new AssetAbort.Violation(custody, "INV11", "postings " + posted + ", rows " + held));
+					throw new AssetAbort(new AssetAbort.Violation(custody, "INV11", evidence));
 				}
 			}
-		}
-
-		private Map<Integer, Long> sums(String sql, int custody) throws SQLException
-		{
-			final Map<Integer, Long> sums = new TreeMap<>();
-			try (PreparedStatement read = _connection.prepareStatement(sql))
-			{
-				read.setInt(1, custody);
-				try (ResultSet result = read.executeQuery())
-				{
-					while (result.next())
-					{
-						sums.put(result.getInt(1), result.getLong(2));
-					}
-				}
-			}
-			return sums;
 		}
 	}
 }

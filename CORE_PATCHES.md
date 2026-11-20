@@ -284,3 +284,19 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: the service takes items and treasury amounts exactly as Mobius's own code would, without new locks.
 - Proof: `TakingSeamsTest.anItemTakenForAnAssetLeavesItsContainerAsRetailRemovalDoes`,
   `awaitingWritesWaitsForAWriteInProgress`, `aTreasuryChangesInMemoryOnlyAndRefusesAnOverdrawOrAPassOverTheCap`.
+
+## CP-0018 The login wait
+
+- Files: `java/org/l2jmobius/gameserver/network/GameClient.java`
+- Reason: a login restores a character's items from rows with plain reads that do not wait for an uncommitted change
+  (Player.java:7357-7360); while an asset operation has taken an item in memory and not yet committed or refunded, the
+  item's row still says where it was, so a login in between would restore a second, live `Item` (asset-service.md §2.4,
+  §11.22, ASSET-R26).
+- Change: `GameClient.load` waits, before `Player.load`, while `lc_asset_pending` marks the character
+  (`PendingMarks.awaitNone`: a plain read polled every 50 ms, taking no lock); if a mark outlives four times
+  `UncertainCommitLookupMillis`, the login is refused and the character not loaded. When Living Chronicle is not
+  running nothing waits.
+- Invariant: no character is loaded while an operation that took its items is pending.
+- Proof: `LoginWaitTest.aLoginWaitsWhileAnOperationOfTheCharacterIsPending` (upstream loaded it at once),
+  `aLoginIsRefusedIfTheMarkOutlivesTheBound` (upstream loaded it), `anUnmarkedLoginDoesNotWait`,
+  `markingCommitsOnItsOwnConnection`.

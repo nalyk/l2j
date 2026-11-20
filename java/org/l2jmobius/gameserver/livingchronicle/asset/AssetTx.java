@@ -71,6 +71,10 @@ public final class AssetTx implements AutoCloseable
 	private final Outcome _prior;
 	private final List<Step> _steps = new ArrayList<>();
 	private final TreeSet<Integer> _custodies = new TreeSet<>();
+	/** Characters whose rows the operation locks first (the global row-lock order starts with `characters`). */
+	private final TreeSet<Integer> _characters = new TreeSet<>();
+	/** The service mails the last attempt wrote, adopted by the game after commit. */
+	private List<Integer> _mails = List.of();
 	private final List<Version> _versions = new ArrayList<>();
 	private final List<Key> _keys = new ArrayList<>();
 	private final List<DurableFact> _facts = new ArrayList<>();
@@ -172,6 +176,74 @@ public final class AssetTx implements AutoCloseable
 			}
 			execution.touched(custody); // INV11 before closing: postings with no rows are a disagreement, not an empty custody
 			execution.facts().add(AssetFact.of("CustodyClosed", custody, "custody", custody, "reason", "EMPTY"));
+		}, custody);
+	}
+
+	/**
+	 * Releases assets from a custody to a character as one service mail (§2.1, §4.3 {@code release}): a message from the
+	 * system, written in this transaction with its attachments, its delivery and the {@code MAIL} legs, and adopted by the
+	 * game after commit. The receiver's row is locked first; a receiver who is gone or marked for deletion aborts it
+	 * ({@code RECEIVER_GONE}) and nothing moves. A whole object keeps its object id; an amount becomes a new attachment row.
+	 */
+	public void release(int custody, int receiverCharId, List<Asset> assets, MailReason reason, String subject, String content)
+	{
+		if ((subject == null) || subject.isBlank() || (content == null))
+		{
+			throw new IllegalArgumentException("a service mail names its institution and says why");
+		}
+		final List<Asset> released = List.copyOf(assets);
+		_characters.add(receiverCharId);
+		step(execution ->
+		{
+			execution.notFrozen(execution.open(custody));
+			if (!execution.receiverAlive(receiverCharId))
+			{
+				throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + receiverCharId + " is gone or marked for deletion");
+			}
+			final Connection connection = execution.connection();
+			final int message = _service.ids().next();
+			try (PreparedStatement insert = connection.prepareStatement("INSERT INTO messages (messageId, senderId, receiverId, subject, content, expiration, reqAdena, hasAttachments, isUnread, isDeletedBySender, isDeletedByReceiver, sendBySystem, isReturned) VALUES (?, ?, ?, ?, ?, ?, 0, 'true', 'true', 'true', 'false', ?, 'false')"))
+			{
+				insert.setInt(1, message);
+				insert.setInt(2, ServiceMail.SENDER);
+				insert.setInt(3, receiverCharId);
+				insert.setString(4, subject);
+				insert.setString(5, content);
+				insert.setLong(6, ServiceMail.EXPIRATION);
+				insert.setInt(7, ServiceMail.SEND_BY_SYSTEM);
+				insert.executeUpdate();
+			}
+			final List<Map<String, Object>> legs = new ArrayList<>();
+			for (Asset asset : released)
+			{
+				execution.take(custody, asset, false);
+				if (asset.objectId() != null)
+				{
+					try (PreparedStatement move = connection.prepareStatement("UPDATE items SET loc = 'MAIL', loc_data = ? WHERE object_id = ? AND owner_id = -1 AND loc = 'ESCROW' AND loc_data = ?"))
+					{
+						move.setInt(1, message);
+						move.setInt(2, asset.objectId());
+						move.setInt(3, custody);
+						Execution.expectOne(move.executeUpdate(), asset.objectId());
+					}
+				}
+				else
+				{
+					try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
+					{
+						attach.setInt(1, _service.ids().next());
+						attach.setInt(2, asset.itemId());
+						attach.setLong(3, asset.qty());
+						attach.setInt(4, message);
+						attach.executeUpdate();
+					}
+				}
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				legs.add(legOf(asset));
+			}
+			execution.mailed(message, receiverCharId, reason);
+			execution.facts().add(AssetFact.of("EscrowReleased", custody, "custody", custody, "receiver", receiverCharId, "mail", message, "reason", reason.name(), "legs", legs));
 		}, custody);
 	}
 
@@ -367,6 +439,7 @@ public final class AssetTx implements AutoCloseable
 			}
 			restoreLockWait(connection, previousWait);
 			close(connection);
+			adoptMails();
 			return Outcome.COMMITTED;
 		}
 	}
@@ -374,6 +447,7 @@ public final class AssetTx implements AutoCloseable
 	private void execute(Connection connection) throws SQLException, AssetAbort, Prior
 	{
 		final Execution execution = new Execution(connection, _service, _op);
+		execution.lockCharacters(_characters);
 		execution.lockCustodies(_custodies);
 		_owners.clear();
 		for (int custody : _custodies)
@@ -421,6 +495,18 @@ public final class AssetTx implements AutoCloseable
 			}
 			throw e;
 		}
+		// Deliveries name the operation (a foreign key to lc_asset_op), so they follow its row; they are new rows nobody waits on.
+		for (Execution.Delivery delivery : execution.deliveries())
+		{
+			try (PreparedStatement insert = connection.prepareStatement("INSERT INTO lc_mail_delivery (message_id, op_id, receiver_char, reason) VALUES (?, ?, ?, ?)"))
+			{
+				insert.setInt(1, delivery.message());
+				insert.setBytes(2, _op.bytes());
+				insert.setInt(3, delivery.receiver());
+				insert.setString(4, delivery.reason().name());
+				insert.executeUpdate();
+			}
+		}
 		final List<Key> keys = new ArrayList<>(_keys);
 		keys.sort(Comparator.comparing(Key::scope).thenComparing(Key::key));
 		for (Key key : keys)
@@ -429,6 +515,8 @@ public final class AssetTx implements AutoCloseable
 		}
 		postLegs(connection, execution.legs());
 		execution.checkCustodies();
+		execution.checkMails();
+		_mails = List.copyOf(execution.mails());
 		final List<DurableFact> facts = new ArrayList<>(execution.facts());
 		facts.addAll(_facts);
 		if (!facts.isEmpty())
@@ -538,6 +626,7 @@ public final class AssetTx implements AutoCloseable
 						restoreLockWait(connection, previousWait);
 						if (committed)
 						{
+							adoptMails();
 							return Outcome.COMMITTED;
 						}
 						throw new AssetAbort(AssetAbort.Reason.NOT_COMMITTED, _op + ": the connection failed before the commit took effect", lost);
@@ -566,6 +655,15 @@ public final class AssetTx implements AutoCloseable
 			last.addSuppressed(e);
 		}
 		throw new UncertainCommitException(_op + ": the commit's result could not be learned; modules frozen: " + _module + " " + _owners, last);
+	}
+
+	/** DONE (§3.2): the game's mail adopts each message this operation committed. */
+	private void adoptMails()
+	{
+		for (int message : _mails)
+		{
+			_service.adopt(message);
+		}
 	}
 
 	private void recordViolation(AssetAbort.Violation violation, AssetAbort abort)
@@ -681,6 +779,9 @@ public final class AssetTx implements AutoCloseable
 		private final OpId _op;
 		private final Map<Integer, Custody> _locked = new HashMap<>();
 		private final TreeSet<Integer> _touched = new TreeSet<>();
+		private final java.util.Set<Integer> _alive = new java.util.HashSet<>();
+		private final List<Integer> _mails = new ArrayList<>();
+		private final List<Delivery> _deliveries = new ArrayList<>();
 		private final List<Leg> _legs = new ArrayList<>();
 		private final List<DurableFact> _facts = new ArrayList<>();
 
@@ -714,6 +815,86 @@ public final class AssetTx implements AutoCloseable
 		List<DurableFact> facts()
 		{
 			return _facts;
+		}
+
+		/** Locks the characters' rows first, in id order (§2.1: service mail and deletion serialise on them). */
+		void lockCharacters(TreeSet<Integer> ids) throws SQLException
+		{
+			for (int id : ids)
+			{
+				try (PreparedStatement read = _connection.prepareStatement("SELECT deletetime FROM characters WHERE charId = ? FOR UPDATE"))
+				{
+					read.setInt(1, id);
+					try (ResultSet result = read.executeQuery())
+					{
+						if (result.next() && (result.getLong(1) == 0))
+						{
+							_alive.add(id);
+						}
+					}
+				}
+			}
+		}
+
+		/** Whether the locked character exists and is not marked for deletion. */
+		boolean receiverAlive(int charId)
+		{
+			return _alive.contains(charId);
+		}
+
+		record Delivery(int message, int receiver, MailReason reason)
+		{
+		}
+
+		void mailed(int message, int receiver, MailReason reason)
+		{
+			_mails.add(message);
+			_deliveries.add(new Delivery(message, receiver, reason));
+		}
+
+		List<Delivery> deliveries()
+		{
+			return _deliveries;
+		}
+
+		List<Integer> mails()
+		{
+			return _mails;
+		}
+
+		/**
+		 * INV12 for this operation's mails: each message is a service mail, and its attachment rows equal its {@code MAIL}
+		 * credit legs per item id.
+		 */
+		void checkMails() throws SQLException, AssetAbort
+		{
+			for (int message : _mails)
+			{
+				final Map<Integer, Long> legs = new TreeMap<>();
+				for (Leg leg : _legs)
+				{
+					if ((leg.kind() == Leg.AccountKind.MAIL) && (leg.accountId() == message))
+					{
+						legs.merge(leg.itemId(), leg.direction() == Leg.Direction.CREDIT ? leg.qty() : -leg.qty(), Long::sum);
+					}
+				}
+				final Map<Integer, Long> rows = new TreeMap<>();
+				try (PreparedStatement read = _connection.prepareStatement("SELECT i.item_id, SUM(i.count) FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.owner_id = -1 AND i.loc = 'MAIL' AND i.loc_data = ? AND m.senderId = -1 AND m.sendBySystem <> 0 AND m.reqAdena = 0 GROUP BY i.item_id"))
+				{
+					read.setInt(1, message);
+					try (ResultSet result = read.executeQuery())
+					{
+						while (result.next())
+						{
+							rows.put(result.getInt(1), result.getLong(2));
+						}
+					}
+				}
+				if (!legs.equals(rows))
+				{
+					throw new AssetAbort(AssetAbort.Reason.UNBALANCED, "INV12: message " + message + " has attachments " + rows + " for legs " + legs);
+				}
+			}
 		}
 
 		/** Locks the custody rows, in id order, before any step runs (§3.1: custody rows change only under their lock). */
@@ -932,7 +1113,7 @@ public final class AssetTx implements AutoCloseable
 			}
 		}
 
-		private static void expectOne(int affected, long objectId) throws AssetAbort
+		static void expectOne(int affected, long objectId) throws AssetAbort
 		{
 			if (affected != 1)
 			{

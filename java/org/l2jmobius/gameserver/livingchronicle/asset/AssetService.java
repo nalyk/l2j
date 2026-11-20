@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 import org.l2jmobius.gameserver.livingchronicle.journal.OutboxStager;
 
@@ -20,12 +21,25 @@ public final class AssetService
 	private final OutboxStager _stager;
 	private final AssetConfig _config;
 	private final Map<String, HoldingPolicy> _owners;
+	private final IntConsumer _adopt;
 
 	/**
 	 * @param owners each owner module's holding predicate (INV05), by module name
 	 */
 	public AssetService(Connections db, ObjectIds ids, OutboxStager stager, AssetConfig config, Map<String, HoldingPolicy> owners)
 	{
+		this(db, ids, stager, config, owners, messageId ->
+		{
+			// No game server: nothing adopts service mail.
+		});
+	}
+	
+	/**
+	 * @param adopt hands each committed service mail to the game's mail (Mobius's {@code MailManager.adopt}, CP-0014)
+	 */
+	public AssetService(Connections db, ObjectIds ids, OutboxStager stager, AssetConfig config, Map<String, HoldingPolicy> owners, IntConsumer adopt)
+	{
+		_adopt = adopt;
 		_db = db;
 		_ids = ids;
 		_stager = stager;
@@ -210,6 +224,12 @@ public final class AssetService
 		return _config;
 	}
 
+	/** After commit: the game's mail adopts the message; a failure is logged by the adopter and repaired by the census. */
+	void adopt(int messageId)
+	{
+		_adopt.accept(messageId);
+	}
+	
 	HoldingPolicy owner(String module)
 	{
 		return _owners.get(module);

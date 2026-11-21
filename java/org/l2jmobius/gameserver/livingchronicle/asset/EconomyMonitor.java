@@ -13,6 +13,9 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Logger;
 
+import org.l2jmobius.commons.database.DatabaseFactory;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.journal.DurableFact;
 import org.l2jmobius.gameserver.livingchronicle.journal.OutboxStager;
@@ -57,6 +60,10 @@ public final class EconomyMonitor
 		connection.setAutoCommit(false);
 		try
 		{
+			try (PreparedStatement clear = connection.prepareStatement("DELETE FROM lc_economy_statement"))
+			{
+				clear.executeUpdate(); // a counted statement's own row a crash left: no statement is in flight at startup
+			}
 			final Map<String, Map<Integer, Long>> detailed = Census.detailed(connection);
 			final Map<Integer, Long> census = totals(detailed);
 			final long[] last = last(connection);
@@ -148,6 +155,51 @@ public final class EconomyMonitor
 		{
 			connection.setAutoCommit(autoCommit);
 		}
+	}
+
+	/**
+	 * The shutdown boundary (asset-service.md §2.6): writes every item of {@code containers} (the clan warehouses, which
+	 * Mobius skips while their leader is offline) from memory, each container in a transaction of its own, then records the
+	 * {@code SHUTDOWN} census and the counters, only if every write succeeded: a boundary that could not write everything
+	 * certifies nothing, so the next start is a rebase.
+	 * @return whether the shutdown census was taken
+	 */
+	public static boolean atBoundary(Iterable<? extends ItemContainer> containers) throws SQLException
+	{
+		boolean written = true;
+		for (ItemContainer container : containers)
+		{
+			try (Connection connection = DatabaseFactory.getConnection())
+			{
+				connection.setAutoCommit(false);
+				try
+				{
+					for (Item item : container.getItems())
+					{
+						if (!item.isRetired() && !item.isForgotten())
+						{
+							ItemRows.writeStack(connection, item);
+						}
+					}
+					connection.commit();
+				}
+				catch (SQLException e)
+				{
+					connection.rollback();
+					written = false;
+					LOGGER.severe("Living Chronicle: " + container.getName() + " could not be written at the boundary: " + e.getMessage());
+				}
+			}
+		}
+		if (!written)
+		{
+			return false;
+		}
+		try (Connection connection = DatabaseFactory.getConnection())
+		{
+			atShutdown(connection);
+		}
+		return true;
 	}
 
 	/** The row that records a census's kind and time, so a census of empty holdings still exists (item 0, holding CENSUS). */

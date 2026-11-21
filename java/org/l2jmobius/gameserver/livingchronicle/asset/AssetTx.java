@@ -1614,7 +1614,7 @@ public final class AssetTx implements AutoCloseable
 					}
 				}
 				final Map<Integer, Long> rows = new TreeMap<>();
-				try (PreparedStatement read = _connection.prepareStatement("SELECT i.item_id, SUM(i.count) FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.owner_id = -1 AND i.loc = 'MAIL' AND i.loc_data = ? AND m.senderId = -1 AND m.sendBySystem <> 0 AND m.reqAdena = 0 GROUP BY i.item_id"))
+				try (PreparedStatement read = _connection.prepareStatement("SELECT i.item_id, SUM(i.count) FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.owner_id = -1 AND i.loc = 'MAIL' AND i.loc_data = ? AND m.senderId = -1 AND m.sendBySystem <> 0 AND m.reqAdena = 0 AND m.hasAttachments = 'true' GROUP BY i.item_id"))
 				{
 					read.setInt(1, message);
 					try (ResultSet result = read.executeQuery())

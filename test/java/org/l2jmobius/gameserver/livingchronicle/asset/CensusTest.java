@@ -37,6 +37,7 @@ class CensusTest
 	static void boot() throws Exception
 	{
 		TestServer.boot();
+		org.l2jmobius.testing.Migrations.ensure();
 		EconomyCounter.activate(Map.of());
 	}
 
@@ -292,6 +293,112 @@ class CensusTest
 			}
 			assertEquals(commits ? Map.of(SOULSHOT, -40L) : Map.of(), minus(EconomyCounter.snapshot(), before), commits ? "committed: posted" : "not committed: nothing posted");
 		}
+	}
+
+	@Test
+	void aLostAcknowledgementIsDecidedByTheStatementsOwnRowWhateverOthersDidMeanwhile() throws Exception
+	{
+		final int owner = IDS.incrementAndGet();
+		item(owner, SOULSHOT, 40, "INVENTORY");
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		try (Connection real = DatabaseFactory.getConnection())
+		{
+			final Connection connection = (Connection) java.lang.reflect.Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]
+			{
+				Connection.class
+			}, (proxy, method, args) ->
+			{
+				if (method.getName().equals("commit"))
+				{
+					real.rollback(); // this one did not commit ...
+					try (Connection other = DatabaseFactory.getConnection();
+						PreparedStatement delete = other.prepareStatement("DELETE FROM items WHERE owner_id = ?"))
+					{
+						delete.setInt(1, owner);
+						Census.counting(other, Holding.ITEMS, "owner_id = ?", new Object[]
+						{
+							owner
+						}, delete::executeUpdate); // ... another deletion of the same rows did, before the first is resolved
+					}
+					throw new SQLException("the acknowledgement was lost");
+				}
+				try
+				{
+					return method.invoke(real, args);
+				}
+				catch (java.lang.reflect.InvocationTargetException e)
+				{
+					throw e.getCause();
+				}
+			});
+			final PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE owner_id = ?");
+			delete.setInt(1, owner);
+			assertThrows(SQLException.class, () -> Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+			{
+				owner
+			}, delete::executeUpdate));
+		}
+		assertEquals(Map.of(SOULSHOT, -40L), minus(EconomyCounter.snapshot(), before), "one deletion, one sink");
+	}
+
+	private static org.l2jmobius.gameserver.entity.item.instance.Item loadedCopy(long count) throws Exception
+	{
+		final org.l2jmobius.gameserver.entity.actor.Player player = org.l2jmobius.testing.TestPlayers.create(org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass.FIGHTER, 40);
+		if (org.l2jmobius.gameserver.entity.World.getPlayer(player.getObjectId()) == null)
+		{
+			org.l2jmobius.gameserver.entity.World.addObject(player);
+		}
+		final org.l2jmobius.gameserver.entity.item.instance.Item copy = player.getInventory().addItem(org.l2jmobius.gameserver.entity.item.enums.ItemProcessType.NONE, SOULSHOT, count, player, null);
+		copy.updateDatabase(true);
+		return copy;
+	}
+
+	private static void deleteCounted(org.l2jmobius.gameserver.entity.item.instance.Item copy, Runnable during) throws Exception
+	{
+		try (Connection connection = DatabaseFactory.getConnection();
+			PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE object_id = ?"))
+		{
+			delete.setInt(1, copy.getObjectId());
+			Census.counting(connection, Holding.ITEMS, "object_id = ?", new Object[]
+			{
+				copy.getObjectId()
+			}, () ->
+			{
+				during.run();
+				return delete.executeUpdate();
+			});
+		}
+	}
+
+	@Test
+	void aCopyDestroyedWhileItsRowsDeletionRunsCountsNothingMore() throws Exception
+	{
+		final org.l2jmobius.gameserver.entity.item.instance.Item copy = loadedCopy(30);
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		final Thread destroyer = new Thread(() -> copy.setCount(0));
+		deleteCounted(copy, () ->
+		{
+			destroyer.start();
+			final long until = System.nanoTime() + 2_000_000_000L;
+			while ((destroyer.getState() != Thread.State.BLOCKED) && (destroyer.getState() != Thread.State.TERMINATED) && (System.nanoTime() < until))
+			{
+				Thread.onSpinWait();
+			}
+		});
+		destroyer.join();
+		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before), "the row's deletion counted it; the copy's destruction waited and counts nothing");
+	}
+
+	@Test
+	void aCopyThatCountedItselfOutBeforeItsRowWentIsNotCountedTwice() throws Exception
+	{
+		final org.l2jmobius.gameserver.entity.item.instance.Item copy = loadedCopy(30);
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		copy.setCount(0); // destroyed in memory; its row not yet deleted, as Mobius deletes it a step later
+		deleteCounted(copy, () ->
+		{
+		});
+		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before));
 	}
 
 	@Test

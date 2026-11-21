@@ -503,6 +503,18 @@ public class Item extends WorldObject
 		}
 	}
 	
+	/** @return the quantity of this object the existence counters include; read under {@link EconomyCounter#lockFor} (CP-0025) */
+	public long countedQuantity()
+	{
+		return _posted;
+	}
+	
+	/** @return whether a counted SQL statement deleted this loaded copy's row (CP-0025): its row must not come back */
+	public boolean isForgotten()
+	{
+		return _forgotten;
+	}
+	
 	/**
 	 * A counted SQL statement deleted this object's row while the object stayed loaded (an ended event's items in a loaded
 	 * warehouse): the deletion counted its quantity out, so this copy never counts again (CP-0025).

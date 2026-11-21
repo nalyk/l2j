@@ -4,7 +4,7 @@
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
-- DDL: `sql/migrations/V010__lc_asset.sql`. Classified sites: `docs/spec/asset-economy-sites.csv` (§2.7).
+- DDL: `sql/migrations/V010__lc_asset.sql`, `V018__lc_economy_statement.sql`. Classified sites: `docs/spec/asset-economy-sites.csv` (§2.7).
 - Upstream facts cited as `file:line` are at the fork's current upstream snapshot (`upstream` c9ca4c31, Mobius
   f1e2649e33cc); paths are under `java/org/l2jmobius/gameserver/` unless they start with `dist/`.
 
@@ -96,6 +96,7 @@ lc_economy_bucket(window_start TIMESTAMP, item_id INT, site VARCHAR(48), class {
 lc_economy_census(census_id BIGINT, taken_at TIMESTAMP(3), kind {SHUTDOWN|STARTUP|REBASE}, item_id INT, holding VARCHAR(16),
                   qty BIGINT UNSIGNED, PRIMARY KEY(census_id, item_id, holding))
 lc_economy_counter(item_id INT PK, existence BIGINT, as_of_census BIGINT)
+lc_economy_statement(statement_id BINARY(16) PK, staged_at TIMESTAMP(3))   -- V018: a counted SQL statement's own row (§2.6)
 lc_module_state(module VARCHAR(16) PK, state {RUNNING|FROZEN}, reason VARCHAR(64), since TIMESTAMP(3), evidence_fact_id BIGINT NULL)
 ```
 
@@ -193,9 +194,12 @@ it guarantees, and what it only watches, are stated separately.
    says when its winning bid was paid, are that holding's truth, so a write that fails counts nothing); a statement that writes census rows directly (an SQL site in §2.7 classed `SOURCE`, `SINK` or `MOVE`)
    runs in a transaction of its own (a connection already in one is refused) that reads, under locks, what the census
    counts in the rows it writes before and after it, and posts the difference only when it commits, so a statement that
-   fails posts nothing; a commit whose acknowledgement is lost is resolved from the rows, read under their locks on a
-   fresh connection; and a loaded copy of a row it deleted (an ended event's item in a loaded warehouse) stops counting,
-   as the deletion counted it. The ledger posts, once
+   fails posts nothing; the transaction writes a row of its own (`lc_economy_statement`), so a commit whose
+   acknowledgement is lost is decided by that row, read under its lock on a fresh connection, never by quantities other
+   writers may have changed since; and the loaded copies of the rows it locks are held under their leaf locks from its
+   locking read until its posting, so none settles in between: a copy of a row it deleted stops counting (an ended
+   event's item in a loaded warehouse: the deletion counted it), and the posting of a deleted row whose copy had counted
+   itself out before the read is cancelled. The ledger posts, once
    its operation commits, each `SOURCE` and `SINK` leg that creates or removes rows (a reconciliation recognising rows as
    they are, §4.5, changes no holding and posts nothing). A clamp (a quantity asked of a change and not applied) is recorded
    apart for the watched part, never in the counters, which see what was applied. Restored state is already in the census and is never counted again: Mobius assigns a restored
@@ -493,7 +497,7 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | ASSET-INV09 | `LazyItemsUpdate = False` (GeneralConfig.java:80, General.ini:193) | at startup; the module refuses to start otherwise |
 | ASSET-INV10 | an object id is never released while a row with that id exists | by the core patch (§11.6) on every destroy; at every census |
 | ASSET-INV11 | per custody and item id: Σ CREDIT − Σ DEBIT of the custody's postings = Σ `count` of its `ESCROW` rows | per operation for the custodies it touches; full pass at every census and at startup, including after a crash |
-| ASSET-INV12 | every `lc_mail_delivery` with `claimed_at` unset names an existing service mail (§2.1: `senderId = -1`, `sendBySystem` nonzero, `reqAdena = 0`) whose attachment rows are exactly the operation's `MAIL` credit legs to that message, and `MailManager` knows it; a missing message for an unclaimed delivery is a violation, not a claim | per operation; at every census (which also adopts a message `MailManager` lacks, and sets `claimed_at` for a message whose attachments retail cleared, RequestPostAttachment.java:232) |
+| ASSET-INV12 | every `lc_mail_delivery` with `claimed_at` unset names an existing service mail (§2.1: `senderId = -1`, `sendBySystem` nonzero, `reqAdena = 0`, `hasAttachments = 'true'`, without which retail shows no attachment) whose attachment rows are exactly the operation's `MAIL` credit legs to that message, and `MailManager` knows it; a missing message for an unclaimed delivery is a violation, not a claim | per operation; at every census (which also adopts a message `MailManager` lacks, and sets `claimed_at` for a message whose attachments retail cleared, RequestPostAttachment.java:232) |
 | ASSET-INV13 | a pending mark exists only while its operation is between `MARKED` and `DONE` | at startup (none may survive recovery); at every census |
 
 A violation of INV01-INV05, INV07, INV08, INV10-INV13 writes `Asset.InvariantViolated`, freezes the owning module through
@@ -753,6 +757,14 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   copy of a row it deleted stop counting; bids are counted where their rows are written, item auctions' state included,
   so a failed write counts nothing, and a clan-hall bid is refunded only once its row is gone (§11.28); stale ticket rows
   are dropped at load, counted; `returnItem` records its clamp.
+- Amendment round 12 (Codex), NO SIGN-OFF: a lost acknowledgement was still decided by quantities another writer could
+  change meanwhile (1); a loaded copy destroyed while its row's counted deletion was between commit and forgetting
+  counted the sink twice (2); the bootstrap gave recovery no holding policies, so every populated custody would freeze
+  (3); a failed adoption was reported as one (4); attachment rows without `hasAttachments` passed, a payout retail cannot
+  show (5). Fixed (still revision 13): a counted statement's own row in `lc_economy_statement` (V018) decides its commit;
+  the copies' leaf locks are held from the locking read to the posting, and a deleted row whose copy had counted itself
+  out is not counted again; modules register their holding policies with the bootstrap; an adoption that leaves the mail
+  unknown and attachment rows without the flag are INV12 violations, the flag also checked per operation.
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

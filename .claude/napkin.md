@@ -16,8 +16,10 @@
    Do instead: `scp` the changed files to `nalyk@build-host:gits/l2j/...`, run `./build.sh` (full gate) or `./build.sh test -Dtest.only=<Class>Test` there, write output to `build/gate.log` and read `build/test-reports/TEST-*.xml` for failures.
 4. **[2026-11-18] A golden is recorded by copying, and trusted only after a second run**
    Do instead: on ultra copy `build/lock-actual/<golden>` to `test/lock/<golden>`, rerun the classes whose goldens changed (`./build.sh test -Dtest.only=<Class>Test`), commit only when they reproduce byte for byte; then `scp` the goldens back.
-5. **[2026-11-19] A gate is 8 minutes: run it in the background and prepare the next step meanwhile**
-   Do instead: start the gate with `run_in_background`, write the next patch as a script in the scratchpad (dry-run it on copies), apply it only after the current step is committed.
+5. **[2026-11-21] A gate is 25 minutes: run it detached on ultra, never as a live ssh from WSL**
+   Do instead: `ssh -f ultra 'setsid nohup bash -c "./build.sh > /tmp/gateN.log 2>&1; echo $? > /tmp/gateN.done" >/dev/null 2>&1 </dev/null &'`,
+   then a background `until ssh ... test -f /tmp/gateN.done; do sleep 60; done` poll; Claude Code's memory reaper killed a
+   live-ssh gate once, and without `-f` the launching ssh stays attached.
 6. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
    Do instead: judge the gate by `BUILD SUCCESSFUL` in `build/gate.log` and by `failures="0"` in the report XML, not by the shell's exit code.
 

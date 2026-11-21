@@ -114,6 +114,12 @@ public final class EconomyCounter
 	 */
 	public static Object lockFor(int objectId)
 	{
-		return LOCKS[Math.floorMod(objectId, STRIPES)];
+		return LOCKS[stripe(objectId)];
+	}
+
+	/** @return the stripe of {@link #lockFor}: a caller holding several takes them in this order */
+	public static int stripe(int objectId)
+	{
+		return Math.floorMod(objectId, STRIPES);
 	}
 }

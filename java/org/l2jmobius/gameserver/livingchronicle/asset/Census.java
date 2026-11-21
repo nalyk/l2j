@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 
 /**
  * The census (docs/spec/asset-service.md §2.6): per item id, what the holdings the census counts hold in the database:
@@ -28,11 +31,12 @@ public final class Census
 {
 	private static final int ADENA = 57;
 	private static final Logger LOGGER = Logger.getLogger(Census.class.getName());
+	private static final java.util.concurrent.atomic.AtomicLong STATEMENTS = new java.util.concurrent.atomic.AtomicLong();
 
 	/** A holding the census counts, with its count and the rows a statement on it locks. */
 	public enum Holding
 	{
-		ITEMS("items", "SELECT item_id, SUM(count) FROM items WHERE loc IS NOT NULL AND loc NOT IN ('VOID', 'REFUND', 'LEASE') AND (%s) GROUP BY item_id", List.of("SELECT object_id FROM items WHERE %s FOR UPDATE")),
+		ITEMS("items", "SELECT item_id, SUM(count) FROM items WHERE loc IS NOT NULL AND loc NOT IN ('VOID', 'REFUND', 'LEASE') AND (%s) GROUP BY item_id", List.of("SELECT object_id, item_id, count, loc FROM items WHERE %s FOR UPDATE")),
 		GROUND("itemsonground", "SELECT item_id, SUM(count) FROM itemsonground WHERE %s GROUP BY item_id", List.of("SELECT object_id FROM itemsonground WHERE %s FOR UPDATE")),
 		TREASURY("castle", "SELECT " + ADENA + ", SUM(treasury) FROM castle WHERE %s", List.of("SELECT id FROM castle WHERE %s FOR UPDATE")),
 		/**
@@ -137,11 +141,16 @@ public final class Census
 	}
 
 	/**
-	 * Runs {@code work}, a statement writing {@code holding}'s rows matching {@code where}, in a transaction of its own:
-	 * the rows are locked, counted before and after it, and the difference is posted to the existence counters only when
-	 * the transaction commits, so a statement that fails posts nothing and changes nothing (asset-service.md §2.6). The
-	 * connection is handed back in the autocommit mode it came in. With the counters inactive, {@code work} runs as it did
-	 * upstream.
+	 * Runs {@code work}, a statement writing {@code holding}'s rows matching {@code where}, in a transaction of its own
+	 * (asset-service.md §2.6): the rows are locked, counted before and after it, and the difference is posted to the
+	 * existence counters only when the transaction commits, so a statement that fails posts nothing and changes nothing.
+	 * The transaction writes a row of its own to {@code lc_economy_statement}, so a commit whose acknowledgement is lost is
+	 * decided by that row, read under its lock on a fresh connection, never by quantities others may have changed since.
+	 * Loaded copies of the item rows it locks are held under their leaf locks from the locking read until the posting, so
+	 * none settles in between: a copy that still counts stops counting (its row's deletion counted it), and the posting of
+	 * a row whose copy had already settled out before the read is cancelled (that copy counted it out). A connection
+	 * already in a transaction is refused; the connection is handed back in autocommit. With the counters inactive,
+	 * {@code work} runs as it did upstream.
 	 * @return what {@code work} returned
 	 */
 	public static int counting(Connection connection, Holding holding, String where, Object[] params, Work work) throws SQLException
@@ -156,17 +165,75 @@ public final class Census
 			throw new IllegalStateException("a counted statement runs in a transaction of its own; this connection is in one");
 		}
 		connection.setAutoCommit(false);
+		final Map<Integer, long[]> rows;
+		try
+		{
+			rows = lock(connection, holding, where, params);
+		}
+		catch (SQLException | RuntimeException e)
+		{
+			connection.rollback();
+			connection.setAutoCommit(true);
+			throw e;
+		}
+		final List<Item> copies = new ArrayList<>();
+		for (int objectId : rows.keySet())
+		{
+			if (World.findObject(objectId) instanceof Item copy)
+			{
+				copies.add(copy);
+			}
+		}
+		copies.sort(Comparator.comparingInt(copy -> EconomyCounter.stripe(copy.getObjectId())));
+		return holdingStripes(copies, 0, new ArrayList<>(), () -> counted(connection, holding, where, params, work, rows, copies));
+	}
+
+	/** Runs {@code body} holding the leaf locks of {@code copies}, each stripe once, in stripe order. */
+	private static int holdingStripes(List<Item> copies, int from, List<Integer> held, Work body) throws SQLException
+	{
+		for (int i = from; i < copies.size(); i++)
+		{
+			final int stripe = EconomyCounter.stripe(copies.get(i).getObjectId());
+			if (!held.contains(stripe))
+			{
+				held.add(stripe);
+				synchronized (EconomyCounter.lockFor(copies.get(i).getObjectId()))
+				{
+					return holdingStripes(copies, i + 1, held, body);
+				}
+			}
+		}
+		return body.run();
+	}
+
+	private static int counted(Connection connection, Holding holding, String where, Object[] params, Work work, Map<Integer, long[]> rows, List<Item> copies) throws SQLException
+	{
+		final Set<Integer> settledOut = new HashSet<>(); // copies counted out before the read: their rows' postings cancel
+		final byte[] statement = new byte[16];
 		final Map<Integer, Long> before;
 		final Map<Integer, Long> after;
 		final Set<Integer> deleted;
 		final int result;
 		try
 		{
-			final Set<Integer> locked = lock(connection, holding, where, params);
+			for (Item copy : copies)
+			{
+				if (copy.countedQuantity() == 0)
+				{
+					settledOut.add(copy.getObjectId());
+				}
+			}
 			before = count(connection, holding, where, params);
 			result = work.run();
 			after = count(connection, holding, where, params);
-			deleted = holding == Holding.ITEMS ? gone(connection, locked) : Set.of();
+			deleted = holding == Holding.ITEMS ? gone(connection, rows.keySet()) : Set.of();
+			java.nio.ByteBuffer.wrap(statement).putLong(GameClock.millis()).putLong(STATEMENTS.incrementAndGet()); // unique in a run; startup clears the rest
+			try (PreparedStatement mark = connection.prepareStatement("INSERT INTO lc_economy_statement (statement_id, staged_at) VALUES (?, ?)"))
+			{
+				mark.setBytes(1, statement);
+				mark.setTimestamp(2, new java.sql.Timestamp(GameClock.millis()));
+				mark.executeUpdate();
+			}
 		}
 		catch (SQLException | RuntimeException e)
 		{
@@ -180,8 +247,8 @@ public final class Census
 		}
 		catch (SQLException e)
 		{
-			// The server may have committed and lost only the acknowledgement: the rows decide, read under their locks.
-			final Boolean committed = committed(holding, where, params, before, after);
+			// The server may have committed and lost only the acknowledgement: the statement's own row decides.
+			final Boolean committed = committed(statement);
 			if (!Boolean.TRUE.equals(committed))
 			{
 				if (committed == null)
@@ -203,14 +270,29 @@ public final class Census
 			}
 		}
 		post(before, after);
-		forget(deleted);
+		for (Item copy : copies)
+		{
+			if (deleted.contains(copy.getObjectId()))
+			{
+				copy.forgetCounted();
+				if (settledOut.contains(copy.getObjectId()))
+				{
+					final long[] row = rows.get(copy.getObjectId());
+					EconomyCounter.post((int) row[0], row[1]); // its copy counted the quantity out already
+				}
+			}
+		}
+		unmark(statement);
 		return result;
 	}
 
-	/** Locks the rows a statement on {@code holding} matching {@code where} writes. @return their object ids, for items */
-	private static Set<Integer> lock(Connection connection, Holding holding, String where, Object[] params) throws SQLException
+	/**
+	 * Locks the rows a statement on {@code holding} matching {@code where} writes.
+	 * @return for items, each locked row's object id with {item id, the quantity the census counts in it}; otherwise empty
+	 */
+	private static Map<Integer, long[]> lock(Connection connection, Holding holding, String where, Object[] params) throws SQLException
 	{
-		final Set<Integer> ids = new HashSet<>();
+		final Map<Integer, long[]> rows = new TreeMap<>();
 		for (String lock : holding._locks)
 		{
 			try (PreparedStatement ps = connection.prepareStatement(String.format(lock, where)))
@@ -220,12 +302,21 @@ public final class Census
 				{
 					while (rs.next())
 					{
-						ids.add(rs.getInt(1));
+						if (holding == Holding.ITEMS)
+						{
+							final String loc = rs.getString(4);
+							final boolean counted = (loc != null) && !List.of("VOID", "REFUND", "LEASE").contains(loc);
+							rows.put(rs.getInt(1), new long[]
+							{
+								rs.getInt(2),
+								counted ? rs.getLong(3) : 0
+							});
+						}
 					}
 				}
 			}
 		}
-		return ids;
+		return rows;
 	}
 
 	/** @return the object ids among {@code locked} whose rows are gone */
@@ -250,17 +341,19 @@ public final class Census
 		return gone;
 	}
 
-	/** @return whether a statement whose commit failed did commit: TRUE, FALSE, or null when the rows cannot tell */
-	private static Boolean committed(Holding holding, String where, Object[] params, Map<Integer, Long> before, Map<Integer, Long> after)
+	/** @return whether the statement whose commit failed did commit: its own row decides; null when it cannot be read */
+	private static Boolean committed(byte[] statement)
 	{
 		try (Connection fresh = DatabaseFactory.getConnection())
 		{
 			fresh.setAutoCommit(false);
-			try
+			try (PreparedStatement read = fresh.prepareStatement("SELECT 1 FROM lc_economy_statement WHERE statement_id = ? FOR UPDATE"))
 			{
-				lock(fresh, holding, where, params); // waits until the server has ended the first transaction either way
-				final Map<Integer, Long> now = count(fresh, holding, where, params);
-				return now.equals(after) ? Boolean.TRUE : now.equals(before) ? Boolean.FALSE : null;
+				read.setBytes(1, statement); // waits until the server has ended the first transaction either way
+				try (ResultSet result = read.executeQuery())
+				{
+					return result.next();
+				}
 			}
 			finally
 			{
@@ -273,6 +366,21 @@ public final class Census
 		}
 	}
 
+	/** The statement's row has done its work once its commit is known; one a crash left is cleared at startup. */
+	private static void unmark(byte[] statement)
+	{
+		try (Connection fresh = DatabaseFactory.getConnection();
+			PreparedStatement delete = fresh.prepareStatement("DELETE FROM lc_economy_statement WHERE statement_id = ?"))
+		{
+			delete.setBytes(1, statement);
+			delete.executeUpdate();
+		}
+		catch (SQLException e)
+		{
+			// harmless: it only ever decides its own statement
+		}
+	}
+
 	private static void post(Map<Integer, Long> before, Map<Integer, Long> after)
 	{
 		final Set<Integer> ids = new HashSet<>(before.keySet());
@@ -280,18 +388,6 @@ public final class Census
 		for (int itemId : ids)
 		{
 			EconomyCounter.post(itemId, after.getOrDefault(itemId, 0L) - before.getOrDefault(itemId, 0L));
-		}
-	}
-
-	/** A loaded copy of a row the statement deleted no longer counts: the deletion counted it (Codex amd11). */
-	private static void forget(Set<Integer> deleted)
-	{
-		for (int objectId : deleted)
-		{
-			if (World.findObject(objectId) instanceof Item copy)
-			{
-				copy.forgetCounted();
-			}
 		}
 	}
 

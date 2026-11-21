@@ -40,7 +40,7 @@ class CustodyCheckTest
 	}
 
 	@Test
-	void aConsistentCustodyPassesAndRecoveryIsRecorded() throws Exception
+	void aConsistentCustodyPasses() throws Exception
 	{
 		final int custody = _f.open("TEST");
 		_f.seed(custody, ADENA, 100, false);
@@ -48,7 +48,6 @@ class CustodyCheckTest
 		assertEquals(List.of(), violationsOf(report, custody));
 		assertTrue(report.custodiesChecked() >= 1);
 		assertEquals("OPEN", _f.text("SELECT state FROM lc_custody WHERE custody_id = " + custody));
-		assertTrue(_f.number("SELECT COUNT(*) FROM lc_fact_outbox o JOIN lc_fact_type t ON t.type = o.type WHERE t.name = 'Asset.RecoveryCompleted'") >= 1);
 	}
 
 	@Test

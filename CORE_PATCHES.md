@@ -401,15 +401,21 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   taken before the statement posting a deletion that then fails).
 - Change: each runs through `Census.counting`: in a transaction of its own, the rows it writes are locked and counted
   before and after it, and the difference is posted only when it commits; a statement that fails rolls back and posts
-  nothing, and the connection is handed back in autocommit; a connection already in a transaction is refused; a commit
-  whose acknowledgement is lost is resolved from the rows, read under their locks on a fresh connection; a loaded copy of
-  a row it deleted is told to stop counting (`Item.forgetCounted`, in CP-0021's file). An auction's row and its bids are
+  nothing, and the connection is handed back in autocommit; a connection already in a transaction is refused; the
+  transaction writes its own row to `lc_economy_statement` (V018), which decides a commit whose acknowledgement is lost,
+  read under its lock on a fresh connection (Codex amd12: quantities could be changed meanwhile by another writer); the
+  loaded copies of the rows it locks are held under their leaf locks from the locking read to the posting, a copy of a
+  deleted row told to stop counting (`Item.forgetCounted`, `countedQuantity`, in CP-0021's file) and the posting of a
+  deleted row whose copy had counted itself out cancelled. An auction's row and its bids are
   deleted in one counted transaction, as its winning bid stops being taken off when the auction's row goes. With the
   counters inactive each statement runs as upstream.
 - Invariant: across each of these statements the existence counters move exactly as the census does.
 - Proof: `SqlSitesTest` (each of the ten sites, the counters' change equal to the census's); `CensusTest` (a failed
   statement posts nothing and rolls back; a connection in a transaction is refused and its work kept apart; a lost
-  acknowledgement resolved both ways; a loaded copy of a deleted row stops counting, -60 for a 30-unit copy before).
+  acknowledgement resolved both ways, and decided by the statement's own row while another deletion of the same rows
+  commits meanwhile; a loaded copy of a deleted row stops counting, -60 for a 30-unit copy before; a copy destroyed while
+  its row's deletion runs waits and counts nothing; a copy that counted itself out before its row went is not counted
+  twice; the last three red on the previous code).
 
 ## CP-0026 A clan-hall bid is refunded only once its row is gone
 
@@ -421,3 +427,24 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: a clan-hall bid is refunded at most once, and only once its row is gone.
 - Proof: `HoldingHooksTest.aClanHallBidWhoseRowCannotBeDeletedIsNotRefunded` (a trigger refuses the deletion; upstream
   refunded the bid and the counters moved by -2 000; now nothing moves).
+
+## CP-0027 Living Chronicle's seams in boot and shutdown
+
+- Files: `java/org/l2jmobius/gameserver/GameServer.java`, `java/org/l2jmobius/gameserver/Shutdown.java`
+- Reason: Mobius has no module seams in its boot or shutdown (asset-service.md §11.25): the startup census must precede
+  every other startup step (Mobius's own cleanup is a counted site), recovery must finish before any character loads
+  (offline traders and players are restored before the login listener opens), and the shutdown boundary must follow
+  Mobius's last save and precede the database closing.
+- Change: `GameServer` calls `LivingChronicle.atDatabase()` right after `DatabaseFactory.init()` (before
+  `ThreadPool.init`: it uses the database only) and `LivingChronicle.beforeLogin()` after `PunishmentManager`, before the
+  shutdown hook is registered and offline traders and players are restored, so a recovery that fails stops the start;
+  `Shutdown` calls `LivingChronicle.atShutdown()` after `saveData()` and before `DatabaseFactory.close()`. In `truth`
+  (and while no `lc.profile` is set, until the profile check exists) each returns at once.
+- Invariant: in a profile that starts Living Chronicle, no character loads before recovery, and every census follows or
+  precedes exactly the Mobius steps §2.6 names.
+- Proof: `LivingChronicleBootTest` (truth starts nothing; an unknown profile refuses; dev counts, recovers and keeps the
+  boundary, a clan warehouse change in memory written there and conserved across the restart; a boundary whose write
+  fails takes no shutdown census, so the next start is a rebase); `SeamsTest` reads the compiled order (the census right
+  after `DatabaseFactory.init`, recovery before the shutdown hook and the offline traders, the boundary right after
+  `saveData` and before `DatabaseFactory.close`; 3/3 fail with CP-0027 reverted); every server-booting test boots
+  through the seams in truth.

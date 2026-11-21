@@ -43,6 +43,7 @@ class ExistenceCounterTest
 	static void boot() throws Exception
 	{
 		TestServer.boot();
+		org.l2jmobius.testing.Migrations.ensure();
 		EconomyCounter.activate(Map.of());
 	}
 

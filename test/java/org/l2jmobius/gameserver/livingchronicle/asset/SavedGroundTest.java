@@ -39,6 +39,7 @@ class SavedGroundTest
 	static void boot() throws Exception
 	{
 		TestServer.boot();
+		org.l2jmobius.testing.Migrations.ensure();
 		_saved = GeneralConfig.SAVE_DROPPED_ITEM;
 		GeneralConfig.SAVE_DROPPED_ITEM = true;
 		EconomyCounter.activate(Map.of());

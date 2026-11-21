@@ -39,6 +39,7 @@ import org.l2jmobius.gameserver.data.sql.OfflinePlayTable;
 import org.l2jmobius.gameserver.data.sql.OfflineTraderTable;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.livingchronicle.LivingChronicle;
 import org.l2jmobius.gameserver.managers.CHSiegeManager;
 import org.l2jmobius.gameserver.managers.CastleManorManager;
 import org.l2jmobius.gameserver.managers.CursedWeaponsManager;
@@ -420,6 +421,7 @@ public class Shutdown extends Thread
 		
 		// last byebye, save all data and quit this server
 		saveData();
+		LivingChronicle.atShutdown(); // the shutdown boundary, before the database closes (CP-0027)
 		tc.restartCounter();
 		
 		// commit data, last chance

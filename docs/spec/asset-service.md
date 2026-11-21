@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 11; signed off with one fix by Codex in amendment round 8; record in §12)
+- Status: draft (revision 13, under review; revision 12 signed off by Codex in amendment round 9; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -51,10 +51,13 @@ mail**, written as rows in the operation's transaction and claimed by the charac
   deletions by item id do reach it (LongTimeEvent.java:557, Hero.java:81): §4.4 keeps those item ids out of custody, and
   §2.7 classifies every such statement. `items.loc_data` is an `INT` (`dist/db_installer/sql/game/items.sql`), so
   custody ids are `INT`s.
-- **Service mail** is a `messages` row with `senderId = -1`, `sendBySystem` nonzero (so it cannot be rejected back to a
-  sender, RequestRejectPostAttachment.java:96), `reqAdena = 0` (never cash on delivery, MailMessage.java:225-227),
-  `hasAttachments = 'true'` and an `expiration` beyond any server lifetime (service mail never expires, so
-  MessageDeletionTaskManager.java:80-110 never touches it). Its life: *sent* (in the operation's transaction) →
+- **Service mail** is a `messages` row with `senderId = -1` (startup cleanup keeps owner -1 `MAIL` attachments only for
+  such a message, DatabaseIdManager.java:68), `sendBySystem` = 1 (`MessageSenderType.NEWS`, nonzero, so it cannot be
+  rejected back to a sender, RequestRejectPostAttachment.java:96), `reqAdena = 0` (never cash on delivery,
+  MailMessage.java:225-227), `hasAttachments = 'true'` and `expiration` = 2 147 483 647 000 ms (2038-01-19 03:14:07 UTC,
+  the latest instant the client can show: the mail lists send it as `int` epoch seconds, MailMessage.java:235-238,
+  ExShowReceivedPostList.java:53). It never expires: the deletion task never schedules a message with that expiration
+  (core patch §11.19), so MessageDeletionTaskManager.java:80-110 never touches it, past 2038 too. Its life: *sent* (in the operation's transaction) →
   *claimed* (by retail mail, which checks room; RequestPostAttachment.java:191-232). The receiver cannot delete it while
   it has attachments (RequestDeleteReceivedPost.java:83), and a character with unclaimed service mail cannot be deleted
   (core patch §11.21). Writing service mail, and writing a pending mark (§2.4), lock the character's `characters` row
@@ -181,6 +184,20 @@ it guarantees, and what it only watches, are stated separately.
    disconnects players before stopping its task pools (Shutdown.java:380, 403), so a task can change a container after
    its final save, and that change is lost and reported.
 
+   **The existence counters** hold, per item id, the quantity in the holdings the census counts, kept from the changes
+   themselves. An item's quantity counts while its location is one the census counts (every `ItemLocation` but `VOID`,
+   `REFUND` and `LEASE`; the ground list too when `SaveDroppedItem` is on), so a change of its count or of its location
+   is counted where it happens (`Item.setCount`, `Item.changeCount`, `Item.setItemLocation`); a treasury counts where
+   Mobius changes it (`Castle.addToTreasuryNoTax`); an open bid at each of its transitions (placed, raised, cancelled,
+   won, expired); a statement that writes census rows directly (a `SOURCE` or `SINK` SQL site in §2.7) counts, before it
+   runs, what the census would have counted in the rows it writes; and the ledger posts each `SOURCE` and `SINK` leg when
+   its operation commits. Restored state is already in the census and is never counted again: Mobius assigns a restored
+   row's location without `setItemLocation` (Item.java:1559-1566), and the object starts counted at its count. The
+   service's own takes and returns (a stack decrease, a treasury commit or return, a whole object retired) move quantity
+   between Mobius's memory and custody rows and post nothing, so a quantity taken and then lost shows as the difference
+   it is. A count and a location changing at once on one item settle under a lock of their own, never an item's or a
+   container's monitor, so the counters are exact when the server is quiet, as at the boundary.
+
 **Watched (alarm, not proof):**
 
 3. Every place that changes an item's existence or quantity is a classified site, and each change is counted under its
@@ -193,12 +210,13 @@ it guarantees, and what it only watches, are stated separately.
 **The shutdown boundary.** After Mobius's shutdown has disconnected every player and stopped its task pools
 (Shutdown.java:380, 403), the service writes every authoritative container that Mobius does not (a clan warehouse whose
 leader is offline is skipped by `ItemContainer.updateDatabase`, ItemContainer.java:579: the service writes each clan
-warehouse's items itself), checks every write succeeded, posts each memory-only holding about to be discarded as a sink
-(ground items when `SaveDroppedItem = False`, General.ini:217; with it on they are counted from `itemsonground` instead),
-and only then takes the `SHUTDOWN` census from the database and persists the counters. Refund lists are already
+warehouse's items itself), checks every write succeeded, and only then takes the `SHUTDOWN` census from the database and
+persists the counters. Ground items are a holding only when `SaveDroppedItem` is on (General.ini:217), counted from
+`itemsonground`; with it off a drop leaves the counted holdings and a pickup enters them, so nothing on the ground is
+posted at the boundary. Refund lists are already
 destroyed at logout (Player.java:12131, PlayerRefund.java:85) through a classified sink site, so they are never counted.
 
-**At startup**, before any login, the database is counted again (`STARTUP`) and compared with the persisted counters. A
+**At startup**, right after the database opens and before any other startup step (Mobius's own cleanup, DatabaseIdManager.java:161-171, is a counted site), the database is counted again (`STARTUP`) and compared with the persisted counters. A
 difference is a conservation failure somewhere in Mobius or here (for instance a background task changing a player's
 container after its final save, which Mobius's shutdown order allows, Shutdown.java:380-403; the census reports such a
 loss, it does not hide it): `Asset.ConservationBroken` with the per-item
@@ -223,19 +241,28 @@ the bid to the seller (ClanHallAuction.java:470-473), with any clamp a sink.
 
 ### 2.7 The site table
 
-`docs/spec/asset-economy-sites.csv`: one row per site, `site, file, member, class, holding_from, holding_to, reason`. It is
-reviewed like the spec. A static test (AT-ASSET-12) scans the compiled core and every datapack script for each call that
-can change an item's existence or quantity (`ItemManager.createItem`, `ItemManager.destroyItem`, `Item.changeCount`,
-`Item.setCount`, the `Item` constructors) and for every SQL string that deletes or updates `items`, and fails on any
-site the table does not classify, and on any table row that no longer matches a site. Known sites that must be in it from
-the start: direct item construction for lottery and race tickets (`dist/game/data/scripts/handlers/bypass/npc/Loto.java:242`,
-RaceManager.java:171) and mercenary tickets (MercTicketManager.java:195), restores (`RESTORE`), and the blanket SQL
-deletions of event and hero items (LongTimeEvent.java:557, Hero.java:81: `SINK`). A constructor followed by
-`setCount` on the fresh object, before it enters any holding, is one site (the quantity first exists there); a
-reconstruction from rows is `RESTORE`. A site that computes several quantities (a returned part, a penalty, a clamp) counts
-each under its own class where it computes it. A row whose class is not yet decided is `PENDING`, and AT-ASSET-12 fails on
-any `PENDING` row: the table is complete only when the scan and the review agree. The table in this commit is the seed
-(the sites the reviews named); completing it is the exit criterion of AT-ASSET-12 in N4, not a claim of this spec.
+`docs/spec/asset-economy-sites.csv`: rows `site, file, member, class, holding_from, holding_to, reason`, reviewed like the
+spec. A **site** is a member (a method or a constructor; a lambda belongs to the member that writes it) of the compiled
+core or of a datapack script that calls something able to change an item's existence or quantity
+(`ItemManager.createItem`, `ItemManager.destroyItem`, `Item.changeCount`, `Item.setCount`, an `Item` constructor other
+than one delegating to another), that loads an SQL string writing a census table (`DELETE`, `UPDATE`, `INSERT` or
+`REPLACE` on `items`, `itemsonground`, `item_auction_bid` or `auction_bid`, or an `UPDATE castle` setting `treasury`), or
+that calls the existence counters (§2.6), so every counter hook is a classified site too. A static test (AT-ASSET-12)
+scans the compiled core, Living Chronicle's own package excepted (its changes are ledger legs), and every datapack script
+compiled as Mobius compiles them at boot, and fails on a site no row names, on a row naming no site, and on a `PENDING`
+row. Classes: `SOURCE`, `SINK`, `MOVE`, `RESTORE` (state rebuilt from rows, never counted), `PERSIST` (writes a holding's
+row from memory, changing no quantity) and `PENDING` (not yet decided). A member that does two things has a row for each
+(ItemContainer.addItem creates by item id and merges into a stack). A constructor followed by `setCount` on the fresh
+object, before it enters any holding, is one site, where the quantity first exists; a quantity a site computes apart (a
+returned part, a penalty, a clamp) is named in that site's reason under its own class, and the counters see the quantity
+applied, never the one asked, so a clamp in `Item.changeCount` or in a treasury is counted where it is computed.
+Known sites that must be in it from the start: direct item construction for lottery and race tickets
+(`dist/game/data/scripts/handlers/bypass/npc/Loto.java:242`, RaceManager.java:171) and mercenary tickets
+(MercTicketManager.java:195), restores (`RESTORE`), and the blanket SQL deletions of event and hero items
+(LongTimeEvent.java:557, Hero.java:81: `SINK`).
+
+**Ledger rows** (`file` = `ledger`, `member` = a posting code) classify Living Chronicle's own sources and sinks, which the
+ledger posts (§2.5, §2.6). AT-ASSET-12 checks that every `SinkCode` has one; it does not scan for them.
 
 ## 3. State machines
 
@@ -518,7 +545,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R09 | An escrowed item's object id MUST stay reserved while its row exists, at runtime and across restarts. | AT-ASSET-00, AT-ASSET-09 |
 | ASSET-R10 | Every credit to a character MUST be system mail written in the operation's transaction; no asset MUST be credited to a live Mobius container. | AT-ASSET-10 |
 | ASSET-R11 | Service mail MUST be built as §2.1 says (not rejectable, not cash on delivery, never expiring) and MUST keep its attachments until claimed; the claim itself is retail and has retail's guarantees, no more. | AT-ASSET-11 |
-| ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
+| ASSET-R12 | Every site that changes an item's existence or quantity, every SQL statement writing a census table and every counter hook MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
 | ASSET-R14 | Living Chronicle MUST NOT create an asset except audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` exactly as the retail craft or kill computed them at the seam, `SINK_RECYCLE` within its recorded share, and the valueless `PACT_PARCHMENT` and `LEDGER_SEAL`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and, if it is `OPEN`, the custody (a `CLOSED` custody stays `CLOSED`), write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
@@ -550,7 +577,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-09 | integration, restart | the allocator never hands out an escrowed or mailed object id, at runtime and after restart; a failed row delete keeps the id reserved |
 | AT-ASSET-10 | integration | releases, refunds and corrections arrive only as system mail; the live containers are untouched |
 | AT-ASSET-11 | integration | service mail as written: rejecting it, deleting it with attachments, waiting past every expiry run, an offline receiver, a full inventory and a full inbox: its attachments survive until claimed; startup cleanup keeps it (DatabaseIdManager.java:68) |
-| AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row and a stale row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
+| AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row, a stale row and a `SinkCode` without a ledger row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
 | AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except audited corrections, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), `SINK_RECYCLE` at most its share of the previous day's recorded teleport-fee sink and once per pool and day, and `PACT_PARCHMENT` and `LEDGER_SEAL` of their items only; an `exchange` refused whole when either side fails |
 | AT-ASSET-15 | integration | a forged `ESCROW` row under an open custody: module and custody frozen; under a closed custody: module frozen, the custody still `CLOSED`; evidence written, rows untouched; only a correction (taking the rows out, §4.5) commits |
@@ -629,23 +656,50 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 19. **Mail.** Expiry of sender -1 mail with the receiver offline destroys the attachments
     (MessageDeletionTaskManager.java:84-104): an upstream defect that service mail avoids by never expiring (§2.1), and
     recorded here for upstream. `MailManager.sendMessage` inserts on its own connection (MailManager.java:157): core patch
-    so that `MailManager` adopts a message the service already committed, idempotently by message id.
+    so that `MailManager` adopts a message the service already committed (`adopt(messageId)`: the row read as `load()`
+    reads it, put in memory if absent, the receiver told if online), idempotently by message id, and so that the deletion
+    task never schedules a service mail's expiration.
 20. **Retired items**: `Item.updateDatabase` does nothing for a retired item, and Mobius's item operations (container add,
     transfer, destroy, drop, equip, use) refuse one (core patch). → §3.3.
 21. **Character deletion** removes the character's own items (GameClient.java:439-451) and leaves owner -1 rows, so
     service mail to a deleted character could never be claimed. A deletion either marks the character (`deletetime`)
-    for later, or, with `DeleteDays = 0`, deletes it at once (GameClient.java:293) on other connections. Core patch: both
-    paths first run the deletion guard (§2.1), which locks the row, refuses while unclaimed service mail or a pending mark
-    exists, and marks the character, committed before any deleting statement; service mail and pending marks are written
-    under the same row lock. → ASSET-R27.
-23. **Claims of service mail** clear the message's attachments (RequestPostAttachment.java:191-232) and say nothing to the
-    service. Core patch: after clearing a service message's attachments, the claim sets `claimed_at` on its delivery; the
-    census repairs a claim whose patch step did not run.
+    for later, executed by CharSelectionInfo.java:266, or, with `DeleteDays = 0`, deletes it at once
+    (GameClient.java:293) on other connections. Core patch: `markToDeleteChar` runs the deletion guard (§2.1) before
+    either path, which locks the row, refuses while unclaimed service mail or a pending mark exists, and marks the
+    character, committed before any deleting statement; the later executor deletes only characters the guard marked.
+    A refusal answers the client with `CharDeleteFail(REASON_DELETION_FAILED)`. Service mail and pending marks are
+    written under the same row lock. → ASSET-R27.
+23. **Claims of service mail** clear the message's attachments (RequestPostAttachment.java:191-232, through
+    `MailMessage.removeAttachments`) and say nothing to the service. Core patch: when `removeAttachments` clears a
+    sender -1 message's attachments, it sets `claimed_at` on the message's delivery, if it has one; the census repairs a
+    claim whose patch step did not run.
 22. **Login** restores a character's items from rows (Player.java:7358-7360) with plain reads that do not wait for an
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
+24. **No hook counts existence** (§2.6). Core patch: `Item.setCount`, `Item.changeCount` and `Item.setItemLocation`
+    settle the item's counted quantity; `Item.restoreFromDb` marks a restored object counted at its count;
+    `Castle.addToTreasuryNoTax` posts the change it applied; `ItemsOnGroundManager.save` and `removeObject` post a ground
+    item entering and leaving the saved ground; `ItemAuction.registerBid` and `cancelBid`,
+    `ItemAuctionInstance.onAuctionFinished` and `ClanHallAuction` (`updateInDB`, `cancelBid`, `removeBids`, `endAuction`)
+    post each bid transition; each `SOURCE` or `SINK` SQL site counts its rows before it runs. Until a profile starts
+    Living Chronicle the hooks do nothing (profiles.md §4.2 rule 4). → ASSET-R12, INV06.
+25. **Boot and shutdown have no module seams.** Core patch: GameServer calls Living Chronicle right after the database
+    opens (recovery, §3.2; the `STARTUP` census) and Shutdown calls it after `saveData` and before the database closes
+    (the boundary, §2.6); in `truth` both return at once.
+26. **A clan-hall re-bid after being outbid loses the first bid** (ClanHallAuction.java:272, 386-390): the clan pays its
+    whole new bid, and its standing bid is overwritten and never returned. Core patch: a clan pays the difference over
+    its own standing bid, as Mobius already charges the highest bidder raising its own.
 
 ## 12. Review record
 
+- Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
+  counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
+  mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL
+  sink counts its rows before it runs; the ledger posts its sources and sinks; the service's own takes post nothing. The
+  boundary no longer posts ground items as a sink (a drop already leaves the counted holdings), and the startup census
+  comes before every other startup step. §2.7 defines a site as a member, extends the scan to SQL writing any census
+  table and to the counter hooks, adds `PERSIST`, and keys Living Chronicle's rows by posting code (`ledger`), every
+  `SinkCode` with one. The table is complete for the upstream snapshot: 50 rows of Mobius sites, 17 ledger rows.
+  §11.24-26 name the hooks, the boot and shutdown seams, and a clan-hall re-bid that loses the first bid.
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens
@@ -658,6 +712,13 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 - Amendment round 8 (Codex): revision 11 **SIGN-OFF WITH FIXES**: §6, ASSET-R15 and AT-ASSET-15 still froze a `CLOSED`
   custody, which §3.1 makes terminal (24). Fixed: an `OPEN` custody freezes, a `CLOSED` one stays `CLOSED` and only its
   module freezes, as the implementation already does (CustodyCheckTest pins it).
+- Amendment round 9 (Codex): revision 12 **SIGN-OFF**, with the expiry rule, the claim hook and the guard placement
+  each verified against the upstream code.
+- Revision 12 (amendment): planning N4 part 3 against the code found that the client shows a mail's expiry
+  as `int` epoch seconds, so "beyond any server lifetime" cannot be sent; §2.1 now fixes service mail's fields
+  (`sendBySystem` = 1, `expiration` = the latest instant the client can show) and makes the deletion task never schedule
+  it; §11.19, §11.21 and §11.23 name the patch points (`MailManager.adopt`, `markToDeleteChar` with
+  `CharDeleteFail(REASON_DELETION_FAILED)`, `MailMessage.removeAttachments`). No rule changed.
 - Amendment round 3 (Codex): revision 10 **SIGN-OFF**.
 - Amendment round 2 (Codex), NO SIGN-OFF: `move` restricted to one owner, though its callers cross modules. Fixed: two
   owners allowed, both predicates checked, refused if either is frozen.

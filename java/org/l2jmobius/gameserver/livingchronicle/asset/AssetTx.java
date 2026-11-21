@@ -107,6 +107,8 @@ public final class AssetTx implements AutoCloseable
 	private final TreeSet<Integer> _marked = new TreeSet<>();
 	/** The service mails the last attempt wrote, adopted by the game after commit. */
 	private List<Integer> _mails = List.of();
+	/** What the committed attempt's legs created or destroyed, by item id, for the existence counters (§2.6). */
+	private Map<Integer, Long> _existence = Map.of();
 	private final List<Version> _versions = new ArrayList<>();
 	private final List<Key> _keys = new ArrayList<>();
 	private final List<DurableFact> _facts = new ArrayList<>();
@@ -346,6 +348,7 @@ public final class AssetTx implements AutoCloseable
 				ItemRows.writeStack(execution.connection(), taken.item());
 				execution.legs().add(new Leg(holder.account(), holder.id(), null, taken.item().getId(), null, null, taken.part(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.SINK, 0, sink.name(), taken.item().getId(), null, null, taken.part(), Leg.Direction.CREDIT));
+				execution.existence(taken.item().getId(), -taken.part()); // the stack's decrease itself posted nothing (CP-0021)
 			}
 		});
 	}
@@ -861,6 +864,7 @@ public final class AssetTx implements AutoCloseable
 				execution.take(custody, asset, true);
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.SINK, reference, code.name(), asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), -asset.qty());
 				legs.add(legOf(asset));
 			}
 			execution.facts().add(AssetFact.of("FeeCharged", custody, "holder", "CUSTODY", "custody", custody, "code", code.name(), "reference", reference, "legs", legs));
@@ -928,12 +932,14 @@ public final class AssetTx implements AutoCloseable
 				execution.give(custody, custody, asset);
 				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, violationFactId, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), asset.qty());
 			}
 			for (Asset asset : removed)
 			{
 				execution.take(custody, asset, true);
 				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
 				execution.legs().add(new Leg(Leg.AccountKind.SINK, violationFactId, code, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), -asset.qty());
 			}
 			execution.touched(custody);
 			execution.facts().add(AssetFact.of("AdminCorrection", custody, "admin", adminCharId, "violation", violationFactId, "reason", reason, "custody", custody, "reconcile", reconcile.name(), "before", byItem(before), "after", byItem(CustodyInvariants.held(connection, custody))));
@@ -979,7 +985,12 @@ public final class AssetTx implements AutoCloseable
 		}
 		if (_debits.isEmpty() && _treasury.isEmpty())
 		{
-			return attempts();
+			final Outcome outcome = attempts();
+			if (outcome == Outcome.COMMITTED)
+			{
+				postExistence();
+			}
+			return outcome;
 		}
 		take();
 		final List<Item> stacks;
@@ -1042,8 +1053,15 @@ public final class AssetTx implements AutoCloseable
 			}
 		}
 		discardTaken();
+		postExistence();
 		tellClients();
 		return outcome;
+	}
+
+	/** Posts what the committed operation's legs created or destroyed to the existence counters, once (§2.6). */
+	private void postExistence()
+	{
+		_existence.forEach(EconomyCounter::post);
 	}
 
 	/** A stack whose row the transaction wrote now exists for Mobius too (CP-0019), under the write lock still held. */
@@ -1218,6 +1236,7 @@ public final class AssetTx implements AutoCloseable
 		execution.checkCustodies();
 		execution.checkMails();
 		_mails = List.copyOf(execution.mails());
+		_existence = Map.copyOf(execution.existence());
 		final List<DurableFact> facts = new ArrayList<>(execution.facts());
 		facts.addAll(_facts);
 		if (!facts.isEmpty())
@@ -1484,6 +1503,7 @@ public final class AssetTx implements AutoCloseable
 		private final List<Integer> _mails = new ArrayList<>();
 		private final List<Delivery> _deliveries = new ArrayList<>();
 		private final List<Leg> _legs = new ArrayList<>();
+		private final Map<Integer, Long> _existence = new java.util.TreeMap<>();
 		private final List<DurableFact> _facts = new ArrayList<>();
 
 		Execution(Connection connection, AssetService service, OpId op)
@@ -1511,6 +1531,20 @@ public final class AssetTx implements AutoCloseable
 		List<Leg> legs()
 		{
 			return _legs;
+		}
+
+		/**
+		 * Records that a leg created ({@code delta} positive) or destroyed rows of {@code itemId}: a SOURCE or SINK leg that
+		 * changes holdings. A reconciliation that recognises rows as they are changes none and records nothing.
+		 */
+		void existence(int itemId, long delta)
+		{
+			_existence.merge(itemId, delta, Long::sum);
+		}
+
+		Map<Integer, Long> existence()
+		{
+			return _existence;
 		}
 
 		List<DurableFact> facts()

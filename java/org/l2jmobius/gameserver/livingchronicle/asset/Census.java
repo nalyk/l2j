@@ -72,16 +72,45 @@ public final class Census
 	public static Map<Integer, Long> all(Connection connection) throws SQLException
 	{
 		final Map<Integer, Long> census = new TreeMap<>();
-		for (Holding holding : Holding.values())
-		{
-			if ((holding == Holding.GROUND) && !GeneralConfig.SAVE_DROPPED_ITEM)
-			{
-				continue; // the ground is a holding only when saved
-			}
-			count(connection, holding, "1 = 1").forEach((itemId, quantity) -> census.merge(itemId, quantity, Long::sum));
-		}
+		detailed(connection).values().forEach(counts -> counts.forEach((itemId, quantity) -> census.merge(itemId, quantity, Long::sum)));
 		census.values().removeIf(quantity -> quantity == 0);
 		return census;
+	}
+
+	/**
+	 * @return the census by holding, as {@code lc_economy_census} records it: items by their location, then {@code GROUND}
+	 *         (only when saved), {@code TREASURY}, {@code ITEM_BIDS} and {@code HALL_BIDS}
+	 */
+	public static Map<String, Map<Integer, Long>> detailed(Connection connection) throws SQLException
+	{
+		final Map<String, Map<Integer, Long>> census = new TreeMap<>();
+		try (PreparedStatement ps = connection.prepareStatement("SELECT loc, item_id, SUM(count) FROM items WHERE loc IS NOT NULL AND loc NOT IN ('VOID', 'REFUND', 'LEASE') GROUP BY loc, item_id");
+			ResultSet rs = ps.executeQuery())
+		{
+			while (rs.next())
+			{
+				if (rs.getLong(3) != 0)
+				{
+					census.computeIfAbsent(rs.getString(1), loc -> new TreeMap<>()).put(rs.getInt(2), rs.getLong(3));
+				}
+			}
+		}
+		if (GeneralConfig.SAVE_DROPPED_ITEM) // the ground is a holding only when saved
+		{
+			put(census, "GROUND", count(connection, Holding.GROUND, "1 = 1"));
+		}
+		put(census, "TREASURY", count(connection, Holding.TREASURY, "1 = 1"));
+		put(census, "ITEM_BIDS", count(connection, Holding.ITEM_AUCTION_BIDS, "1 = 1"));
+		put(census, "HALL_BIDS", count(connection, Holding.CLAN_HALL_BIDS, "1 = 1"));
+		return census;
+	}
+
+	private static void put(Map<String, Map<Integer, Long>> census, String holding, Map<Integer, Long> counts)
+	{
+		if (!counts.isEmpty())
+		{
+			census.put(holding, counts);
+		}
 	}
 
 	/** @return what {@code holding} counts in its rows matching {@code where}, by item id */

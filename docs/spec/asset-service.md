@@ -191,8 +191,9 @@ it guarantees, and what it only watches, are stated separately.
    Mobius changes it (`Castle.addToTreasuryNoTax`); an open bid at each of its transitions (placed, raised, cancelled,
    won, expired); a statement that writes census rows directly (an SQL site in §2.7 classed `SOURCE`, `SINK` or `MOVE`)
    runs in a transaction of its own that reads, under locks, what the census counts in the rows it writes before and after
-   it, and posts the difference only when it commits, so a statement that fails posts nothing; and the ledger posts each
-   `SOURCE` and `SINK` leg when its operation commits. A clamp (a quantity asked of a change and not applied) is recorded
+   it, and posts the difference only when it commits, so a statement that fails posts nothing; and the ledger posts, once
+   its operation commits, each `SOURCE` and `SINK` leg that creates or removes rows (a reconciliation recognising rows as
+   they are, §4.5, changes no holding and posts nothing). A clamp (a quantity asked of a change and not applied) is recorded
    apart for the watched part, never in the counters, which see what was applied. Restored state is already in the census and is never counted again: Mobius assigns a restored
    row's location without `setItemLocation` (Item.java:1559-1566), and the object starts counted at its count. The
    service's own takes and returns (a stack decrease, a treasury commit or return, a whole object retired) move quantity

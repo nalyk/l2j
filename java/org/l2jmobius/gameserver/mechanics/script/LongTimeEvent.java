@@ -52,6 +52,7 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.holders.npc.EventDropHolder;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.spawns.Spawn;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.managers.EventDropManager;
 import org.l2jmobius.gameserver.mechanics.announce.EventAnnouncement;
 import org.l2jmobius.gameserver.mechanics.events.Containers;
@@ -557,7 +558,10 @@ public class LongTimeEvent extends Script
 					PreparedStatement statement = con.prepareStatement("DELETE FROM items WHERE item_id=?"))
 				{
 					statement.setInt(1, itemId);
-					statement.execute();
+					Census.counting(con, Census.Holding.ITEMS, "item_id = ?", new Object[]
+					{
+						itemId
+					}, statement::executeUpdate); // counted before and after, posted on commit (CP-0025)
 				}
 				catch (SQLException e)
 				{

@@ -41,6 +41,7 @@ import org.l2jmobius.gameserver.entity.groups.PartyMessageType;
 import org.l2jmobius.gameserver.entity.item.enums.BodyPart;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.managers.CursedWeaponsManager;
 import org.l2jmobius.gameserver.mechanics.skill.CommonSkill;
 import org.l2jmobius.gameserver.mechanics.skill.Skill;
@@ -128,7 +129,11 @@ public class CursedWeapon
 					// Delete the item
 					del.setInt(1, _playerId);
 					del.setInt(2, _itemId);
-					if (del.executeUpdate() != 1)
+					if (Census.counting(con, Census.Holding.ITEMS, "owner_id = ? AND item_id = ?", new Object[]
+					{
+						_playerId,
+						_itemId
+					}, del::executeUpdate) != 1) // (CP-0025)
 					{
 						LOGGER.warning("Error while deleting itemId " + _itemId + " from userId " + _playerId);
 					}

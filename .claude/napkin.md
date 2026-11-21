@@ -60,7 +60,10 @@
    Do instead: use the Short Sword (id 1), not the Squire's Sword (2369, a starter item with is_tradable=false, which §4.4
    refuses), and call `World.addObject(player)` after `TestPlayers.create` for anything that looks players up by id.
 2. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
-   Do instead: add `CP-NNNN` (files, reason, change, invariant, proof) in the same commit; `check-core-ledger` fails the build otherwise.
+   Do instead: add `CP-NNNN` (files, reason, change, invariant, proof) in the same commit; `check-core-ledger` fails the
+   build otherwise. Put every file of an entry on its one `- Files:` line (the check reads only that line);
+   for a revert proof that restores a file to upstream, drop it from a temporary ledger on ultra too, or the stale check
+   stops the build before any test runs.
 3. **[2026-11-19] Upstream files mix CRLF and LF**
    Do instead: edit them byte-wise in Python, check whether `\r\n` is present first and write the same endings back.
 4. **[2026-11-19] `-XX:hashCode=2` makes every identity hash equal in tests**

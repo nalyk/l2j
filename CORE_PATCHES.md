@@ -385,3 +385,19 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: a placed ticket exists once after a restart; a saved stack comes back whole.
 - Proof: `SavedGroundTest` (a ticket is not saved and posts nothing; a saved stack of 3 000 000 000 Adena, restored as 1
   by upstream, comes back whole and posts nothing).
+
+## CP-0025 Existence counters: SQL sites counted in their own transaction
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/mechanics/olympiad/Hero.java`, `java/org/l2jmobius/gameserver/entity/actor/holders/player/CursedWeapon.java`, `java/org/l2jmobius/gameserver/managers/CursedWeaponsManager.java`, `java/org/l2jmobius/gameserver/managers/CastleManager.java`, `java/org/l2jmobius/gameserver/network/GameClient.java`, `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`, `java/org/l2jmobius/gameserver/managers/ItemAuctionManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuctionInstance.java`, `dist/game/data/scripts/handlers/chat/commands/admin/AdminRepairChar.java`
+- Reason: these statements write census rows directly (an ended event's and a new hero period's items, an offline
+  owner's cursed weapon and circlet, a deleted character's items, the startup cleanup, a deleted or expired item auction's
+  bids, the admin repair), so no item hook sees them (asset-service.md §2.6, §11.24; Codex round amd10 found a count
+  taken before the statement posting a deletion that then fails).
+- Change: each runs through `Census.counting`: in a transaction of its own, the rows it writes are locked and counted
+  before and after it, and the difference is posted only when it commits; a statement that fails rolls back and posts
+  nothing, and the connection is handed back in the autocommit mode it came in. An auction's row and its bids are
+  deleted in one counted transaction, as its winning bid stops being taken off when the auction's row goes. With the
+  counters inactive each statement runs as upstream.
+- Invariant: across each of these statements the existence counters move exactly as the census does.
+- Proof: `SqlSitesTest` (each of the ten sites, the counters' change equal to the census's); `CensusTest` (a failed
+  statement posts nothing and rolls back).

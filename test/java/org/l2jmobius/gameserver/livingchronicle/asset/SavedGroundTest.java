@@ -74,6 +74,55 @@ class SavedGroundTest
 	}
 
 	@Test
+	void aTicketSavedBeforeThePatchIsNotRestoredFromTheGroundAndItsRowGoesCounted() throws Exception
+	{
+		final Field ids = MercTicketManager.class.getDeclaredField("ITEM_IDS");
+		ids.setAccessible(true);
+		final int ticketId = ((int[]) ids.get(null))[0];
+		final int objectId = IdManager.getInstance().getNextId();
+		try (Connection connection = DatabaseFactory.getConnection();
+			PreparedStatement insert = connection.prepareStatement("INSERT INTO itemsonground (object_id, item_id, count, enchant_level, x, y, z, drop_time, equipable) VALUES (?, ?, 1, 0, 83400, 147900, -3400, -1, 0)"))
+		{
+			insert.setInt(1, objectId);
+			insert.setInt(2, ticketId);
+			insert.executeUpdate();
+		}
+		final Map<Integer, Long> census = census();
+		final Map<Integer, Long> counters = EconomyCounter.snapshot();
+		final Method load = ItemsOnGroundManager.class.getDeclaredMethod("load");
+		load.setAccessible(true);
+		load.invoke(ItemsOnGroundManager.getInstance());
+		assertEquals(null, World.findObject(objectId), "MercTicketManager rebuilds the ticket from castle_siege_guards");
+		final Map<Integer, Long> changed = minus(census(), census);
+		assertEquals(Map.of(ticketId, -1L), changed, "the stale row is gone");
+		assertEquals(changed, minus(EconomyCounter.snapshot(), counters), "and counted out");
+	}
+
+	private static Map<Integer, Long> census() throws Exception
+	{
+		try (Connection connection = DatabaseFactory.getConnection())
+		{
+			return Census.all(connection);
+		}
+	}
+
+	private static Map<Integer, Long> minus(Map<Integer, Long> after, Map<Integer, Long> before)
+	{
+		final java.util.Set<Integer> keys = new java.util.HashSet<>(before.keySet());
+		keys.addAll(after.keySet());
+		final Map<Integer, Long> change = new java.util.TreeMap<>();
+		for (int id : keys)
+		{
+			final long delta = after.getOrDefault(id, 0L) - before.getOrDefault(id, 0L);
+			if (delta != 0)
+			{
+				change.put(id, delta);
+			}
+		}
+		return change;
+	}
+
+	@Test
 	void aSavedStackLargerThanAnIntIsRestoredWhole() throws Exception
 	{
 		final int objectId = IdManager.getInstance().getNextId();

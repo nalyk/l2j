@@ -117,6 +117,10 @@ public class Item extends WorldObject
 	private volatile boolean _retired;
 	/** The quantity of this object the existence counters include (CP-0021), guarded by {@link EconomyCounter#lockFor}. */
 	private long _posted;
+	/** Its row was deleted by a counted SQL statement while this copy stayed loaded (CP-0025): it never counts again. */
+	private boolean _forgotten;
+	/** In the saved ground list (SaveDroppedItem), a census holding (CP-0022), guarded by {@link EconomyCounter#lockFor}. */
+	private boolean _onSavedGround;
 	
 	/** Quantity of the item; changed by compare-and-set (CP-0009), so concurrent changes never lose one another. */
 	private volatile long _count;
@@ -485,16 +489,55 @@ public class Item extends WorldObject
 		}
 		synchronized (EconomyCounter.lockFor(getObjectId()))
 		{
-			if (_retired)
+			if (_retired || _forgotten)
 			{
 				return;
 			}
-			final long counted = EconomyCounter.counted(_loc) ? Math.max(0, _count) : 0;
+			final long counted = (EconomyCounter.counted(_loc) || _onSavedGround) ? Math.max(0, _count) : 0;
 			final long delta = counted - _posted;
 			if (delta != 0)
 			{
 				_posted = counted;
 				EconomyCounter.post(_itemId, delta);
+			}
+		}
+	}
+	
+	/**
+	 * A counted SQL statement deleted this object's row while the object stayed loaded (an ended event's items in a loaded
+	 * warehouse): the deletion counted its quantity out, so this copy never counts again (CP-0025).
+	 */
+	public void forgetCounted()
+	{
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_posted = 0;
+			_forgotten = true;
+		}
+	}
+	
+	/**
+	 * This object entered ({@code true}) or left the saved ground list (CP-0022). The caller holds
+	 * {@link EconomyCounter#lockFor} across the list's change and this call, so the membership and its count settle together.
+	 */
+	public void setOnSavedGround(boolean onSavedGround)
+	{
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_onSavedGround = onSavedGround;
+			settleCounted();
+		}
+	}
+	
+	/** A saved ground row rebuilt at startup joins the list counted at its count, posting nothing: it is in the census (CP-0022). */
+	public void restoreOnSavedGround()
+	{
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_onSavedGround = true;
+			if (EconomyCounter.isActive())
+			{
+				_posted = Math.max(0, _count);
 			}
 		}
 	}
@@ -508,7 +551,7 @@ public class Item extends WorldObject
 		}
 		synchronized (EconomyCounter.lockFor(getObjectId()))
 		{
-			_posted = EconomyCounter.counted(_loc) ? Math.max(0, _count) : 0;
+			_posted = (EconomyCounter.counted(_loc) || _onSavedGround) ? Math.max(0, _count) : 0;
 		}
 	}
 

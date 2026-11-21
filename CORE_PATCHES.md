@@ -349,16 +349,21 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`, `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java`, `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
 - Reason: a castle treasury, the saved ground list and the open bids of both auctions are census holdings
   (asset-service.md §2.6) that no item call changes, so their changes need hooks of their own (§11.24).
-- Change: `Castle.addToTreasuryNoTax` posts the change it applied and records its clamp apart; `ItemsOnGroundManager.save`
-  and `removeObject` post an object entering and leaving the saved list (only when it was not, or was, in it);
-  `ItemAuction.registerBid` posts the bid's growth over its standing bid, `cancelBid` the bid leaving, `setAuctionState`
-  into `FINISHED` the winning bid paid to the NPC; `ClanHallAuction.updateInDB` posts the bid's growth over the clan's
-  standing bid, `cancelBid`, `removeBids` and `endAuction` each bid leaving. No retail behaviour changes; with the
-  counters inactive every hook returns at once.
+- Change: `Castle.addToTreasuryNoTax` posts the change it applied and records its clamp apart; `ItemsOnGroundManager.save`,
+  `removeObject` and `load` change the saved list and the item's membership together under the item's leaf lock, so the
+  item settles its counted quantity as for a location (CP-0021); the bids are counted where their rows are written:
+  `ItemAuction.updatePlayerBidInternal` and `storeMe` (an auction's state says when its winning bid was paid) and
+  `ClanHallAuction.updateInDB`, `cancelBid` and `removeBids` run their statements through `Census.counting`, so a write
+  that fails counts nothing; `ClanHallAuction.returnItem` records the part of a credit past MAX_ADENA it clamps away.
+  No retail behaviour changes; with the counters inactive every hook returns at once. Codex round amd11 found the first
+  design (posts beside the in-memory changes) losing a drop that raced a pickup and posting a bid change whose write
+  failed.
 - Invariant: a move between one of these holdings and an inventory or warehouse nets to nothing in the counters.
 - Proof: `HoldingHooksTest` (tax in, a withdrawal out, the service's treasury commitment and return, a clamp; a drop to
-  and a pickup from the saved ground; an item-auction bid placed, raised, cancelled and won; a clan-hall bid placed and
-  cancelled; an ended clan-hall auction paying the seller's share and the lease and refunding a loser).
+  and a pickup from the saved ground, and an entry racing a removal and a destruction, red on the first design at
+  iteration 33; an item-auction bid placed, raised, cancelled and won; a clan-hall bid placed and cancelled; an ended
+  clan-hall auction paying the seller's share and the lease and refunding a loser; a credit past the cap recorded as
+  clamped, red without the record).
 
 ## CP-0023 A clan-hall re-bid pays the difference over the clan's standing bid
 
@@ -381,10 +386,11 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   came back as a single unit (asset-service.md §11.27).
 - Change: `save` keeps placed tickets and cursed weapons out of the ground list (their managers own them; the cursed
   weapons were already never written); the ticket check is the static `MercTicketManager.ticketCastleId`, since that
-  manager drops its restored tickets while it is still being built; the load reads the count as a `long`.
+  manager drops its restored tickets while it is still being built; the load skips a ticket row saved before this patch
+  and deletes it, counted out of the saved ground; the load reads the count as a `long`.
 - Invariant: a placed ticket exists once after a restart; a saved stack comes back whole.
-- Proof: `SavedGroundTest` (a ticket is not saved and posts nothing; a saved stack of 3 000 000 000 Adena, restored as 1
-  by upstream, comes back whole and posts nothing).
+- Proof: `SavedGroundTest` (a ticket is not saved and posts nothing; a ticket row saved before is not restored and goes,
+  counted; a saved stack of 3 000 000 000 Adena, restored as 1 by upstream, comes back whole and posts nothing).
 
 ## CP-0025 Existence counters: SQL sites counted in their own transaction
 
@@ -395,9 +401,23 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   taken before the statement posting a deletion that then fails).
 - Change: each runs through `Census.counting`: in a transaction of its own, the rows it writes are locked and counted
   before and after it, and the difference is posted only when it commits; a statement that fails rolls back and posts
-  nothing, and the connection is handed back in the autocommit mode it came in. An auction's row and its bids are
+  nothing, and the connection is handed back in autocommit; a connection already in a transaction is refused; a commit
+  whose acknowledgement is lost is resolved from the rows, read under their locks on a fresh connection; a loaded copy of
+  a row it deleted is told to stop counting (`Item.forgetCounted`, in CP-0021's file). An auction's row and its bids are
   deleted in one counted transaction, as its winning bid stops being taken off when the auction's row goes. With the
   counters inactive each statement runs as upstream.
 - Invariant: across each of these statements the existence counters move exactly as the census does.
 - Proof: `SqlSitesTest` (each of the ten sites, the counters' change equal to the census's); `CensusTest` (a failed
-  statement posts nothing and rolls back).
+  statement posts nothing and rolls back; a connection in a transaction is refused and its work kept apart; a lost
+  acknowledgement resolved both ways; a loaded copy of a deleted row stops counting, -60 for a 30-unit copy before).
+
+## CP-0026 A clan-hall bid is refunded only once its row is gone
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: `cancelBid` and `removeBids` logged a failed `DELETE` of the bid rows and went on to refund them
+  (ClanHallAuction.java:494-512, 403-431): the bid stayed and was paid back, again at its next removal
+  (asset-service.md §11.28, Codex round amd11).
+- Change: each returns after a failed deletion, refunding nothing.
+- Invariant: a clan-hall bid is refunded at most once, and only once its row is gone.
+- Proof: `HoldingHooksTest.aClanHallBidWhoseRowCannotBeDeletedIsNotRefunded` (a trigger refuses the deletion; upstream
+  refunded the bid and the counters moved by -2 000; now nothing moves).

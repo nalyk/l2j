@@ -203,6 +203,123 @@ class CensusTest
 	}
 
 	@Test
+	void aCountedStatementNeedsATransactionOfItsOwn() throws Exception
+	{
+		final int owner = IDS.incrementAndGet();
+		try (Connection connection = DatabaseFactory.getConnection())
+		{
+			connection.setAutoCommit(false);
+			try (PreparedStatement insert = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data) VALUES (?, ?, ?, 5, 0, 'INVENTORY', 0)"))
+			{
+				insert.setInt(1, owner);
+				insert.setInt(2, IDS.incrementAndGet());
+				insert.setInt(3, SOULSHOT);
+				insert.executeUpdate(); // the caller's own transaction, not to be committed by the census
+			}
+			assertThrows(IllegalStateException.class, () -> Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+			{
+				owner
+			}, () -> 0));
+			connection.rollback();
+			connection.setAutoCommit(true);
+			assertEquals(Map.of(), Census.count(connection, Holding.ITEMS, "owner_id = ?", owner), "the caller's change was neither committed nor kept");
+		}
+	}
+
+	/** A connection whose commit reaches the server or not, and then loses its acknowledgement either way. */
+	private static Connection losingTheAcknowledgement(Connection connection, boolean commits)
+	{
+		return (Connection) java.lang.reflect.Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]
+		{
+			Connection.class
+		}, (proxy, method, args) ->
+		{
+			if (method.getName().equals("commit"))
+			{
+				if (commits)
+				{
+					connection.commit();
+				}
+				else
+				{
+					connection.rollback();
+				}
+				throw new SQLException("the acknowledgement was lost");
+			}
+			try
+			{
+				return method.invoke(connection, args);
+			}
+			catch (java.lang.reflect.InvocationTargetException e)
+			{
+				throw e.getCause();
+			}
+		});
+	}
+
+	@Test
+	void aCommitWhoseAcknowledgementIsLostIsResolvedFromTheRows() throws Exception
+	{
+		for (boolean commits : new boolean[]
+		{
+			true,
+			false
+		})
+		{
+			final int owner = IDS.incrementAndGet();
+			item(owner, SOULSHOT, 40, "INVENTORY");
+			final Map<Integer, Long> before = EconomyCounter.snapshot();
+			try (Connection real = DatabaseFactory.getConnection())
+			{
+				final Connection connection = losingTheAcknowledgement(real, commits);
+				final PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE owner_id = ?");
+				delete.setInt(1, owner);
+				final Census.Work work = delete::executeUpdate;
+				if (commits)
+				{
+					assertEquals(1, Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+					{
+						owner
+					}, work), "it committed: the statement's result stands");
+				}
+				else
+				{
+					assertThrows(SQLException.class, () -> Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+					{
+						owner
+					}, work));
+				}
+			}
+			assertEquals(commits ? Map.of(SOULSHOT, -40L) : Map.of(), minus(EconomyCounter.snapshot(), before), commits ? "committed: posted" : "not committed: nothing posted");
+		}
+	}
+
+	@Test
+	void aLoadedCopyOfARowACountedStatementDeletedNoLongerCounts() throws Exception
+	{
+		final org.l2jmobius.gameserver.entity.actor.Player player = org.l2jmobius.testing.TestPlayers.create(org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass.FIGHTER, 40);
+		if (org.l2jmobius.gameserver.entity.World.getPlayer(player.getObjectId()) == null)
+		{
+			org.l2jmobius.gameserver.entity.World.addObject(player);
+		}
+		final org.l2jmobius.gameserver.entity.item.instance.Item copy = player.getInventory().addItem(org.l2jmobius.gameserver.entity.item.enums.ItemProcessType.NONE, SOULSHOT, 30, player, null);
+		copy.updateDatabase(true);
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		try (Connection connection = DatabaseFactory.getConnection();
+			PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE object_id = ?"))
+		{
+			delete.setInt(1, copy.getObjectId());
+			Census.counting(connection, Holding.ITEMS, "object_id = ?", new Object[]
+			{
+				copy.getObjectId()
+			}, delete::executeUpdate); // as an ended event deletes a copy a loaded warehouse still holds
+		}
+		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before));
+		player.getInventory().destroyItem(org.l2jmobius.gameserver.entity.item.enums.ItemProcessType.NONE, copy, player, null);
+		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before), "its row went already: destroying the copy counts nothing more");
+	}
+
+	@Test
 	void aStatementNamesTheHoldingItWritesAndItsCondition()
 	{
 		assertEquals(Holding.ITEMS, Census.written("DELETE FROM items WHERE owner_id=?"));

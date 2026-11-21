@@ -9,10 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.gameserver.config.GeneralConfig;
+import org.l2jmobius.gameserver.entity.World;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
 
 /**
  * The census (docs/spec/asset-service.md §2.6): per item id, what the holdings the census counts hold in the database:
@@ -23,6 +27,7 @@ import org.l2jmobius.gameserver.config.GeneralConfig;
 public final class Census
 {
 	private static final int ADENA = 57;
+	private static final Logger LOGGER = Logger.getLogger(Census.class.getName());
 
 	/** A holding the census counts, with its count and the rows a statement on it locks. */
 	public enum Holding
@@ -31,10 +36,11 @@ public final class Census
 		GROUND("itemsonground", "SELECT item_id, SUM(count) FROM itemsonground WHERE %s GROUP BY item_id", List.of("SELECT object_id FROM itemsonground WHERE %s FOR UPDATE")),
 		TREASURY("castle", "SELECT " + ADENA + ", SUM(treasury) FROM castle WHERE %s", List.of("SELECT id FROM castle WHERE %s FOR UPDATE")),
 		/**
-		 * Counted whole (a statement on it is counted over every bid): a finished auction's winning bid was paid when it
-		 * finished, so it is the highest open bid of each finished auction that is taken off.
+		 * Per auction: its open bids, less its highest one once it finished (that one was paid then). A statement on it is
+		 * counted over every bid ({@code 1 = 1}) or over one auction's ({@code item_auction_bid.auctionId = ?}), never
+		 * over a filter of bid rows, which would take the wrong bid off; its rows and its auctions' are locked whole.
 		 */
-		ITEM_AUCTION_BIDS("item_auction_bid", "SELECT " + ADENA + ", COALESCE(SUM(item_auction_bid.playerBid), 0) - COALESCE((SELECT SUM(won.top) FROM (SELECT b.auctionId, MAX(b.playerBid) AS top FROM item_auction_bid b JOIN item_auction a ON a.auctionId = b.auctionId WHERE a.auctionStateId = 2 AND b.playerBid > 0 GROUP BY b.auctionId) won), 0) FROM item_auction_bid WHERE item_auction_bid.playerBid > 0 AND (%s)", List.of("SELECT auctionId FROM item_auction FOR UPDATE", "SELECT auctionId FROM item_auction_bid FOR UPDATE")),
+		ITEM_AUCTION_BIDS("item_auction_bid", "SELECT " + ADENA + ", COALESCE(SUM(t.open - t.won), 0) FROM (SELECT item_auction_bid.auctionId, SUM(CASE WHEN item_auction_bid.playerBid > 0 THEN item_auction_bid.playerBid ELSE 0 END) AS open, CASE WHEN MAX(item_auction.auctionStateId) = 2 THEN COALESCE(MAX(CASE WHEN item_auction_bid.playerBid > 0 THEN item_auction_bid.playerBid END), 0) ELSE 0 END AS won FROM item_auction_bid LEFT JOIN item_auction ON item_auction.auctionId = item_auction_bid.auctionId WHERE %s GROUP BY item_auction_bid.auctionId) t", List.of("SELECT auctionId FROM item_auction FOR UPDATE", "SELECT auctionId FROM item_auction_bid FOR UPDATE")),
 		CLAN_HALL_BIDS("auction_bid", "SELECT " + ADENA + ", SUM(maxBid) FROM auction_bid WHERE %s", List.of("SELECT id FROM auction_bid WHERE %s FOR UPDATE"));
 
 		private final String _table;
@@ -46,11 +52,6 @@ public final class Census
 			_table = table;
 			_count = count;
 			_locks = locks;
-		}
-
-		private boolean countedWhole()
-		{
-			return this == ITEM_AUCTION_BIDS;
 		}
 	}
 
@@ -117,9 +118,9 @@ public final class Census
 	public static Map<Integer, Long> count(Connection connection, Holding holding, String where, Object... params) throws SQLException
 	{
 		final Map<Integer, Long> counts = new TreeMap<>();
-		try (PreparedStatement ps = connection.prepareStatement(String.format(holding._count, holding.countedWhole() ? "1 = 1" : where)))
+		try (PreparedStatement ps = connection.prepareStatement(String.format(holding._count, where)))
 		{
-			bind(ps, holding.countedWhole() ? new Object[0] : params);
+			bind(ps, params);
 			try (ResultSet rs = ps.executeQuery())
 			{
 				while (rs.next())
@@ -149,38 +150,148 @@ public final class Census
 		{
 			return work.run();
 		}
-		final boolean autoCommit = connection.getAutoCommit();
+		if (!connection.getAutoCommit())
+		{
+			// Its commit would be the caller's, and an earlier read's snapshot would skew the count before (Codex amd11).
+			throw new IllegalStateException("a counted statement runs in a transaction of its own; this connection is in one");
+		}
 		connection.setAutoCommit(false);
+		final Map<Integer, Long> before;
+		final Map<Integer, Long> after;
+		final Set<Integer> deleted;
+		final int result;
 		try
 		{
-			for (String lock : holding._locks)
-			{
-				try (PreparedStatement ps = connection.prepareStatement(String.format(lock, holding.countedWhole() ? "1 = 1" : where)))
-				{
-					bind(ps, lock.contains("%s") && !holding.countedWhole() ? params : new Object[0]);
-					ps.executeQuery().close();
-				}
-			}
-			final Map<Integer, Long> before = count(connection, holding, where, params);
-			final int result = work.run();
-			final Map<Integer, Long> after = count(connection, holding, where, params);
-			connection.commit();
-			final Set<Integer> ids = new HashSet<>(before.keySet());
-			ids.addAll(after.keySet());
-			for (int itemId : ids)
-			{
-				EconomyCounter.post(itemId, after.getOrDefault(itemId, 0L) - before.getOrDefault(itemId, 0L));
-			}
-			return result;
+			final Set<Integer> locked = lock(connection, holding, where, params);
+			before = count(connection, holding, where, params);
+			result = work.run();
+			after = count(connection, holding, where, params);
+			deleted = holding == Holding.ITEMS ? gone(connection, locked) : Set.of();
 		}
 		catch (SQLException | RuntimeException e)
 		{
 			connection.rollback();
+			connection.setAutoCommit(true);
 			throw e;
+		}
+		try
+		{
+			connection.commit();
+		}
+		catch (SQLException e)
+		{
+			// The server may have committed and lost only the acknowledgement: the rows decide, read under their locks.
+			final Boolean committed = committed(holding, where, params, before, after);
+			if (!Boolean.TRUE.equals(committed))
+			{
+				if (committed == null)
+				{
+					LOGGER.severe("Living Chronicle: a counted statement on " + holding + " (" + where + ") ended unknown; the census will show it");
+				}
+				throw e;
+			}
 		}
 		finally
 		{
-			connection.setAutoCommit(autoCommit);
+			try
+			{
+				connection.setAutoCommit(true);
+			}
+			catch (SQLException e)
+			{
+				// a connection that failed its commit may be gone; the pool replaces it
+			}
+		}
+		post(before, after);
+		forget(deleted);
+		return result;
+	}
+
+	/** Locks the rows a statement on {@code holding} matching {@code where} writes. @return their object ids, for items */
+	private static Set<Integer> lock(Connection connection, Holding holding, String where, Object[] params) throws SQLException
+	{
+		final Set<Integer> ids = new HashSet<>();
+		for (String lock : holding._locks)
+		{
+			try (PreparedStatement ps = connection.prepareStatement(String.format(lock, where)))
+			{
+				bind(ps, lock.contains("%s") ? params : new Object[0]);
+				try (ResultSet rs = ps.executeQuery())
+				{
+					while (rs.next())
+					{
+						ids.add(rs.getInt(1));
+					}
+				}
+			}
+		}
+		return ids;
+	}
+
+	/** @return the object ids among {@code locked} whose rows are gone */
+	private static Set<Integer> gone(Connection connection, Set<Integer> locked) throws SQLException
+	{
+		final Set<Integer> gone = new HashSet<>(locked);
+		if (locked.isEmpty())
+		{
+			return gone;
+		}
+		try (PreparedStatement ps = connection.prepareStatement("SELECT object_id FROM items WHERE object_id IN (" + String.join(",", java.util.Collections.nCopies(locked.size(), "?")) + ")"))
+		{
+			bind(ps, locked.toArray());
+			try (ResultSet rs = ps.executeQuery())
+			{
+				while (rs.next())
+				{
+					gone.remove(rs.getInt(1));
+				}
+			}
+		}
+		return gone;
+	}
+
+	/** @return whether a statement whose commit failed did commit: TRUE, FALSE, or null when the rows cannot tell */
+	private static Boolean committed(Holding holding, String where, Object[] params, Map<Integer, Long> before, Map<Integer, Long> after)
+	{
+		try (Connection fresh = DatabaseFactory.getConnection())
+		{
+			fresh.setAutoCommit(false);
+			try
+			{
+				lock(fresh, holding, where, params); // waits until the server has ended the first transaction either way
+				final Map<Integer, Long> now = count(fresh, holding, where, params);
+				return now.equals(after) ? Boolean.TRUE : now.equals(before) ? Boolean.FALSE : null;
+			}
+			finally
+			{
+				fresh.rollback();
+			}
+		}
+		catch (SQLException e)
+		{
+			return null;
+		}
+	}
+
+	private static void post(Map<Integer, Long> before, Map<Integer, Long> after)
+	{
+		final Set<Integer> ids = new HashSet<>(before.keySet());
+		ids.addAll(after.keySet());
+		for (int itemId : ids)
+		{
+			EconomyCounter.post(itemId, after.getOrDefault(itemId, 0L) - before.getOrDefault(itemId, 0L));
+		}
+	}
+
+	/** A loaded copy of a row the statement deleted no longer counts: the deletion counted it (Codex amd11). */
+	private static void forget(Set<Integer> deleted)
+	{
+		for (int objectId : deleted)
+		{
+			if (World.findObject(objectId) instanceof Item copy)
+			{
+				copy.forgetCounted();
+			}
 		}
 	}
 
@@ -195,7 +306,7 @@ public final class Census
 		final String table = write.group(3).toLowerCase();
 		for (Holding holding : Holding.values())
 		{
-			if (holding._table.equals(table) && ((holding != Holding.TREASURY) || sql.toLowerCase().matches("(?s).*\\bset\\b.*\\btreasury\\b.*")))
+			if ((holding._table.equals(table) || ((holding == Holding.ITEM_AUCTION_BIDS) && table.equals("item_auction"))) && ((holding != Holding.TREASURY) || sql.toLowerCase().matches("(?s).*\\bset\\b.*\\btreasury\\b.*")))
 			{
 				return holding;
 			}

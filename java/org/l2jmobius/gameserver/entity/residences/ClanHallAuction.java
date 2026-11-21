@@ -41,6 +41,7 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.ClanHallAuctionManager;
 import org.l2jmobius.gameserver.managers.IdManager;
@@ -317,6 +318,7 @@ public class ClanHallAuction
 		
 		// avoid overflow on return
 		final long limit = MAX_ADENA - cwh.getAdena();
+		EconomyCounter.postClamp(ADENA_ID, Math.max(0, amount - limit)); // the part past MAX_ADENA, a sink (CP-0022)
 		amount = Math.min(amount, limit);
 		cwh.addItem(ItemProcessType.REFUND, ADENA_ID, amount, null, null);
 	}
@@ -346,8 +348,6 @@ public class ClanHallAuction
 	 */
 	private void updateInDB(Player bidder, long bid)
 	{
-		final Bidder standing = _bidders.get(bidder.getClanId());
-		final long before = standing == null ? 0 : standing.getBid();
 		try (Connection con = DatabaseFactory.getConnection())
 		{
 			if (_bidders.get(bidder.getClanId()) != null)
@@ -360,7 +360,10 @@ public class ClanHallAuction
 					ps.setLong(4, System.currentTimeMillis());
 					ps.setInt(5, _id);
 					ps.setInt(6, bidder.getClanId());
-					ps.execute();
+					Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+					{
+						_id
+					}, ps::executeUpdate); // the bid holding is counted where its rows are written (CP-0022)
 				}
 			}
 			else
@@ -374,7 +377,10 @@ public class ClanHallAuction
 					ps.setLong(5, bid);
 					ps.setString(6, bidder.getClan().getName());
 					ps.setLong(7, System.currentTimeMillis());
-					ps.execute();
+					Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+					{
+						_id
+					}, ps::executeUpdate); // the bid holding is counted where its rows are written (CP-0022)
 				}
 				
 				if (World.getPlayer(_highestBidderName) != null)
@@ -396,7 +402,6 @@ public class ClanHallAuction
 				_bidders.get(_highestBidderId).setBid(bid);
 				_bidders.get(_highestBidderId).setTimeBid(currentTime);
 			}
-			EconomyCounter.post(ADENA_ID, bid - before); // the open bid is a census holding (CP-0022)
 			
 			bidder.sendPacket(SystemMessageId.YOUR_BID_HAS_BEEN_SUCCESSFULLY_PLACED);
 		}
@@ -413,11 +418,15 @@ public class ClanHallAuction
 			PreparedStatement ps = con.prepareStatement("DELETE FROM auction_bid WHERE auctionId=?"))
 		{
 			ps.setInt(1, _id);
-			ps.execute();
+			Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+			{
+				_id
+			}, ps::executeUpdate); // (CP-0022)
 		}
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.deleteFromDB(): " + e.getMessage(), e);
+			return; // CP-0026: bids whose rows stay are not refunded, or a later removal would refund them again
 		}
 		
 		for (Bidder b : _bidders.values())
@@ -432,7 +441,6 @@ public class ClanHallAuction
 			}
 			
 			ClanTable.getInstance().getClanByName(b.getClanName()).setAuctionBiddedAt(0, true);
-			EconomyCounter.post(ADENA_ID, -b.getBid()); // each bid leaves its holding (CP-0022)
 		}
 		
 		_bidders.clear();
@@ -483,7 +491,7 @@ public class ClanHallAuction
 			
 			deleteAuctionFromDB();
 			final Clan clan = ClanTable.getInstance().getClanByName(_bidders.get(_highestBidderId).getClanName());
-			EconomyCounter.post(ADENA_ID, -_bidders.remove(_highestBidderId).getBid()); // the winning bid leaves its holding (CP-0022)
+			_bidders.remove(_highestBidderId);
 			clan.setAuctionBiddedAt(0, true);
 			removeBids();
 			ClanHallTable.getInstance().setOwner(_itemId, clan);
@@ -506,16 +514,19 @@ public class ClanHallAuction
 		{
 			ps.setInt(1, _id);
 			ps.setInt(2, bidder);
-			ps.execute();
+			Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+			{
+				_id
+			}, ps::executeUpdate); // (CP-0022)
 		}
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.cancelBid(String bidder): " + e.getMessage(), e);
+			return; // CP-0026: a bid whose row stays is not refunded
 		}
 		
 		returnItem(_bidders.get(bidder).getClanName(), _bidders.get(bidder).getBid(), true);
 		ClanTable.getInstance().getClanByName(_bidders.get(bidder).getClanName()).setAuctionBiddedAt(0, true);
-		EconomyCounter.post(ADENA_ID, -_bidders.get(bidder).getBid()); // the bid leaves its holding (CP-0022)
 		_bidders.clear();
 		loadBid();
 	}

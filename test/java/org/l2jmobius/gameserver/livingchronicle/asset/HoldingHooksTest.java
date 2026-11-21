@@ -155,6 +155,65 @@ class HoldingHooksTest
 		}
 	}
 
+	@Test
+	void anEntryRacingARemovalAndADestructionSettlesExactly() throws Exception
+	{
+		final boolean saved = GeneralConfig.SAVE_DROPPED_ITEM;
+		GeneralConfig.SAVE_DROPPED_ITEM = true;
+		try
+		{
+			for (int i = 0; i < 3_000; i++)
+			{
+				final Item drop = new Item(org.l2jmobius.gameserver.managers.IdManager.getInstance().getNextId(), SOULSHOT);
+				drop.setCount(10);
+				final long before = EconomyCounter.snapshot().getOrDefault(SOULSHOT, 0L);
+				final java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(2);
+				final Thread dropper = new Thread(() ->
+				{
+					await(start);
+					ItemsOnGroundManager.getInstance().save(drop);
+				});
+				final Thread picker = new Thread(() ->
+				{
+					await(start);
+					ItemsOnGroundManager.getInstance().removeObject(drop);
+					drop.setCount(0); // merged into the picker's stack and destroyed
+				});
+				dropper.start();
+				picker.start();
+				dropper.join();
+				picker.join();
+				final long onGround = ground().contains(drop) ? drop.getCount() : 0;
+				assertEquals(before + onGround, EconomyCounter.snapshot().getOrDefault(SOULSHOT, 0L), "iteration " + i);
+				ItemsOnGroundManager.getInstance().removeObject(drop);
+			}
+		}
+		finally
+		{
+			GeneralConfig.SAVE_DROPPED_ITEM = saved;
+		}
+	}
+
+	private static void await(java.util.concurrent.CyclicBarrier barrier)
+	{
+		try
+		{
+			barrier.await();
+		}
+		catch (Exception e)
+		{
+			throw new IllegalStateException(e);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static java.util.Collection<Item> ground() throws Exception
+	{
+		final Field items = ItemsOnGroundManager.class.getDeclaredField("_items");
+		items.setAccessible(true);
+		return (java.util.Collection<Item>) items.get(ItemsOnGroundManager.getInstance());
+	}
+
 	private static ItemAuction auction(int id)
 	{
 		final ItemAuction auction = new ItemAuction(id, 0, System.currentTimeMillis(), System.currentTimeMillis() + 3_600_000, new AuctionItem(id, 60, 1_000, SOULSHOT, 1, new StatSet()));
@@ -191,6 +250,45 @@ class HoldingHooksTest
 		assertEquals(980_000, a.getWarehouse().getAdena());
 		assertEquals(Map.of(ADENA, -2_000L), change(() -> auction.cancelBid(a.getId())), "cancelled: 90 % back, 10 % a sink");
 		assertEquals(998_000, a.getWarehouse().getAdena());
+	}
+
+	@Test
+	void aClanHallBidWhoseRowCannotBeDeletedIsNotRefunded() throws Exception
+	{
+		final Clan seller = clan();
+		final Clan a = clan();
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Onyx Hall");
+		auction.setBid(World.getPlayer(a.getLeaderId()), 20_000);
+		try (java.sql.Connection connection = org.l2jmobius.commons.database.DatabaseFactory.getConnection();
+			java.sql.Statement statement = connection.createStatement())
+		{
+			statement.execute("CREATE TRIGGER lc_test_refuse_bid BEFORE DELETE ON auction_bid FOR EACH ROW BEGIN IF OLD.bidderId = " + a.getId() + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused'; END IF; END");
+			try
+			{
+				assertEquals(Map.of(), change(() -> auction.cancelBid(a.getId())), "nothing left the bid, nothing came back");
+				assertEquals(980_000, a.getWarehouse().getAdena(), "upstream refunded a bid whose row stayed");
+			}
+			finally
+			{
+				statement.execute("DROP TRIGGER lc_test_refuse_bid");
+			}
+		}
+	}
+
+	@Test
+	void aClanHallCreditPastTheCapIsRecordedAsClamped()
+	{
+		final Clan seller = clan();
+		final Clan b = clan();
+		final long max = org.l2jmobius.gameserver.entity.itemcontainer.Inventory.MAX_ADENA;
+		seller.getWarehouse().addItem(ItemProcessType.NONE, ADENA, max - 1_000 - seller.getWarehouse().getAdena(), null, null);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Onyx Hall");
+		auction.setBid(World.getPlayer(b.getLeaderId()), 30_000);
+		final long lease = org.l2jmobius.gameserver.data.sql.ClanHallTable.getInstance().getAuctionableHallById(HALL).getLease();
+		final long clamped = EconomyCounter.clamped().getOrDefault(ADENA, 0L);
+		auction.endAuction();
+		assertEquals(max, seller.getWarehouse().getAdena(), "only 1 000 fitted");
+		assertEquals(clamped + (27_000 - 1_000) + lease, EconomyCounter.clamped().getOrDefault(ADENA, 0L), "the rest of the share and the whole lease were clamped away");
 	}
 
 	@Test

@@ -62,8 +62,9 @@ public final class SiteScan
 	private static final String ITEM_MANAGER = "org/l2jmobius/gameserver/managers/ItemManager";
 	private static final String LIVING_CHRONICLE = "org/l2jmobius/gameserver/livingchronicle/";
 	private static final String COUNTERS = LIVING_CHRONICLE + "asset/EconomyCounter";
-	/** SQL that writes a table the census counts (§2.6): items, saved ground items, both kinds of open bid, a treasury. */
-	private static final Pattern CENSUS_WRITE = Pattern.compile("(?i)\\b(DELETE\\s+FROM|UPDATE|INSERT\\s+(IGNORE\\s+)?INTO|REPLACE\\s+INTO)\\s+`?(items|itemsonground|item_auction_bid|auction_bid)`?(\\s|\\(|$)");
+	/** SQL that writes a table the census counts (§2.6): items, saved ground items, both kinds of open bid (an item auction's
+	 * state decides when its winning bid was paid), a treasury. */
+	private static final Pattern CENSUS_WRITE = Pattern.compile("(?i)\\b(DELETE\\s+FROM|UPDATE|INSERT\\s+(IGNORE\\s+)?INTO|REPLACE\\s+INTO)\\s+`?(items|itemsonground|item_auction_bid|item_auction|auction_bid)`?(\\s|\\(|$)");
 	private static final Pattern TREASURY_WRITE = Pattern.compile("(?i)\\bUPDATE\\s+`?castle`?\\s+SET\\b.*\\btreasury\\b");
 	private static final Pattern LAMBDA = Pattern.compile("lambda\\$(.+)\\$\\d+");
 
@@ -183,6 +184,10 @@ public final class SiteScan
 			if (target.equals(ITEM) && called.equals("setCount"))
 			{
 				return Kind.SET_COUNT;
+			}
+			if (target.equals(ITEM) && (called.equals("setOnSavedGround") || called.equals("restoreOnSavedGround")))
+			{
+				return Kind.LOCATION; // entering or leaving the saved ground, a census holding (CP-0022)
 			}
 			if (target.equals(ITEM) && called.equals("setItemLocation") && !(owner.equals(ITEM) && methodName.equals("setItemLocation")))
 			{

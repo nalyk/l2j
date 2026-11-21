@@ -187,11 +187,15 @@ it guarantees, and what it only watches, are stated separately.
    **The existence counters** hold, per item id, the quantity in the holdings the census counts, kept from the changes
    themselves. An item's quantity counts while its location is one the census counts (every `ItemLocation` but `VOID`,
    `REFUND` and `LEASE`; the ground list too when `SaveDroppedItem` is on), so a change of its count or of its location
-   is counted where it happens (`Item.setCount`, `Item.changeCount`, `Item.setItemLocation`); a treasury counts where
-   Mobius changes it (`Castle.addToTreasuryNoTax`); an open bid at each of its transitions (placed, raised, cancelled,
-   won, expired); a statement that writes census rows directly (an SQL site in §2.7 classed `SOURCE`, `SINK` or `MOVE`)
-   runs in a transaction of its own that reads, under locks, what the census counts in the rows it writes before and after
-   it, and posts the difference only when it commits, so a statement that fails posts nothing; and the ledger posts, once
+   is counted where it happens (`Item.setCount`, `Item.changeCount`, `Item.setItemLocation`, and joining or leaving the
+   saved ground list, which settles with the item under the same lock); a treasury counts where Mobius changes it
+   (`Castle.addToTreasuryNoTax`); an open bid where its row is written (the bid tables, and an item auction's state, which
+   says when its winning bid was paid, are that holding's truth, so a write that fails counts nothing); a statement that writes census rows directly (an SQL site in §2.7 classed `SOURCE`, `SINK` or `MOVE`)
+   runs in a transaction of its own (a connection already in one is refused) that reads, under locks, what the census
+   counts in the rows it writes before and after it, and posts the difference only when it commits, so a statement that
+   fails posts nothing; a commit whose acknowledgement is lost is resolved from the rows, read under their locks on a
+   fresh connection; and a loaded copy of a row it deleted (an ended event's item in a loaded warehouse) stops counting,
+   as the deletion counted it. The ledger posts, once
    its operation commits, each `SOURCE` and `SINK` leg that creates or removes rows (a reconciliation recognising rows as
    they are, §4.5, changes no holding and posts nothing). A clamp (a quantity asked of a change and not applied) is recorded
    apart for the watched part, never in the counters, which see what was applied. Restored state is already in the census and is never counted again: Mobius assigns a restored
@@ -688,17 +692,20 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     settle the item's counted quantity under a leaf lock, `Item.changeCount` records its clamp apart, and the service's
     `tryDecrease` and `retire` hand their quantity to a custody under the same lock; `Item.restoreFromDb` marks a restored
     object counted at its count;
-    `Castle.addToTreasuryNoTax` posts the change it applied; `ItemsOnGroundManager.save` and `removeObject` post a ground
-    item entering and leaving the saved ground; `ItemAuction.registerBid`, `cancelBid` and
-    `setAuctionState` into `FINISHED` (the winning bid paid) and `ClanHallAuction` (`updateInDB`, `cancelBid`, `removeBids`, `endAuction`)
-    post each bid transition; each SQL site classed `SOURCE`, `SINK` or `MOVE` runs in a transaction that counts its
+    `Castle.addToTreasuryNoTax` posts the change it applied; `ItemsOnGroundManager.save`, `removeObject` and `load`
+    change the saved ground list and the item's membership under the item's lock (`Item.setOnSavedGround`,
+    `restoreOnSavedGround`); `ItemAuction.updatePlayerBidInternal` and `storeMe` and `ClanHallAuction.updateInDB`,
+    `cancelBid` and `removeBids` count the bid rows they write, and `ClanHallAuction.returnItem` records its clamp; each
+    SQL site classed `SOURCE`, `SINK` or `MOVE` runs in a transaction that counts its
     rows under locks before and after it and posts the difference when it commits. Until a profile starts
     Living Chronicle the hooks do nothing (profiles.md §4.2 rule 4). → ASSET-R12, INV06.
 25. **Boot and shutdown have no module seams.** Core patch: GameServer calls Living Chronicle twice, right after the
     database opens (the `STARTUP` census and the counters, §2.6; before `ThreadPool.init`, GameServer.java:213-216, so it
-    uses nothing but the database) and after Mobius's managers are up and before the login listener opens
-    (GameServer.java:482-484: recovery, §3.2, and the service); Shutdown calls it after `saveData` and before the
-    database closes (the boundary, §2.6). In `truth` each returns at once.
+    uses nothing but the database) and once Mobius's managers are up, before the shutdown hook is registered and before
+    offline traders and players are restored, which load characters as a login does (GameServer.java:436-447:
+    recovery, §3.2, and the service; a recovery that fails stops the start); Shutdown calls it after `saveData` and
+    before the database closes (the boundary, §2.6: every clan warehouse written from memory, then the census, only if
+    every write succeeded). In `truth` each returns at once.
 26. **A clan-hall re-bid after being outbid loses the first bid** (ClanHallAuction.java:272, 386-390): the clan pays its
     whole new bid, and its standing bid is overwritten and never returned. Core patch: a clan pays the difference over
     its own standing bid, as Mobius already charges the highest bidder raising its own.
@@ -706,7 +713,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     ground item but a cursed weapon is saved (ItemsOnGroundManager.java:216-219), placed tickets included, and both
     `ItemsOnGroundManager.load` and `MercTicketManager.load` rebuild them at startup (ItemsOnGroundManager.java:106,
     MercTicketManager.java:195); the load reads a stack's count with `getInt` (ItemsOnGroundManager.java:110-112). Core
-    patch: placed tickets are not saved to the ground, which `MercTicketManager` owns, and counts are read as `long`.
+    patch: placed tickets are not saved to the ground, which `MercTicketManager` owns, a ticket row saved before is not
+    restored from it and its row is deleted, counted; counts are read as `long`.
+28. **A clan-hall bid whose row could not be deleted was refunded anyway** (`cancelBid` and `removeBids` log a failed
+    `DELETE` and go on to `returnItem`, ClanHallAuction.java:494-512, 403-431), so the bid stayed and was paid back, a
+    second time at its next removal. Core patch: a bid is refunded only once its row is gone.
 
 ## 12. Review record
 
@@ -731,6 +742,17 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   the table names every hook (`COUNTER` for the settle itself, the clamp, the service's takes), the bid transitions and
   the lease credit with the hooks that make them sites; the baseline is the fork's code; the ledger rows are exactly
   §2.5's codes in each kind; §11.27 adds the saved ground's double ticket and count truncation.
+- Amendment round 11 (Codex), NO SIGN-OFF: a drop racing a pickup could lose the saved ground's quantity (1); an SQL
+  deletion of a row a loaded copy still held, then the copy's destruction, counted the sink twice (2); a counted
+  statement on a connection already in a transaction committed or rolled back the caller's work (3); a commit whose
+  acknowledgement was lost posted nothing (4); a failed clan-hall bid deletion still refunded and posted (5); the ledger
+  posting every SOURCE and SINK leg contradicted a reconciliation that changes no row (6, fixed in the same revision
+  before the round ended); ticket rows saved before CP-0024 were still restored twice (7); the clan-hall refund's clamp
+  was not recorded (8). Fixed (still revision 13): ground membership settles with the item under its lock; a counted
+  statement refuses a connection in a transaction, resolves a lost acknowledgement from the rows, and makes a loaded
+  copy of a row it deleted stop counting; bids are counted where their rows are written, item auctions' state included,
+  so a failed write counts nothing, and a clan-hall bid is refunded only once its row is gone (§11.28); stale ticket rows
+  are dropped at load, counted; `returnItem` records its clamp.
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

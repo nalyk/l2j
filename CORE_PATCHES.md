@@ -325,3 +325,21 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: a clan warehouse event means its operation happened.
 - Proof: `ClanAndTreasuryDebitTest.clanWarehouseEventsFireOnlyForOperationsThatHappen` (a refused destroy fires nothing; a
   missing object's transfer returns null).
+
+## CP-0021 Existence counters: the item hooks
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: asset-service.md §2.6 (revision 13) compares the census across a clean restart with existence counters kept
+  from the changes themselves (INV06), and Mobius has no hook that counts an item's quantity entering or leaving the
+  holdings the census counts.
+- Change: `setCount`, `changeCount` and `setItemLocation` settle the object's counted quantity (its count while its
+  location is one the census counts, otherwise nothing) under a leaf lock of `EconomyCounter`, never an item's or a
+  container's monitor; `changeCount` records what its clamps took or refused apart from the counts; `restoreFromDb` marks
+  a restored object counted at its count without posting; the Asset Service's `tryDecrease` (CP-0009) and `retire`
+  (CP-0010) hand their quantity to a custody under the same lock, posting only what the object was not counted with. Until
+  `EconomyCounter.activate`, every hook returns at once, so `truth` runs as upstream.
+- Invariant: when the server is quiet, the counters equal the census of the counted holdings plus what the service and
+  the SQL sites posted.
+- Proof: `ExistenceCounterTest` (creation, merge, destroy, drop and pickup, moves between counted holdings, a sale to the
+  buyback list, a restore then a change, the service's takes, a clamp, a count and a location changing together and a
+  stack decrease racing a Mobius change, each exact; an inactive counter posts nothing).

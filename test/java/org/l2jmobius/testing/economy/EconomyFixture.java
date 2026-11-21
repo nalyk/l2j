@@ -2,8 +2,10 @@ package org.l2jmobius.testing.economy;
 
 import java.util.function.Consumer;
 
+import org.l2jmobius.gameserver.entity.item.enums.ItemLocation;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.ItemManager;
 
 /**
@@ -71,6 +73,21 @@ final class EconomyFixture
 	static String notACensusTable()
 	{
 		return "UPDATE castle SET taxPercent = ? WHERE id = ?"; // the castle row, but not its treasury: no site
+	}
+
+	static void hooks()
+	{
+		EconomyCounter.post(57, 1); // a counter hook: a classified site
+	}
+
+	static boolean onlyAsks()
+	{
+		return EconomyCounter.isActive(); // asking is not counting: no site
+	}
+
+	static void relocates(Item item)
+	{
+		item.setItemLocation(ItemLocation.VOID); // a location change can enter or leave the counted holdings
 	}
 
 	static void harmless(Item item)

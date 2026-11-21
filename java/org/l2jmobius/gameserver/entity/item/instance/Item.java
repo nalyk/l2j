@@ -65,6 +65,7 @@ import org.l2jmobius.gameserver.entity.item.holders.Elementals;
 import org.l2jmobius.gameserver.entity.item.type.EtcItemType;
 import org.l2jmobius.gameserver.entity.item.type.ItemType;
 import org.l2jmobius.gameserver.geoengine.GeoEngine;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.managers.ItemsOnGroundManager;
 import org.l2jmobius.gameserver.managers.MercTicketManager;
@@ -114,6 +115,8 @@ public class Item extends WorldObject
 	
 	/** Taken by the Asset Service (CP-0010): never written by Mobius again, refused by every Mobius operation. */
 	private volatile boolean _retired;
+	/** The quantity of this object the existence counters include (CP-0021), guarded by {@link EconomyCounter#lockFor}. */
+	private long _posted;
 	
 	/** Quantity of the item; changed by compare-and-set (CP-0009), so concurrent changes never lose one another. */
 	private volatile long _count;
@@ -423,6 +426,7 @@ public class Item extends WorldObject
 		_loc = loc;
 		_locData = locData;
 		_storedInDb = false;
+		settleCounted();
 		
 		if (checkSkills)
 		{
@@ -450,6 +454,7 @@ public class Item extends WorldObject
 		
 		_count = count >= -1 ? count : 0;
 		_storedInDb = false;
+		settleCounted();
 	}
 	
 	/**
@@ -458,9 +463,55 @@ public class Item extends WorldObject
 	 */
 	public void retire()
 	{
-		_retired = true;
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			// The whole object is a custody's now: counted at its count, including a change not yet settled (CP-0021).
+			EconomyCounter.post(_itemId, Math.max(0, _count) - _posted);
+			_posted = 0;
+			_retired = true;
+		}
 	}
 	
+	/**
+	 * Settles the quantity of this object the existence counters include (CP-0021, docs/spec/asset-service.md §2.6): its
+	 * count while its location is one the census counts, otherwise nothing. Called after every change of count or location;
+	 * the lock is a leaf, so concurrent changes settle exactly.
+	 */
+	private void settleCounted()
+	{
+		if (!EconomyCounter.isActive() || _retired)
+		{
+			return;
+		}
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			if (_retired)
+			{
+				return;
+			}
+			final long counted = EconomyCounter.counted(_loc) ? Math.max(0, _count) : 0;
+			final long delta = counted - _posted;
+			if (delta != 0)
+			{
+				_posted = counted;
+				EconomyCounter.post(_itemId, delta);
+			}
+		}
+	}
+	
+	/** Marks a restored object as included at its count: its row is already in the census (CP-0021). */
+	private void markCounted()
+	{
+		if (!EconomyCounter.isActive())
+		{
+			return;
+		}
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_posted = EconomyCounter.counted(_loc) ? Math.max(0, _count) : 0;
+		}
+	}
+
 	/**
 	 * Waits for a write of this item already in progress to finish (CP-0017): takes and releases its write lock. After a
 	 * {@link #retire()} every later write is a no-op, so the Asset Service's row is the last word (asset-service.md §3.3).
@@ -533,6 +584,26 @@ public class Item extends WorldObject
 		{
 			throw new IllegalArgumentException("a decrease is positive, not " + quantity);
 		}
+		if (!EconomyCounter.isActive())
+		{
+			return decrease(quantity);
+		}
+		synchronized (EconomyCounter.lockFor(getObjectId())) // with its counted quantity, so no settle falls between (CP-0021)
+		{
+			if (!decrease(quantity))
+			{
+				return false;
+			}
+			// The quantity is a custody's now: what this object was counted with moves silently, the rest is counted here.
+			final long fromThisObject = Math.min(_posted, quantity);
+			_posted -= fromThisObject;
+			EconomyCounter.post(_itemId, quantity - fromThisObject);
+			return true;
+		}
+	}
+	
+	private boolean decrease(long quantity)
+	{
 		long old;
 		do
 		{
@@ -585,6 +656,8 @@ public class Item extends WorldObject
 		while (!COUNT.compareAndSet(this, old, next));
 		
 		_storedInDb = false;
+		settleCounted();
+		EconomyCounter.postClamp(_itemId, count - (next - old)); // asked minus applied: what the clamps took or refused (ASSET-R13, CP-0021)
 		
 		if ((process != null) && (process != ItemProcessType.NONE))
 		{
@@ -1684,6 +1757,7 @@ public class Item extends WorldObject
 		inst._locData = locData;
 		inst._existsInDb = true;
 		inst._storedInDb = true;
+		inst.markCounted(); // its row is already in the census (CP-0021)
 		
 		// Setup life time for shadow weapons.
 		inst._mana = manaLeft;

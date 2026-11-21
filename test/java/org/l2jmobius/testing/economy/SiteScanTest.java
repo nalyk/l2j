@@ -23,6 +23,6 @@ class SiteScanTest
 		final Path root = Path.of(EconomyFixture.class.getProtectionDomain().getCodeSource().getLocation().toURI());
 		final Set<Site> sites = SiteScan.scanClasses(root, "test/java/", name -> name.contains("EconomyFixture"));
 		final String file = "test/java/org/l2jmobius/testing/economy/EconomyFixture.java";
-		assertEquals(Set.of(new Site(file, "mints", Kind.NEW_ITEM), new Site(file, "creates", Kind.CREATE_ITEM), new Site(file, "destroys", Kind.DESTROY_ITEM), new Site(file, "grows", Kind.CHANGE_COUNT), new Site(file, "sets", Kind.SET_COUNT), new Site(file, "purges", Kind.CENSUS_SQL), new Site(file, "inserts", Kind.CENSUS_SQL), new Site(file, "treasury", Kind.CENSUS_SQL), new Site(file, "bids", Kind.CENSUS_SQL), new Site(file, "ground", Kind.CENSUS_SQL)), sites);
+		assertEquals(Set.of(new Site(file, "mints", Kind.NEW_ITEM), new Site(file, "creates", Kind.CREATE_ITEM), new Site(file, "destroys", Kind.DESTROY_ITEM), new Site(file, "grows", Kind.CHANGE_COUNT), new Site(file, "sets", Kind.SET_COUNT), new Site(file, "purges", Kind.CENSUS_SQL), new Site(file, "inserts", Kind.CENSUS_SQL), new Site(file, "treasury", Kind.CENSUS_SQL), new Site(file, "bids", Kind.CENSUS_SQL), new Site(file, "ground", Kind.CENSUS_SQL), new Site(file, "hooks", Kind.COUNTER), new Site(file, "relocates", Kind.LOCATION)), sites);
 	}
 }

@@ -153,7 +153,7 @@ change.
 | `RELOCATED_DROP` | SOURCE | kill key | a kill's retail-rolled family items that Aden Remembers relocates into a Guild warehouse instead of the ground or an inventory, exactly the items and counts the retail roll made (aden-remembers.md §4.3.1); like `LOOT_DROP`, one operation per kill |
 | `SINK_RECYCLE` | SOURCE | Guild pool | Adena credited to a Guild pool once a day, at most `RecyclePermille` of the Adena its territory's retail teleport fees destroyed the previous day as the journal recorded it (aden-remembers.md §4.6): a source bounded by a recorded sink |
 | `CROWN_UPKEEP` | SINK | law | road wardens' wages paid from an Open Roads law's custody (aden-remembers.md §4.5) |
-| `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again through the classified site `lc_raid_drop` (§2.7) when it is dropped |
+| `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again as a drop the ledger's own code creates on the ground, counted like any drop (§2.6) when it is picked up or saved |
 | `ROAD_LOSS` | SINK | caravan | the rest of a raided manifest |
 | `ADMIN_CORRECTION` | SOURCE / SINK | audit fact | a corrective admin operation (§4.5) |
 | `CRAFT_INPUT` | SINK | contract | a contractual craft's materials, consumed from the contract's custody exactly as retail consumes them from an inventory (pact.md §4.3) |
@@ -189,9 +189,11 @@ it guarantees, and what it only watches, are stated separately.
    `REFUND` and `LEASE`; the ground list too when `SaveDroppedItem` is on), so a change of its count or of its location
    is counted where it happens (`Item.setCount`, `Item.changeCount`, `Item.setItemLocation`); a treasury counts where
    Mobius changes it (`Castle.addToTreasuryNoTax`); an open bid at each of its transitions (placed, raised, cancelled,
-   won, expired); a statement that writes census rows directly (a `SOURCE` or `SINK` SQL site in §2.7) counts, before it
-   runs, what the census would have counted in the rows it writes; and the ledger posts each `SOURCE` and `SINK` leg when
-   its operation commits. Restored state is already in the census and is never counted again: Mobius assigns a restored
+   won, expired); a statement that writes census rows directly (an SQL site in §2.7 classed `SOURCE`, `SINK` or `MOVE`)
+   runs in a transaction of its own that reads, under locks, what the census counts in the rows it writes before and after
+   it, and posts the difference only when it commits, so a statement that fails posts nothing; and the ledger posts each
+   `SOURCE` and `SINK` leg when its operation commits. A clamp (a quantity asked of a change and not applied) is recorded
+   apart for the watched part, never in the counters, which see what was applied. Restored state is already in the census and is never counted again: Mobius assigns a restored
    row's location without `setItemLocation` (Item.java:1559-1566), and the object starts counted at its count. The
    service's own takes and returns (a stack decrease, a treasury commit or return, a whole object retired) move quantity
    between Mobius's memory and custody rows and post nothing, so a quantity taken and then lost shows as the difference
@@ -216,7 +218,10 @@ persists the counters. Ground items are a holding only when `SaveDroppedItem` is
 posted at the boundary. Refund lists are already
 destroyed at logout (Player.java:12131, PlayerRefund.java:85) through a classified sink site, so they are never counted.
 
-**At startup**, right after the database opens and before any other startup step (Mobius's own cleanup, DatabaseIdManager.java:161-171, is a counted site), the database is counted again (`STARTUP`) and compared with the persisted counters. A
+**At startup**, right after the database opens and before any other startup step (Mobius's own cleanup,
+DatabaseIdManager.java:161-171, is a counted site), the database is counted again (`STARTUP`), compared with the persisted
+counters, and the counters start from it; this needs only the database. Recovery (§3.2, §7), which needs Mobius's mail
+manager for INV12, runs later, once Mobius's managers are up and before any login. A
 difference is a conservation failure somewhere in Mobius or here (for instance a background task changing a player's
 container after its final save, which Mobius's shutdown order allows, Shutdown.java:380-403; the census reports such a
 loss, it does not hide it): `Asset.ConservationBroken` with the per-item
@@ -244,14 +249,16 @@ the bid to the seller (ClanHallAuction.java:470-473), with any clamp a sink.
 `docs/spec/asset-economy-sites.csv`: rows `site, file, member, class, holding_from, holding_to, reason`, reviewed like the
 spec. A **site** is a member (a method or a constructor; a lambda belongs to the member that writes it) of the compiled
 core or of a datapack script that calls something able to change an item's existence or quantity
-(`ItemManager.createItem`, `ItemManager.destroyItem`, `Item.changeCount`, `Item.setCount`, an `Item` constructor other
-than one delegating to another), that loads an SQL string writing a census table (`DELETE`, `UPDATE`, `INSERT` or
+(`ItemManager.createItem`, `ItemManager.destroyItem`, `Item.changeCount`, `Item.setCount`, `Item.setItemLocation`, an
+`Item` constructor; never one overload delegating to another), that loads an SQL string writing a census table (`DELETE`, `UPDATE`, `INSERT` or
 `REPLACE` on `items`, `itemsonground`, `item_auction_bid` or `auction_bid`, or an `UPDATE castle` setting `treasury`), or
 that calls the existence counters (§2.6), so every counter hook is a classified site too. A static test (AT-ASSET-12)
-scans the compiled core, Living Chronicle's own package excepted (its changes are ledger legs), and every datapack script
+scans the fork's compiled core (upstream with its core patches, so a patch that moves a site moves its row), Living
+Chronicle's own package excepted (its changes are ledger legs), and every datapack script
 compiled as Mobius compiles them at boot, and fails on a site no row names, on a row naming no site, and on a `PENDING`
 row. Classes: `SOURCE`, `SINK`, `MOVE`, `RESTORE` (state rebuilt from rows, never counted), `PERSIST` (writes a holding's
-row from memory, changing no quantity) and `PENDING` (not yet decided). A member that does two things has a row for each
+row from memory, changing no quantity), `COUNTER` (the counters' own settle, which posts what a change classified at
+another site does; not a site of the watched buckets) and `PENDING` (not yet decided). A member that does two things has a row for each
 (ItemContainer.addItem creates by item id and merges into a stack). A constructor followed by `setCount` on the fresh
 object, before it enters any holding, is one site, where the quantity first exists; a quantity a site computes apart (a
 returned part, a penalty, a clamp) is named in that site's reason under its own class, and the counters see the quantity
@@ -262,7 +269,8 @@ Known sites that must be in it from the start: direct item construction for lott
 (LongTimeEvent.java:557, Hero.java:81: `SINK`).
 
 **Ledger rows** (`file` = `ledger`, `member` = a posting code) classify Living Chronicle's own sources and sinks, which the
-ledger posts (§2.5, §2.6). AT-ASSET-12 checks that every `SinkCode` has one; it does not scan for them.
+ledger posts (§2.5, §2.6). AT-ASSET-12 checks that they are exactly §2.5's `SOURCE` and `SINK` codes, each in every kind
+§2.5 permits it, and that every `SinkCode` is one of them; it does not scan for them.
 
 ## 3. State machines
 
@@ -393,7 +401,7 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `relocate(drops)` | `RELOCATED_DROP` source → for each selected item its own destination warehouse custody (a kill's families may go to different towns), exactly the kill's selected items; one operation per kill, whole or nothing, under the kill key, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
 | `recycle(pool, amount, day)` | `SINK_RECYCLE` source → the pool, once per (pool, day), refused above the recorded share | `Asset.SinkRecycled` |
 | `track(objectId)` | no legs: if the live object has no live lifecycle, one is begun (`began_op` null, `began_kind` `TRACKED`), under the object's stack lock like any operation that reads it (§3.3); idempotent; ended by the existing end sites (chronicle.md §4.6, under review) | `Asset.LifecycleTracked` |
-| `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
+| `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, as a ground drop, §2.5) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
 | `issue(character, item, code)` | a representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`) source → system mail | `Asset.ParchmentIssued` or `Asset.SealIssued` |
@@ -676,18 +684,28 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 22. **Login** restores a character's items from rows (Player.java:7358-7360) with plain reads that do not wait for an
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
 24. **No hook counts existence** (§2.6). Core patch: `Item.setCount`, `Item.changeCount` and `Item.setItemLocation`
-    settle the item's counted quantity; `Item.restoreFromDb` marks a restored object counted at its count;
+    settle the item's counted quantity under a leaf lock, `Item.changeCount` records its clamp apart, and the service's
+    `tryDecrease` and `retire` hand their quantity to a custody under the same lock; `Item.restoreFromDb` marks a restored
+    object counted at its count;
     `Castle.addToTreasuryNoTax` posts the change it applied; `ItemsOnGroundManager.save` and `removeObject` post a ground
     item entering and leaving the saved ground; `ItemAuction.registerBid` and `cancelBid`,
     `ItemAuctionInstance.onAuctionFinished` and `ClanHallAuction` (`updateInDB`, `cancelBid`, `removeBids`, `endAuction`)
-    post each bid transition; each `SOURCE` or `SINK` SQL site counts its rows before it runs. Until a profile starts
+    post each bid transition; each SQL site classed `SOURCE`, `SINK` or `MOVE` runs in a transaction that counts its
+    rows under locks before and after it and posts the difference when it commits. Until a profile starts
     Living Chronicle the hooks do nothing (profiles.md §4.2 rule 4). → ASSET-R12, INV06.
-25. **Boot and shutdown have no module seams.** Core patch: GameServer calls Living Chronicle right after the database
-    opens (recovery, §3.2; the `STARTUP` census) and Shutdown calls it after `saveData` and before the database closes
-    (the boundary, §2.6); in `truth` both return at once.
+25. **Boot and shutdown have no module seams.** Core patch: GameServer calls Living Chronicle twice, right after the
+    database opens (the `STARTUP` census and the counters, §2.6; before `ThreadPool.init`, GameServer.java:213-216, so it
+    uses nothing but the database) and after Mobius's managers are up and before the login listener opens
+    (GameServer.java:482-484: recovery, §3.2, and the service); Shutdown calls it after `saveData` and before the
+    database closes (the boundary, §2.6). In `truth` each returns at once.
 26. **A clan-hall re-bid after being outbid loses the first bid** (ClanHallAuction.java:272, 386-390): the clan pays its
     whole new bid, and its standing bid is overwritten and never returned. Core patch: a clan pays the difference over
     its own standing bid, as Mobius already charges the highest bidder raising its own.
+27. **The saved ground restores a placed mercenary ticket twice and truncates counts.** With `SaveDroppedItem`, every
+    ground item but a cursed weapon is saved (ItemsOnGroundManager.java:216-219), placed tickets included, and both
+    `ItemsOnGroundManager.load` and `MercTicketManager.load` rebuild them at startup (ItemsOnGroundManager.java:106,
+    MercTicketManager.java:195); the load reads a stack's count with `getInt` (ItemsOnGroundManager.java:110-112). Core
+    patch: placed tickets are not saved to the ground, which `MercTicketManager` owns, and counts are read as `long`.
 
 ## 12. Review record
 
@@ -700,6 +718,18 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   table and to the counter hooks, adds `PERSIST`, and keys Living Chronicle's rows by posting code (`ledger`), every
   `SinkCode` with one. The table is complete for the upstream snapshot: 50 rows of Mobius sites, 17 ledger rows.
   §11.24-26 name the hooks, the boot and shutdown seams, and a clan-hall re-bid that loses the first bid.
+- Amendment round 10 (Codex), NO SIGN-OFF: an SQL count taken before the statement posts a deletion that then fails, and
+  misses concurrent writes (1); a `MOVE` SQL site (the admin repair) was left outside the counters (2); the lease a
+  clan-hall seller gets back had lost its row (3); recovery before `ThreadPool.init` would start the mail manager without
+  its deletion task (4); the scan saw neither counter hooks nor location changes (5); "complete for the upstream
+  snapshot" was the fork's code, and the stack clamp had lost its row (6); mercenary tickets and herbs ignored the saved
+  ground (7); the ledger check covered `SinkCode` only, missing `ADMIN_CORRECTION` (8); the re-bid loss and its fix were
+  confirmed (9). Fixed (still revision 13): every SQL site classed `SOURCE`, `SINK` or `MOVE` counts under locks before
+  and after it in its own transaction and posts on commit; the startup census and the counters run before
+  `ThreadPool.init`, recovery after Mobius's managers; the scan also finds `setItemLocation` calls and counter posts, and
+  the table names every hook (`COUNTER` for the settle itself, the clamp, the service's takes), the bid transitions and
+  the lease credit with the hooks that make them sites; the baseline is the fork's code; the ledger rows are exactly
+  §2.5's codes in each kind; §11.27 adds the saved ground's double ticket and count truncation.
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

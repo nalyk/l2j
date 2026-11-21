@@ -445,7 +445,7 @@ and pack animals are new NPC templates on existing client models (`displayId`), 
   proportion to their presence, the remainder (all of it if nobody qualifies) refunded to the pool. PACT settles the
   contract with these shares (pact.md §4.2's Caravan Escort: "delivery + participation").
 - **Raid**: killing the Caravan Master is the `RAIDED` transition (§3.4): `raid` drops `RaidSharePermille` (default 300) of
-  the manifest once, after commit, at the Master's position (`lc_raid_drop`, asset-service.md ASSET-R25), the rest lost to
+  the manifest once, after commit, at the Master's position (a ground drop, asset-service.md §2.5 and ASSET-R25), the rest lost to
   the road (`ROAD_LOSS`). Killing NPCs gives no karma in Mobius; raiders who kill escorts or bystanders get karma and flags
   by the normal rules, and the raid becomes history, `outlaw` pressure and rumors. No Writ is posted on raiders: the
   Ledger takes external money only for cursed weapons (black-ledger.md §4.3), and a raid names no one.

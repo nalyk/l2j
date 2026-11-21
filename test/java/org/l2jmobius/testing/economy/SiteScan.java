@@ -28,7 +28,8 @@ import javax.tools.ToolProvider;
 /**
  * The static site scan of AT-ASSET-12 (docs/spec/asset-service.md §2.7): every call that can change an item's existence
  * or quantity ({@code ItemManager.createItem}, {@code ItemManager.destroyItem}, {@code Item.changeCount},
- * {@code Item.setCount}, an {@code Item} constructor) and every SQL string that writes a table the census counts, read from
+ * {@code Item.setCount}, {@code Item.setItemLocation}, an {@code Item} constructor), every SQL string that writes a table the census counts and every
+ * call that posts to the existence counters, read from
  * bytecode: the compiled core, and the datapack's scripts compiled here as Mobius compiles them at boot. A site is a
  * (file, member, kind): repeated calls of one kind in one member are one site, and a call inside a lambda belongs to the
  * member that wrote the lambda. Living Chronicle's own package is not scanned: its writes are the Asset Service's,
@@ -43,7 +44,9 @@ public final class SiteScan
 		CHANGE_COUNT,
 		SET_COUNT,
 		NEW_ITEM,
-		CENSUS_SQL
+		CENSUS_SQL,
+		COUNTER,
+		LOCATION
 	}
 
 	public record Site(String file, String member, Kind kind) implements Comparable<Site>
@@ -58,6 +61,7 @@ public final class SiteScan
 	private static final String ITEM = "org/l2jmobius/gameserver/entity/item/instance/Item";
 	private static final String ITEM_MANAGER = "org/l2jmobius/gameserver/managers/ItemManager";
 	private static final String LIVING_CHRONICLE = "org/l2jmobius/gameserver/livingchronicle/";
+	private static final String COUNTERS = LIVING_CHRONICLE + "asset/EconomyCounter";
 	/** SQL that writes a table the census counts (§2.6): items, saved ground items, both kinds of open bid, a treasury. */
 	private static final Pattern CENSUS_WRITE = Pattern.compile("(?i)\\b(DELETE\\s+FROM|UPDATE|INSERT\\s+(IGNORE\\s+)?INTO|REPLACE\\s+INTO)\\s+`?(items|itemsonground|item_auction_bid|auction_bid)`?(\\s|\\(|$)");
 	private static final Pattern TREASURY_WRITE = Pattern.compile("(?i)\\bUPDATE\\s+`?castle`?\\s+SET\\b.*\\btreasury\\b");
@@ -160,6 +164,10 @@ public final class SiteScan
 		{
 			final String target = invoke.owner().asInternalName();
 			final String called = invoke.name().stringValue();
+			if (target.equals(COUNTERS) && called.startsWith("post"))
+			{
+				return Kind.COUNTER; // a counter hook (§2.6) is a site, classified like any other
+			}
 			if (target.equals(ITEM_MANAGER) && called.equals("createItem"))
 			{
 				return Kind.CREATE_ITEM;
@@ -175,6 +183,10 @@ public final class SiteScan
 			if (target.equals(ITEM) && called.equals("setCount"))
 			{
 				return Kind.SET_COUNT;
+			}
+			if (target.equals(ITEM) && called.equals("setItemLocation") && !(owner.equals(ITEM) && methodName.equals("setItemLocation")))
+			{
+				return Kind.LOCATION; // not one overload delegating to another
 			}
 			if (target.equals(ITEM) && called.equals("<init>") && !(owner.equals(ITEM) && methodName.equals("<init>")))
 			{

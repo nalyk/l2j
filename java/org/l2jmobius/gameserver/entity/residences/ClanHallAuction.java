@@ -41,6 +41,7 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.ClanHallAuctionManager;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.network.SystemMessageId;
@@ -269,7 +270,10 @@ public class ClanHallAuction
 	 */
 	public synchronized void setBid(Player bidder, long bid)
 	{
-		final long requiredAdena = _highestBidderName.equals(bidder.getClan().getLeaderName()) ? bid - _highestBidderMaxBid : bid;
+		// CP-0023: a clan pays the difference over its own standing bid, as upstream charged only the highest bidder; a clan
+		// outbid and bidding again paid its whole new bid and lost the standing one, which its new bid overwrites.
+		final Bidder standing = bidder.getClan() == null ? null : _bidders.get(bidder.getClanId());
+		final long requiredAdena = standing == null ? bid : bid - standing.getBid();
 		if ((((_highestBidderId > 0) && (bid > _highestBidderMaxBid)) || ((_highestBidderId == 0) && (bid >= _startingBid))) && takeItem(bidder, requiredAdena))
 		{
 			updateInDB(bidder, bid);
@@ -342,6 +346,8 @@ public class ClanHallAuction
 	 */
 	private void updateInDB(Player bidder, long bid)
 	{
+		final Bidder standing = _bidders.get(bidder.getClanId());
+		final long before = standing == null ? 0 : standing.getBid();
 		try (Connection con = DatabaseFactory.getConnection())
 		{
 			if (_bidders.get(bidder.getClanId()) != null)
@@ -390,6 +396,7 @@ public class ClanHallAuction
 				_bidders.get(_highestBidderId).setBid(bid);
 				_bidders.get(_highestBidderId).setTimeBid(currentTime);
 			}
+			EconomyCounter.post(ADENA_ID, bid - before); // the open bid is a census holding (CP-0022)
 			
 			bidder.sendPacket(SystemMessageId.YOUR_BID_HAS_BEEN_SUCCESSFULLY_PLACED);
 		}
@@ -425,6 +432,7 @@ public class ClanHallAuction
 			}
 			
 			ClanTable.getInstance().getClanByName(b.getClanName()).setAuctionBiddedAt(0, true);
+			EconomyCounter.post(ADENA_ID, -b.getBid()); // each bid leaves its holding (CP-0022)
 		}
 		
 		_bidders.clear();
@@ -475,7 +483,7 @@ public class ClanHallAuction
 			
 			deleteAuctionFromDB();
 			final Clan clan = ClanTable.getInstance().getClanByName(_bidders.get(_highestBidderId).getClanName());
-			_bidders.remove(_highestBidderId);
+			EconomyCounter.post(ADENA_ID, -_bidders.remove(_highestBidderId).getBid()); // the winning bid leaves its holding (CP-0022)
 			clan.setAuctionBiddedAt(0, true);
 			removeBids();
 			ClanHallTable.getInstance().setOwner(_itemId, clan);
@@ -507,6 +515,7 @@ public class ClanHallAuction
 		
 		returnItem(_bidders.get(bidder).getClanName(), _bidders.get(bidder).getBid(), true);
 		ClanTable.getInstance().getClanByName(_bidders.get(bidder).getClanName()).setAuctionBiddedAt(0, true);
+		EconomyCounter.post(ADENA_ID, -_bidders.get(bidder).getBid()); // the bid leaves its holding (CP-0022)
 		_bidders.clear();
 		loadBid();
 	}

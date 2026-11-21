@@ -343,3 +343,45 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Proof: `ExistenceCounterTest` (creation, merge, destroy, drop and pickup, moves between counted holdings, a sale to the
   buyback list, a restore then a change, the service's takes, a clamp, a count and a location changing together and a
   stack decrease racing a Mobius change, each exact; an inactive counter posts nothing).
+
+## CP-0022 Existence counters: the treasury, saved-ground and bid hooks
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`, `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java`, `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: a castle treasury, the saved ground list and the open bids of both auctions are census holdings
+  (asset-service.md §2.6) that no item call changes, so their changes need hooks of their own (§11.24).
+- Change: `Castle.addToTreasuryNoTax` posts the change it applied and records its clamp apart; `ItemsOnGroundManager.save`
+  and `removeObject` post an object entering and leaving the saved list (only when it was not, or was, in it);
+  `ItemAuction.registerBid` posts the bid's growth over its standing bid, `cancelBid` the bid leaving, `setAuctionState`
+  into `FINISHED` the winning bid paid to the NPC; `ClanHallAuction.updateInDB` posts the bid's growth over the clan's
+  standing bid, `cancelBid`, `removeBids` and `endAuction` each bid leaving. No retail behaviour changes; with the
+  counters inactive every hook returns at once.
+- Invariant: a move between one of these holdings and an inventory or warehouse nets to nothing in the counters.
+- Proof: `HoldingHooksTest` (tax in, a withdrawal out, the service's treasury commitment and return, a clamp; a drop to
+  and a pickup from the saved ground; an item-auction bid placed, raised, cancelled and won; a clan-hall bid placed and
+  cancelled; an ended clan-hall auction paying the seller's share and the lease and refunding a loser).
+
+## CP-0023 A clan-hall re-bid pays the difference over the clan's standing bid
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: `setBid` subtracted a standing bid only for the current highest bidder (ClanHallAuction.java:272), and
+  `updateInDB` replaces a clan's standing bid with its new one (344-354, 386-390): a clan outbid and bidding again paid
+  its whole new bid and lost the standing one (asset-service.md §11.26, confirmed by Codex round amd10).
+- Change: the Adena taken is the new bid less the clan's own standing bid, if it has one. For the highest bidder raising
+  its own bid this is what upstream charged.
+- Invariant: what a clan has paid into an auction equals its standing bid.
+- Proof: `ClanHallRebidTest.aClanOutbidPaysOnlyTheDifferenceOverItsStandingBid` (red on upstream: 60 000 paid for a
+  40 000 bid).
+
+## CP-0024 The saved ground: no placed tickets, whole counts
+
+- Files: `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/managers/MercTicketManager.java`
+- Reason: with `SaveDroppedItem`, every ground item but a cursed weapon was saved (ItemsOnGroundManager.java:216-219),
+  placed mercenary tickets included, which `ItemsOnGroundManager.load` and `MercTicketManager.load` both rebuilt at
+  startup, a duplicate per restart; and the load read a stack's count with `getInt` (110-112), so a stack past 2^31
+  came back as a single unit (asset-service.md §11.27).
+- Change: `save` keeps placed tickets and cursed weapons out of the ground list (their managers own them; the cursed
+  weapons were already never written); the ticket check is the static `MercTicketManager.ticketCastleId`, since that
+  manager drops its restored tickets while it is still being built; the load reads the count as a `long`.
+- Invariant: a placed ticket exists once after a restart; a saved stack comes back whole.
+- Proof: `SavedGroundTest` (a ticket is not saved and posts nothing; a saved stack of 3 000 000 000 Adena, restored as 1
+  by upstream, comes back whole and posts nothing).

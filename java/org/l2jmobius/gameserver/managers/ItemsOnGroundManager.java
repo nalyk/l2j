@@ -31,6 +31,7 @@ import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.taskmanagers.ItemsAutoDestroyTaskManager;
 
 /**
@@ -107,9 +108,9 @@ public class ItemsOnGroundManager implements Runnable
 					World.addObject(item);
 					
 					// this check and..
-					if (item.isStackable() && (rs.getInt(3) > 1))
+					if (item.isStackable() && (rs.getLong(3) > 1)) // CP-0024: a long, as the column is
 					{
-						item.setCount(rs.getInt(3));
+						item.setCount(rs.getLong(3));
 					}
 					
 					// This, are really necessary?
@@ -157,14 +158,25 @@ public class ItemsOnGroundManager implements Runnable
 			return;
 		}
 		
-		_items.add(item);
+		// CP-0024: a placed mercenary ticket is MercTicketManager's (castle_siege_guards), which rebuilds it at startup, and a
+		// cursed weapon is CursedWeaponsManager's; saved here too, a ticket was restored twice.
+		final CursedWeaponsManager cursed = CursedWeaponsManager.getInstance();
+		if ((MercTicketManager.ticketCastleId(item.getId()) > 0) || ((cursed != null) && cursed.isCursed(item.getId())))
+		{
+			return;
+		}
+		
+		if (_items.add(item))
+		{
+			EconomyCounter.post(item.getId(), item.getCount()); // the saved ground is a census holding (CP-0022)
+		}
 	}
 	
 	public void removeObject(Item item)
 	{
-		if (GeneralConfig.SAVE_DROPPED_ITEM)
+		if (GeneralConfig.SAVE_DROPPED_ITEM && _items.remove(item))
 		{
-			_items.remove(item);
+			EconomyCounter.post(item.getId(), -item.getCount()); // (CP-0022)
 		}
 	}
 	

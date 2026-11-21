@@ -33,6 +33,8 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.holders.ItemInfo;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.itemcontainer.Inventory;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.network.SystemMessageId;
 import org.l2jmobius.gameserver.network.serverpackets.ServerPacket;
 import org.l2jmobius.gameserver.network.serverpackets.SystemMessage;
@@ -121,6 +123,10 @@ public class ItemAuction
 			}
 			
 			_auctionState = wanted;
+			if ((wanted == ItemAuctionState.FINISHED) && (expected != ItemAuctionState.FINISHED) && (_highestBid != null))
+			{
+				EconomyCounter.post(Inventory.ADENA_ID, -_highestBid.getLastBid()); // the winning bid is paid to the NPC (CP-0022)
+			}
 			storeMe();
 			return true;
 		}
@@ -280,6 +286,7 @@ public class ItemAuction
 			}
 			
 			ItemAuctionBid bid = getBidFor(playerObjId);
+			final long standing = ((bid == null) || bid.isCanceled()) ? 0 : bid.getLastBid();
 			if (bid == null)
 			{
 				if (!reduceItemCount(player, newBid))
@@ -315,6 +322,8 @@ public class ItemAuction
 				
 				bid.setLastBid(newBid);
 			}
+			
+			EconomyCounter.post(Inventory.ADENA_ID, newBid - standing); // the open bid is a census holding (CP-0022)
 			
 			onPlayerBid(player, bid);
 			updatePlayerBid(bid, false);
@@ -471,6 +480,7 @@ public class ItemAuction
 			}
 			
 			increaseItemCount(player, bid.getLastBid());
+			EconomyCounter.post(Inventory.ADENA_ID, -bid.getLastBid()); // the bid leaves its holding (CP-0022)
 			bid.cancelBid();
 			
 			// Delete bid from database if auction already finished.

@@ -688,8 +688,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     `tryDecrease` and `retire` hand their quantity to a custody under the same lock; `Item.restoreFromDb` marks a restored
     object counted at its count;
     `Castle.addToTreasuryNoTax` posts the change it applied; `ItemsOnGroundManager.save` and `removeObject` post a ground
-    item entering and leaving the saved ground; `ItemAuction.registerBid` and `cancelBid`,
-    `ItemAuctionInstance.onAuctionFinished` and `ClanHallAuction` (`updateInDB`, `cancelBid`, `removeBids`, `endAuction`)
+    item entering and leaving the saved ground; `ItemAuction.registerBid`, `cancelBid` and
+    `setAuctionState` into `FINISHED` (the winning bid paid) and `ClanHallAuction` (`updateInDB`, `cancelBid`, `removeBids`, `endAuction`)
     post each bid transition; each SQL site classed `SOURCE`, `SINK` or `MOVE` runs in a transaction that counts its
     rows under locks before and after it and posts the difference when it commits. Until a profile starts
     Living Chronicle the hooks do nothing (profiles.md §4.2 rule 4). → ASSET-R12, INV06.

@@ -57,6 +57,7 @@ import org.l2jmobius.gameserver.entity.residences.AbstractResidence;
 import org.l2jmobius.gameserver.entity.zone.type.CastleZone;
 import org.l2jmobius.gameserver.entity.zone.type.ResidenceTeleportZone;
 import org.l2jmobius.gameserver.entity.zone.type.SiegeZone;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.CastleManager;
 import org.l2jmobius.gameserver.managers.CastleManorManager;
 import org.l2jmobius.gameserver.managers.FortManager;
@@ -376,6 +377,8 @@ public class Castle extends AbstractResidence
 			}
 		}
 		while (!TREASURY.compareAndSet(this, old, next));
+		EconomyCounter.post(Inventory.ADENA_ID, next - old); // the treasury is a census holding (CP-0022)
+		EconomyCounter.postClamp(Inventory.ADENA_ID, amountValue - (next - old)); // a gain past MAX_ADENA clamped away
 		
 		// The row is written under the treasury lock from the value in memory when the lock is held, so the last writer
 		// writes the last value (the Asset Service writes the row under the same lock).

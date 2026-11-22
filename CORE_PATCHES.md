@@ -480,3 +480,63 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: the shutdown census is taken only once no task pool runs.
 - Proof: `SeamsTest.theBoundaryWaitsForTheTaskPoolsMobiusStopped` (the boundary follows `ThreadPool.shutdown` and calls
   `awaitTermination`); `LivingChronicleBootTest.aBoundaryWhileMobiusTasksStillRunTakesNoShutdownCensus`.
+
+## CP-0029 A clan hall put up for sale pays its deposit
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`, `java/org/l2jmobius/gameserver/entity/actor/instance/Auctioneer.java`
+- Reason: retail's sale page (`data/html/auction/AgitSale1.htm`) says the deposit, the hall's lease, "is taken out of the
+  clan warehouse at the moment the clan hall is put up for auction and is returned if the auction is completed
+  normally", and is lost on a cancel or an auction without bids. Upstream's `confirmAuction` took nothing, and
+  `endAuction` still paid the lease back (ClanHallAuction.java:473): every completed sale created the lease in Adena
+  from nothing (asset-service.md §11.29).
+- Change: `confirmAuction` destroys the deposit from the seller's clan warehouse (exact under the stack's lock) before it
+  registers the sale, and returns whether it did; the Auctioneer tells a clan that cannot pay, with retail's own
+  message, and keeps the pending sale. Every auctioneer keeps its own pending sales (Auctioneer.java:57), so two members
+  at two auctioneers can confirm two sales of one hall: confirmations take one lock, and a hall already for sale is
+  refused before anything is taken (upstream listed it twice; with a deposit, each would have paid). `endAuction`, `cancelAuction` and the auction without bids are unchanged: they
+  already return the deposit only when the auction completes normally.
+- Invariant: what a seller is paid back as its deposit, it paid; a completed sale creates no Adena.
+- Proof: `ClanHallDepositTest` (4/4 red on upstream: the deposit is not taken, a clan that cannot pay registers its
+  sale, a completed sale leaves the seller 500 000 Adena richer than its 90 %, a cancel keeps nothing; and
+  `aHallIsPutUpForSaleOnceWhoeverConfirmsIt`, red without the lock and the check: a second confirmation paid a second
+  deposit and listed the hall twice). An auction
+  registered before this patch paid no deposit and is still paid one at its end: that sale is a source, which the
+  counters post exactly.
+
+## CP-0030 An ended event's items go wherever they are loaded
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/network/holders/MailMessage.java`, `java/org/l2jmobius/gameserver/managers/MailManager.java`
+- Reason: `destroyItemsOnEnd` destroyed an ended event's items from online inventories (LongTimeEvent.java:551) and
+  deleted every other row of the item id by SQL (557); a copy loaded elsewhere kept living in memory: a clan warehouse
+  (always loaded), an online player's warehouse or freight, a summoned pet, a loaded mail attachment, the ground. It
+  stayed usable until the restart, and a claim or withdrawal carried it into an inventory (asset-service.md §11.30).
+  Online inventories were not swept whole either: of a non-stackable item the destruction asks for every copy, worn ones
+  included (Player.java:3726), from the unequipped copies alone (PlayerInventory.java:657), so a copy worn beside
+  another left both.
+- Change: before the deletion, every copy of the item id in those containers, and every copy an online inventory still
+  holds after upstream's destruction, is destroyed through its container, and a
+  copy on the ground decays as the auto-destroy task decays it; `MailMessage.getLoadedAttachments` reads a message's
+  attachments without loading them, and `MailManager.isLoaded` whether the mail manager exists without creating it:
+  an event that ended while the server was down is swept during script loading (LongTimeEvent.java:128), before
+  `MailManager` has its place in the boot order (GameServer.java:424), and a server with `AllowMail` off never loads it,
+  so the sweep reads mail only once it is loaded and no attachment can be loaded before that.
+- Invariant: after an event ends, no copy of its items is left in a container Mobius has loaded, but for one moved
+  concurrently from a container not yet swept into one already swept.
+- Proof: `EventEndTest` (6/7 red with the sweep's call removed: the clan warehouse, the player warehouse, a summoned
+  pet and a loaded mail attachment kept their copies, an inventory kept both copies of a sword when one was worn, and
+  a medal on the ground stayed; the seventh, two unworn copies, passes on upstream and guards it), each
+  moving the counters by the destroyed quantity once; truth's boot report is unchanged (`PausedWorldTest`: with the
+  mail manager read through `getInstance`, its load line moved ahead of the event's).
+
+## CP-0031 An auction that ends without bids leaves no row
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: a player's sale that ends without bids is dropped from memory only ("THIS MUST BE CONFIRMED",
+  ClanHallAuction.java:460-467): its `auction` row stays, so the hall's next sale fails its `INSERT` on the primary key
+  (logged, ClanHallAuction.java:545) and lives in memory only; at a restart the stale row comes back and ends again,
+  and the next sale and its bids' standing with it are gone. With CP-0029 that next sale has paid a deposit
+  (asset-service.md §11.31).
+- Change: the branch deletes the auction as a cancelled one is deleted (`deleteAuctionFromDB`: the row and the listing).
+- Invariant: a hall's sale is listed exactly when its row exists.
+- Proof: `ClanHallDepositTest.aSaleWithoutBidsKeepsItsDepositAndFreesTheHallForItsNextSale` (red on upstream: the row
+  stayed and the next sale's end date was never stored).

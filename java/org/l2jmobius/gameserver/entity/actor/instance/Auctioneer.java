@@ -146,7 +146,20 @@ public class Auctioneer extends Npc
 				try
 				{
 					final ClanHallAuction a = _pendingAuctions.get(clan.getHideoutId());
-					a.confirmAuction();
+					if (!a.confirmAuction()) // CP-0029: the hall is already for sale, or its deposit could not be paid
+					{
+						if (ClanHallAuctionManager.getInstance().getAuction(a.getId()) != null)
+						{
+							player.sendMessage("Invalid auction");
+						}
+						else
+						{
+							player.sendPacket(SystemMessageId.THERE_IS_NOT_ENOUGH_ADENA_IN_THE_CLAN_HALL_WAREHOUSE);
+						}
+						
+						return;
+					}
+					
 					_pendingAuctions.remove(clan.getHideoutId());
 				}
 				catch (Exception e)

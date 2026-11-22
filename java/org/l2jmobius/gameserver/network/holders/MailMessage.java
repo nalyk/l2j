@@ -337,6 +337,14 @@ public class MailMessage
 		return _attachments;
 	}
 	
+	/**
+	 * @return the attachments if they are loaded, without loading them (CP-0030)
+	 */
+	public synchronized Mail getLoadedAttachments()
+	{
+		return _attachments;
+	}
+	
 	public boolean hasAttachments()
 	{
 		return _hasAttachments;

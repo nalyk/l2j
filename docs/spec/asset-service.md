@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 13; signed off by Codex in amendment round 19; record in §12)
+- Status: draft (revision 14, under review; revision 13 signed off by Codex in amendment round 19; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -199,7 +199,7 @@ it guarantees, and what it only watches, are stated separately.
    writers may have changed since. Memory is the truth for an object Mobius has loaded: the loaded copies of the rows it
    locks are held under their leaf locks from its locking read until its posting, so none settles in between, and a
    deleted row whose copy is loaded counts out what that copy counted, never the row's stale quantity (the copy then
-   stops counting: an ended event's item in a loaded warehouse); a deleted row whose object memory had already counted
+   stops counting: an ended event's item moved during the event's sweep into a container already swept, CP-0030); a deleted row whose object memory had already counted
    out (destroyed, dropped or sold, its row not yet written: Mobius counts and deletes in two steps) counts nothing
    more, read under the row's lock, which Mobius's own deletion of the row waits behind, and kept until a write of the
    row holds nothing counted (a save that began before and wrote the older quantity keeps it; a destruction while the
@@ -229,6 +229,18 @@ it guarantees, and what it only watches, are stated separately.
    cash on delivery, RequestPostAttachment.java:183-256; auction refunds; freight; offline shops), so an exact live check
    would need an identity on every retail transfer; this is a deliberate limit, not a guarantee, and offsetting errors of
    equal size in one window can hide each other.
+
+   The buckets are built on the Fact Journal's telemetry capture (fact-journal.md §3.3-§3.4), not before it: a change
+   happens on hot paths (a soulshot, an arrow), where 02 §6 allows only an O(1) capture into a bounded, phase-accounted
+   buffer, so neither a stack walk nor a second capture ring of this module's own may attribute it. Until that capture
+   exists nothing is bucketed and `Asset.MoveImbalance` is never raised; the guaranteed part above stands alone. The
+   revision that builds them must also settle what the table does not yet say: a change is attributed to the outermost
+   site of its call (a transfer's target stack is created by `ItemManager.createItem` inside `transferItem`, so the
+   innermost site would split one move into a source and a move-out), which a site's own O(1) scope gives; a member with
+   rows of two classes (`Player.doPickupItem`, `ItemContainer.addItem`, `ClanHallAuction.returnItem`) needs its changes
+   told apart; a quantity a site computes apart (a refund's 10 %, a clamp) enters its balance; and a move whose two sides
+   are different calls (a bid taken in `setBid`, refunded in `removeBids`; mail cash on delivery) is marked unpaired and
+   never alarmed, or every bid and every delivery would raise it.
 
 **The shutdown boundary.** After Mobius's shutdown has disconnected every player and stopped its task pools
 (Shutdown.java:380, 403), and once those pools have terminated (`shutdownNow` only interrupts a running task; the
@@ -266,7 +278,9 @@ auction finishes, ItemAuction.java:428-477; the winning one was sunk, ItemAuctio
 clan-hall bids (`auction_bid.maxBid`, ClanHallAuction.java:326). Each bid transition is its own site in §2.7: placing a bid
 moves Adena into the bid holding; cancelling an item-auction bid moves it back; cancelling a clan-hall bid moves 90 % back
 and sinks 10 % (ClanHallAuction.java:292-317); winning an NPC's auction sinks the bid; winning a player-owned hall moves
-the bid to the seller (ClanHallAuction.java:470-473), with any clamp a sink.
+90 % of the bid to the seller and sinks 10 % (ClanHallAuction.java:472), with any clamp a sink. A player's sale sinks its
+deposit, the hall's lease, from its clan warehouse when it is put up, and the seller is given it back, a source bounded by
+that sink, only when a winner is found (ClanHallAuction.java:473); a cancel or an auction without bids keeps it (§11.29).
 
 ### 2.7 The site table
 
@@ -737,9 +751,35 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 28. **A clan-hall bid whose row could not be deleted was refunded anyway** (`cancelBid` and `removeBids` log a failed
     `DELETE` and go on to `returnItem`, ClanHallAuction.java:494-512, 403-431), so the bid stayed and was paid back, a
     second time at its next removal. Core patch: a bid is refunded only once its row is gone.
+29. **A clan hall put up for sale pays no deposit, and is paid one back** (`confirmAuction` takes nothing;
+    `endAuction` returns the lease to a player seller, ClanHallAuction.java:473). Retail's sale page
+    (`data/html/auction/AgitSale1.htm`) takes the deposit, the hall's lease, from the clan warehouse when the hall is put
+    up, returns it only when the auction completes normally, and keeps it on a cancel or an auction without bids: upstream
+    created the lease in Adena from nothing on every completed sale. Core patch: `confirmAuction` destroys the deposit
+    from the seller's clan warehouse before it registers the sale, and refuses a clan that cannot pay, and a hall already
+    for sale (each auctioneer keeps its own pending sales, so two members could confirm two sales of one hall, each
+    paying). An auction registered before the patch paid nothing and is still paid back: a source the counters post
+    exactly.
+30. **An ended event's items outlive it in memory** (`destroyItemsOnEnd` destroys online inventories' copies,
+    LongTimeEvent.java:551, then deletes every row of the item id, 557): a copy loaded elsewhere (a clan warehouse, a loaded
+    mail attachment, an online player's warehouse or freight, a summoned pet, the ground) stays usable until the
+    restart, and a claim or a withdrawal carries it into an inventory; and of a non-stackable item worn beside another
+    copy, an online inventory keeps both (the destruction asks the unequipped copies for every copy, Player.java:3726,
+    PlayerInventory.java:657). Core patch: those copies are destroyed through their containers before the deletion; one moved concurrently into a container already swept still outlives its row,
+    which the counters count out from what it counted (§2.6).
+31. **An auction that ends without bids keeps its row** (ClanHallAuction.java:460-467 drops it from memory only), so the
+    hall's next sale fails its `INSERT` (logged) and lives in memory only until a restart brings the stale row back. Core
+    patch: the auction is deleted as a cancelled one is, row and listing.
 
 ## 12. Review record
 
+- Revision 14 (amendment, under review): the two retail questions revision 13 left open are answered as core patches.
+  A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
+  creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are
+  destroyed wherever Mobius has them loaded (§11.30, CP-0030), so the census no longer reports a clan warehouse's copy
+  as the normal case. §2.6 and the site table say so. A sale that ends without bids is deleted with its row (§11.31,
+  CP-0031), so the hall's next sale, which now pays a deposit, is stored. §2.6's watched part is built on the Fact Journal's telemetry
+  capture (N5), since its changes happen on hot paths; the questions its attribution must answer are named there.
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

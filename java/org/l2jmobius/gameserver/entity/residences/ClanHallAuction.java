@@ -60,6 +60,9 @@ public class ClanHallAuction
 	private int _itemObjectId = 0;
 	private final long _itemQuantity = 0;
 	private String _itemType = "";
+	/** Serialises every sale's confirmation (CP-0029). */
+	private static final Object CONFIRMATIONS = new Object();
+	
 	private int _sellerId = 0;
 	private String _sellerClanName = "";
 	private String _sellerName = "";
@@ -478,8 +481,7 @@ public class ClanHallAuction
 				/**
 				 * If seller haven't sell ClanHall, auction removed, THIS MUST BE CONFIRMED
 				 */
-				final int aucId = ClanHallAuctionManager.getInstance().getAuctionIndex(_id);
-				ClanHallAuctionManager.getInstance().getAuctions().remove(aucId);
+				deleteAuctionFromDB(); // CP-0031: and its row, which upstream left to block the hall's next sale
 				return;
 			}
 			
@@ -539,9 +541,30 @@ public class ClanHallAuction
 	}
 	
 	/** Confirm an auction */
-	public void confirmAuction()
+	public boolean confirmAuction()
 	{
-		ClanHallAuctionManager.getInstance().getAuctions().add(this);
+		// CP-0029: the deposit, the hall's lease, is taken from the seller's clan warehouse when the hall is put up, as
+		// retail's sale page says (AgitSale1.htm); upstream never took it and paid it back at the end (endAuction). The
+		// destruction is exact under the stack's lock: a clan warehouse holding less than the deposit pays nothing. Each
+		// auctioneer keeps its own pending sales, so two members can confirm two sales of one hall: one lock for every
+		// confirmation, and a hall already for sale is not put up again (upstream listed it twice).
+		synchronized (CONFIRMATIONS)
+		{
+			if (ClanHallAuctionManager.getInstance().getAuction(_id) != null)
+			{
+				return false;
+			}
+			
+			final Clan seller = ClanTable.getInstance().getClanByName(_sellerClanName);
+			final long deposit = ClanHallTable.getInstance().getAuctionableHallById(_itemId).getLease();
+			if ((seller == null) || ((deposit > 0) && (seller.getWarehouse().destroyItemByItemId(ItemProcessType.FEE, ADENA_ID, deposit, null, null) == null)))
+			{
+				return false;
+			}
+			
+			ClanHallAuctionManager.getInstance().getAuctions().add(this);
+		}
+		
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("INSERT INTO auction (id, sellerId, sellerName, sellerClanName, itemType, itemId, itemObjectId, itemName, itemQuantity, startingBid, currentBid, endDate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"))
 		{
@@ -564,6 +587,7 @@ public class ClanHallAuction
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.load(): " + e.getMessage(), e);
 		}
+		return true;
 	}
 	
 	/**

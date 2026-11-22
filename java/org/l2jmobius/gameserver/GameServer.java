@@ -113,6 +113,7 @@ import org.l2jmobius.gameserver.entity.groups.matching.PartyMatchWaitingList;
 import org.l2jmobius.gameserver.entity.spawns.AutoSpawnHandler;
 import org.l2jmobius.gameserver.geoengine.GeoEngine;
 import org.l2jmobius.gameserver.handler.EffectHandler;
+import org.l2jmobius.gameserver.livingchronicle.LivingChronicle;
 import org.l2jmobius.gameserver.managers.AirShipManager;
 import org.l2jmobius.gameserver.managers.AntiFeedManager;
 import org.l2jmobius.gameserver.managers.BoatManager;
@@ -211,6 +212,7 @@ public class GameServer
 		
 		printSection("Database");
 		DatabaseFactory.init();
+		LivingChronicle.atDatabase(); // the startup census and the existence counters, before any other step (CP-0027)
 		
 		printSection("ThreadPool");
 		ThreadPool.init();
@@ -428,6 +430,8 @@ public class GameServer
 		{
 			CustomMailManager.getInstance();
 		}
+		
+		LivingChronicle.beforeLogin(); // recovery, once the managers are up and before any server-start listener or login (CP-0027)
 		
 		if (EventDispatcher.getInstance().hasListener(EventType.ON_SERVER_START))
 		{

@@ -115,6 +115,17 @@ public class MercTicketManager
 	// returns the castleId for the passed ticket item id
 	public int getTicketCastleId(int itemId)
 	{
+		return ticketCastleId(itemId);
+	}
+	
+	/**
+	 * The castle of a mercenary ticket, or 0 for any other item (CP-0024): static, so it can be asked while this manager is
+	 * still being built, as {@link #load()} drops the placed tickets it restores.
+	 * @param itemId an item id
+	 * @return the castle id, or 0
+	 */
+	public static int ticketCastleId(int itemId)
+	{
 		for (int i = 0; i < 9; i++) // CastleID`s from 1 to 9 minus;
 		{
 			for (int i2 = 0; i2 < 50; i2 += 10)

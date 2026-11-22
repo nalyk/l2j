@@ -21,7 +21,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,6 +34,8 @@ import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.taskmanagers.ItemsAutoDestroyTaskManager;
 
 /**
@@ -94,6 +99,7 @@ public class ItemsOnGroundManager implements Runnable
 		}
 		
 		// Add items to world.
+		final List<Integer> staleTickets = new ArrayList<>();
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("SELECT object_id,item_id,count,enchant_level,x,y,z,drop_time,equipable FROM itemsonground"))
 		{
@@ -103,13 +109,18 @@ public class ItemsOnGroundManager implements Runnable
 				Item item;
 				while (rs.next())
 				{
+					if (MercTicketManager.ticketCastleId(rs.getInt(2)) > 0)
+					{
+						staleTickets.add(rs.getInt(1)); // saved before CP-0024; MercTicketManager rebuilds it
+						continue;
+					}
 					item = new Item(rs.getInt(1), rs.getInt(2));
 					World.addObject(item);
 					
 					// this check and..
-					if (item.isStackable() && (rs.getInt(3) > 1))
+					if (item.isStackable() && (rs.getLong(3) > 1)) // CP-0024: a long, as the column is
 					{
-						item.setCount(rs.getInt(3));
+						item.setCount(rs.getLong(3));
 					}
 					
 					// This, are really necessary?
@@ -127,6 +138,7 @@ public class ItemsOnGroundManager implements Runnable
 					item.setSpawned(true);
 					World.addVisibleObject(item, item.getWorldRegion());
 					_items.add(item);
+					item.restoreOnSavedGround(); // a restore: in the census already (CP-0022)
 					count++;
 					
 					// Add to ItemsAutoDestroy only items not protected.
@@ -144,6 +156,24 @@ public class ItemsOnGroundManager implements Runnable
 			LOGGER.log(Level.SEVERE, getClass().getSimpleName() + ": Error while loading ItemsOnGround " + e.getMessage(), e);
 		}
 		
+		if (!staleTickets.isEmpty()) // CP-0024: their rows go, counted out of the saved ground
+		{
+			final String in = String.join(",", Collections.nCopies(staleTickets.size(), "?"));
+			try (Connection con = DatabaseFactory.getConnection();
+				PreparedStatement ps = con.prepareStatement("DELETE FROM itemsonground WHERE object_id IN (" + in + ")"))
+			{
+				for (int i = 0; i < staleTickets.size(); i++)
+				{
+					ps.setInt(i + 1, staleTickets.get(i));
+				}
+				Census.counting(con, Census.Holding.GROUND, "object_id IN (" + in + ")", staleTickets.toArray(), ps::executeUpdate);
+			}
+			catch (Exception e)
+			{
+				LOGGER.log(Level.WARNING, getClass().getSimpleName() + ": Could not remove saved mercenary tickets " + staleTickets + ": " + e.getMessage(), e);
+			}
+		}
+		
 		if (GeneralConfig.EMPTY_DROPPED_ITEM_TABLE_AFTER_LOAD)
 		{
 			emptyTable();
@@ -157,14 +187,34 @@ public class ItemsOnGroundManager implements Runnable
 			return;
 		}
 		
-		_items.add(item);
+		// CP-0024: a placed mercenary ticket is MercTicketManager's (castle_siege_guards), which rebuilds it at startup, and a
+		// cursed weapon is CursedWeaponsManager's; saved here too, a ticket was restored twice.
+		final CursedWeaponsManager cursed = CursedWeaponsManager.getInstance();
+		if ((MercTicketManager.ticketCastleId(item.getId()) > 0) || ((cursed != null) && cursed.isCursed(item.getId())))
+		{
+			return;
+		}
+		
+		synchronized (EconomyCounter.lockFor(item.getObjectId())) // the membership and its count settle together (CP-0022)
+		{
+			if (_items.add(item))
+			{
+				item.setOnSavedGround(true); // the saved ground is a census holding
+			}
+		}
 	}
 	
 	public void removeObject(Item item)
 	{
 		if (GeneralConfig.SAVE_DROPPED_ITEM)
 		{
-			_items.remove(item);
+			synchronized (EconomyCounter.lockFor(item.getObjectId())) // (CP-0022)
+			{
+				if (_items.remove(item))
+				{
+					item.setOnSavedGround(false);
+				}
+			}
 		}
 	}
 	

@@ -33,6 +33,7 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.holders.ItemInfo;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.network.SystemMessageId;
 import org.l2jmobius.gameserver.network.serverpackets.ServerPacket;
 import org.l2jmobius.gameserver.network.serverpackets.SystemMessage;
@@ -203,7 +204,11 @@ public class ItemAuction
 			ps.setLong(5, _endingTime);
 			ps.setByte(6, _auctionState.getStateId());
 			ps.setByte(7, _auctionState.getStateId());
-			ps.execute();
+			// Finishing pays the winning bid (CP-0022): the bid holding is counted where its rows are written.
+			Census.counting(con, Census.Holding.ITEM_AUCTION_BIDS, "item_auction_bid.auctionId = ?", new Object[]
+			{
+				_auctionId
+			}, ps::executeUpdate);
 		}
 		catch (SQLException e)
 		{
@@ -237,7 +242,11 @@ public class ItemAuction
 				ps.setLong(4, bid.getLastBid());
 			}
 			
-			ps.execute();
+			// A bid placed, raised or cancelled (CP-0022): the bid holding is counted where its rows are written.
+			Census.counting(con, Census.Holding.ITEM_AUCTION_BIDS, "item_auction_bid.auctionId = ?", new Object[]
+			{
+				_auctionId
+			}, ps::executeUpdate);
 		}
 		catch (SQLException e)
 		{

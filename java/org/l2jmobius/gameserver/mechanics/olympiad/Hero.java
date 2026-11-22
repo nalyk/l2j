@@ -52,6 +52,7 @@ import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.entity.itemcontainer.Inventory;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.managers.CastleManager;
 import org.l2jmobius.gameserver.mechanics.siege.Castle;
 import org.l2jmobius.gameserver.network.SystemMessageId;
@@ -871,7 +872,7 @@ public class Hero
 		try (Connection con = DatabaseFactory.getConnection();
 			Statement s = con.createStatement())
 		{
-			s.executeUpdate(DELETE_ITEMS);
+			Census.counting(con, Census.Holding.ITEMS, Census.whereOf(DELETE_ITEMS), new Object[0], () -> s.executeUpdate(DELETE_ITEMS)); // (CP-0025)
 		}
 		catch (SQLException e)
 		{

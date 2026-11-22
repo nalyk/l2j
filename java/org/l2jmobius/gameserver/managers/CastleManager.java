@@ -38,6 +38,7 @@ import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.clan.ClanMember;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.mechanics.sevensigns.SevenSigns;
 import org.l2jmobius.gameserver.mechanics.siege.Castle;
 
@@ -307,7 +308,11 @@ public class CastleManager
 			{
 				ps.setInt(1, member.getObjectId());
 				ps.setInt(2, circletId);
-				ps.execute();
+				Census.counting(con, Census.Holding.ITEMS, "owner_id = ? AND item_id = ?", new Object[]
+				{
+					member.getObjectId(),
+					circletId
+				}, ps::executeUpdate); // (CP-0025)
 			}
 			catch (Exception e)
 			{

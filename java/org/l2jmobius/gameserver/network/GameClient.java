@@ -41,6 +41,7 @@ import org.l2jmobius.gameserver.data.xml.SecondaryAuthData;
 import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.livingchronicle.asset.DeletionGuard;
 import org.l2jmobius.gameserver.livingchronicle.asset.PendingMarks;
 import org.l2jmobius.gameserver.network.holders.CharacterInfoHolder;
@@ -449,7 +450,10 @@ public class GameClient extends Client<org.l2jmobius.commons.network.Connection<
 			try (PreparedStatement ps = con.prepareStatement("DELETE FROM items WHERE owner_id=?"))
 			{
 				ps.setInt(1, objectId);
-				ps.execute();
+				Census.counting(con, Census.Holding.ITEMS, "owner_id = ?", new Object[]
+				{
+					objectId
+				}, ps::executeUpdate); // (CP-0025)
 			}
 			
 			try (PreparedStatement ps = con.prepareStatement("DELETE FROM merchant_lease WHERE player_id=?"))

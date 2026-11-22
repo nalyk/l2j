@@ -84,10 +84,8 @@ public final class CustodyCheck
 					Violations.record(connection, _stager, orphan.getKey(), "INV03", violation);
 				}
 			}
-			connection.setAutoCommit(false);
-			_stager.stage(connection, null, List.of(new AssetFact("Asset.RecoveryCompleted", "asset.recovery", Json.object(Map.of("custodies_checked", custodies.size(), "violations", violations.size())))));
-			connection.commit();
 		}
+		// Recovery (AssetRecovery) records Asset.RecoveryCompleted once, with this check, the pending marks and the deliveries.
 		return new Report(custodies.size(), List.copyOf(violations));
 	}
 

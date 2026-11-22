@@ -590,3 +590,21 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Proof: `DropSeamTest` (6/7 red with the seam ignoring its routers: a router's positions dropped anyway, the second
   router offered everything, kills unnumbered; the seventh, a router that throws, passes and guards that it takes
   nothing); `DropLockTest`, `PausedWorldTest` and the other behaviour locks unchanged.
+
+## CP-0033 The crafting boundary
+
+- Files: `java/org/l2jmobius/gameserver/managers/RecipeManager.java`
+- Reason: PACT's contractual craft (pact.md §4.3) validates, rolls with its own keyed draw and applies through the Asset
+  Service, but every retail rule of a craft lives inside one runnable, `RecipeItemMaker` (RecipeManager.java:171-782):
+  validation, the success and masterwork draws (:416, :679), the materials (:608-660) and the product (:669-686)
+  (blueprint 03 §4.3; asset-service.md §11.34).
+- Change: `RecipeManager.Craft` holds them as functions: `refusal` (what `requestMakeItem` and the maker's constructor
+  refuse), `successRate`, `masterworkApplies`, `masterworkRatePpm` (min(100, ceil(rarity × CraftMasterworkChanceRate)) ×
+  10 000, the probability retail's draw has), `materials`, `product`, and `consumeStats` (what finishing a craft takes).
+  The maker takes its success rate, its masterwork rule and product, its materials and its stat cost from them; its two
+  `Rnd` draws stay where they are, in the same order. `refusal` mirrors the maker's checks, which also send their
+  packets and abort; its test pins it to them.
+- Invariant: a retail craft draws the same numbers in the same order and makes the same thing as upstream.
+- Proof: `CraftBoundaryTest.retailCraftIsUnchanged` (110 crafts recorded on upstream before the change, green before
+  and after); `theRatesAreRetails`, `materialsAndProductAreRetails`, `refusalMatchesWhatRetailRefuses`,
+  `consumeStatsTakesWhatRetailTakes` (red without `Craft`: they do not compile).

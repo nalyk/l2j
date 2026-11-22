@@ -99,6 +99,70 @@ class CraftBoundaryTest
 		assertEquals(RECORDED, outcomes.toString().trim(), "retail's craft, recorded on upstream (CP-0033 must not change it)");
 	}
 
+	private static RecipeList recipe(int id)
+	{
+		return RecipeData.getInstance().getRecipeList(id);
+	}
+
+	@Test
+	void theRatesAreRetails()
+	{
+		assertEquals(70, RecipeManager.Craft.successRate(recipe(EARRING)));
+		final double rate = org.l2jmobius.gameserver.config.PlayerConfig.CRAFT_MASTERWORK_CHANCE_RATE;
+		assertEquals(Math.min(100, (int) Math.ceil(4 * rate)) * 10_000, RecipeManager.Craft.masterworkRatePpm(recipe(EARRING)), "rarity 4: retail's draw Rnd.get(100) < 4 x rate");
+		assertEquals(0, RecipeManager.Craft.masterworkRatePpm(recipe(ARROWS)), "no rare product");
+		final boolean masterwork = org.l2jmobius.gameserver.config.PlayerConfig.CRAFT_MASTERWORK;
+		org.l2jmobius.gameserver.config.PlayerConfig.CRAFT_MASTERWORK = false;
+		try
+		{
+			assertEquals(0, RecipeManager.Craft.masterworkRatePpm(recipe(EARRING)), "a rare product of another item needs CraftMasterwork");
+			assertEquals(Math.min(100, (int) Math.ceil(20 * rate)) * 10_000, RecipeManager.Craft.masterworkRatePpm(recipe(44)), "a rare product of the same item does not");
+		}
+		finally
+		{
+			org.l2jmobius.gameserver.config.PlayerConfig.CRAFT_MASTERWORK = masterwork;
+		}
+	}
+
+	@Test
+	void materialsAndProductAreRetails()
+	{
+		assertEquals(java.util.List.of("1864x4", "1869x2"), RecipeManager.Craft.materials(recipe(ARROWS)).stream().map(h -> h.getId() + "x" + h.getCount()).toList());
+		assertEquals("17x500", text(RecipeManager.Craft.product(recipe(ARROWS), false)));
+		assertEquals("17x500", text(RecipeManager.Craft.product(recipe(ARROWS), true)), "no rare product: a masterwork roll changes nothing");
+		assertEquals("856x1", text(RecipeManager.Craft.product(recipe(EARRING), false)));
+		assertEquals("12710x1", text(RecipeManager.Craft.product(recipe(EARRING), true)));
+	}
+
+	private static String text(org.l2jmobius.gameserver.entity.item.holders.ItemHolder holder)
+	{
+		return holder.getId() + "x" + holder.getCount();
+	}
+
+	@Test
+	void refusalMatchesWhatRetailRefuses()
+	{
+		_crafter.setCurrentMp(_crafter.getMaxMp());
+		assertEquals(null, RecipeManager.Craft.refusal(_crafter, recipe(EARRING)), "retail would start it");
+		assertEquals(RecipeManager.Craft.Refusal.NOT_IN_BOOK, RecipeManager.Craft.refusal(_crafter, recipe(44)));
+		_crafter.setCurrentMp(0);
+		assertEquals(RecipeManager.Craft.Refusal.NOT_ENOUGH_MP, RecipeManager.Craft.refusal(_crafter, recipe(EARRING)));
+		_crafter.setCurrentMp(_crafter.getMaxMp());
+		final Player novice = TestPlayers.create(PlayerClass.FIGHTER, 60);
+		novice.addSkill(SkillData.getInstance().getSkill(172, 1), false);
+		novice.registerDwarvenRecipeList(recipe(EARRING), false);
+		novice.setCurrentMp(novice.getMaxMp());
+		assertEquals(RecipeManager.Craft.Refusal.LOW_SKILL, RecipeManager.Craft.refusal(novice, recipe(EARRING)), "level 6 needs Create Item 6");
+	}
+
+	@Test
+	void consumeStatsTakesWhatRetailTakes()
+	{
+		_crafter.setCurrentMp(_crafter.getMaxMp());
+		RecipeManager.Craft.consumeStats(_crafter, recipe(EARRING));
+		assertEquals(174, (int) (_crafter.getMaxMp() - _crafter.getCurrentMp()), "the earring's MP, as the recorded crafts cost");
+	}
+
 	/** Recorded on upstream c9ca4c31's RecipeManager. */
 	private static final String RECORDED = "17x500@30 17x500@30 17x500@30 17x500@30 17x500@30 17x500@30 17x500@30 17x500@30 " +
 		"17x500@30 17x500@30 856x1@174 856x1@174 -@174 856x1@174 856x1@174 856x1@174 " +

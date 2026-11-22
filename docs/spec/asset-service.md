@@ -820,7 +820,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     `materials`, `product`, `consumeStats`), the maker calls them, and its two `Rnd` draws stay where and as they are.
     The masterwork rate in parts per million is `min(100, ceil(rarity × CraftMasterworkChanceRate)) × 10 000` when the
     recipe has a rare product that applies (its id is the product's, or `CraftMasterwork` is on), else 0: the
-    probability retail's draw `Rnd.get(100) < rarity × rate` has.
+    probability retail's draw `Rnd.get(100) < rarity × rate` has. A recipe without a rare product has rare id 0 and
+    rarity 0, so retail draws for it and never wins; the maker keeps that draw, part of its order of draws.
 
 ## 12. Review record
 

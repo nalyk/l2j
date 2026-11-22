@@ -38,6 +38,7 @@ import org.l2jmobius.gameserver.data.xml.RecipeData;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.ItemTemplate;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
+import org.l2jmobius.gameserver.entity.item.holders.ItemHolder;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.entity.item.recipe.ManufactureItem;
 import org.l2jmobius.gameserver.entity.item.recipe.RecipeItemInfo;
@@ -164,6 +165,177 @@ public class RecipeManager
 			else
 			{
 				maker.run();
+			}
+		}
+	}
+	
+	/**
+	 * Retail's crafting rules, callable apart (CP-0033, blueprint 03 §4.3): what {@link RecipeItemMaker} validates, the two
+	 * rates it draws against, the materials it takes and the product it makes. The maker uses the rates, the materials,
+	 * the product and the stat cost from here and keeps its own two {@code Rnd} draws where they are; a contractual craft
+	 * (pact.md §4.3) validates, rolls with its own keyed draw and applies through the Asset Service.
+	 */
+	public static final class Craft
+	{
+		/** Why retail would not start a craft. */
+		public enum Refusal
+		{
+			DISABLED,
+			IN_COMBAT,
+			NOT_IN_BOOK,
+			DEAD,
+			BUSY,
+			NO_INGREDIENTS,
+			LOW_SKILL,
+			NOT_ENOUGH_HP,
+			NOT_ENOUGH_MP
+		}
+		
+		private Craft()
+		{
+		}
+		
+		/**
+		 * @param crafter the character who would craft, for itself
+		 * @param recipe the recipe
+		 * @return why retail would refuse to start it (requestMakeItem and the maker's constructor), or null if it would not
+		 */
+		public static Refusal refusal(Player crafter, RecipeList recipe)
+		{
+			if (!PlayerConfig.IS_CRAFTING_ENABLED)
+			{
+				return Refusal.DISABLED;
+			}
+			
+			if ((crafter.isInCombat() && !PlayerConfig.CRAFTING_IN_COMBAT) || crafter.isInDuel())
+			{
+				return Refusal.IN_COMBAT;
+			}
+			
+			if (!crafter.getDwarvenRecipeBook().contains(recipe) && !crafter.getCommonRecipeBook().contains(recipe))
+			{
+				return Refusal.NOT_IN_BOOK;
+			}
+			
+			if (crafter.isAlikeDead())
+			{
+				return Refusal.DEAD;
+			}
+			
+			if (crafter.isProcessingTransaction())
+			{
+				return Refusal.BUSY;
+			}
+			
+			if (recipe.getRecipes().length == 0)
+			{
+				return Refusal.NO_INGREDIENTS;
+			}
+			
+			if (recipe.getLevel() > crafter.getSkillLevel(skillId(recipe)))
+			{
+				return Refusal.LOW_SKILL;
+			}
+			
+			for (RecipeStatHolder statUse : recipe.getStatUse())
+			{
+				if ((statUse.getType() == StatType.HP) && (crafter.getCurrentHp() <= cost(statUse, 1)))
+				{
+					return Refusal.NOT_ENOUGH_HP;
+				}
+				
+				if ((statUse.getType() == StatType.MP) && (crafter.getCurrentMp() < cost(statUse, 1)))
+				{
+					return Refusal.NOT_ENOUGH_MP;
+				}
+			}
+			
+			return null;
+		}
+		
+		/** @return the craft skill a recipe needs */
+		public static int skillId(RecipeList recipe)
+		{
+			return recipe.isDwarvenRecipe() ? CommonSkill.CREATE_DWARVEN.getId() : CommonSkill.CREATE_COMMON.getId();
+		}
+		
+		/** @return the success rate in percent, as retail draws {@code Rnd.get(100) < rate} */
+		public static int successRate(RecipeList recipe)
+		{
+			return recipe.getSuccessRate();
+		}
+		
+		/**
+		 * @return whether retail draws for a masterwork: its rare id is not -1, and is the product's or {@code CraftMasterwork}
+		 *         is on. A recipe without a rare product has rare id 0 and rarity 0, so retail draws and never wins: the draw
+		 *         is kept, since it is part of retail's order of draws.
+		 */
+		public static boolean masterworkApplies(RecipeList recipe)
+		{
+			final int rareProdId = recipe.getRareItemId();
+			return (rareProdId != -1) && ((rareProdId == recipe.getItemId()) || PlayerConfig.CRAFT_MASTERWORK);
+		}
+		
+		/**
+		 * @return the masterwork rate in parts per million: the probability retail's draw
+		 *         {@code Rnd.get(100) < rarity x CraftMasterworkChanceRate} has, {@code min(100, ceil(rarity x rate)) x 10 000}
+		 */
+		public static int masterworkRatePpm(RecipeList recipe)
+		{
+			if (!masterworkApplies(recipe))
+			{
+				return 0;
+			}
+			
+			return (int) Math.min(100, Math.max(0, Math.ceil(recipe.getRarity() * PlayerConfig.CRAFT_MASTERWORK_CHANCE_RATE))) * 10_000;
+		}
+		
+		/** @return the materials, in the recipe's order, those with a positive quantity */
+		public static List<ItemHolder> materials(RecipeList recipe)
+		{
+			final List<ItemHolder> materials = new ArrayList<>();
+			for (RecipeHolder ingredient : recipe.getRecipes())
+			{
+				if (ingredient.getQuantity() > 0)
+				{
+					materials.add(new ItemHolder(ingredient.getItemId(), ingredient.getQuantity()));
+				}
+			}
+			
+			return materials;
+		}
+		
+		/** @return the product: the rare one for a masterwork that applies to a real rare product, else the recipe's */
+		public static ItemHolder product(RecipeList recipe, boolean masterwork)
+		{
+			if (masterwork && masterworkApplies(recipe) && (recipe.getRareItemId() > 0))
+			{
+				return new ItemHolder(recipe.getRareItemId(), recipe.getRareCount());
+			}
+			
+			return new ItemHolder(recipe.getItemId(), recipe.getCount());
+		}
+		
+		/** @return what a stat use costs in one of {@code passes} creation passes */
+		static double cost(RecipeStatHolder statUse, int passes)
+		{
+			return statUse.getValue() / passes;
+		}
+		
+		/** Takes the HP and MP a craft costs, as retail takes them when it finishes (calculateStatUse, reducing). */
+		public static void consumeStats(Player crafter, RecipeList recipe)
+		{
+			final Skill skill = crafter.getKnownSkill(skillId(recipe));
+			for (RecipeStatHolder statUse : recipe.getStatUse())
+			{
+				if (statUse.getType() == StatType.HP)
+				{
+					crafter.reduceCurrentHp(cost(statUse, 1), crafter, skill);
+				}
+				else if (statUse.getType() == StatType.MP)
+				{
+					crafter.reduceCurrentMp(cost(statUse, 1));
+				}
 			}
 		}
 	}
@@ -413,7 +585,7 @@ public class RecipeManager
 			
 			if (_items != null)
 			{
-				final boolean success = Rnd.get(100) < _recipeList.getSuccessRate();
+				final boolean success = Rnd.get(100) < Craft.successRate(_recipeList);
 				if (success)
 				{
 					rewardPlayer();
@@ -545,7 +717,7 @@ public class RecipeManager
 			boolean ret = true;
 			for (RecipeStatHolder statUse : _recipeList.getStatUse())
 			{
-				final double modifiedValue = statUse.getValue() / _creationPasses;
+				final double modifiedValue = Craft.cost(statUse, _creationPasses);
 				if (statUse.getType() == StatType.HP)
 				{
 					// we do not want to kill the player, so its CurrentHP must be greater than the reduce value
@@ -607,32 +779,27 @@ public class RecipeManager
 		
 		private List<RecipeItemInfo> listItems(boolean remove)
 		{
-			final RecipeHolder[] recipes = _recipeList.getRecipes();
 			final Inventory inv = _target.getInventory();
 			final List<RecipeItemInfo> materials = new ArrayList<>();
 			SystemMessage sm;
-			for (RecipeHolder recipe : recipes)
+			for (ItemHolder recipe : Craft.materials(_recipeList)) // CP-0033: the materials, as Craft gives them
 			{
-				if (recipe.getQuantity() > 0)
+				final Item item = inv.getItemByItemId(recipe.getId());
+				final long itemQuantityAmount = item == null ? 0 : item.getCount();
+				
+				// check materials
+				if (itemQuantityAmount < recipe.getCount())
 				{
-					final Item item = inv.getItemByItemId(recipe.getItemId());
-					final long itemQuantityAmount = item == null ? 0 : item.getCount();
-					
-					// check materials
-					if (itemQuantityAmount < recipe.getQuantity())
-					{
-						sm = new SystemMessage(SystemMessageId.YOU_ARE_MISSING_S2_S1_REQUIRED_TO_CREATE_THAT);
-						sm.addItemName(recipe.getItemId());
-						sm.addLong(recipe.getQuantity() - itemQuantityAmount);
-						_target.sendPacket(sm);
-						
-						abort();
-						return null;
-					}
-					
-					// make new temporary object, just for counting purposes
-					materials.add(new RecipeItemInfo(item, recipe.getQuantity()));
+					sm = new SystemMessage(SystemMessageId.YOU_ARE_MISSING_S2_S1_REQUIRED_TO_CREATE_THAT);
+					sm.addItemName(recipe.getId());
+					sm.addLong(recipe.getCount() - itemQuantityAmount);
+					_target.sendPacket(sm);
+					abort();
+					return null;
 				}
+				
+				// make new temporary object, just for counting purposes
+				materials.add(new RecipeItemInfo(item, (int) recipe.getCount()));
 			}
 			
 			if (remove)
@@ -673,14 +840,12 @@ public class RecipeManager
 			int itemCount = _recipeList.getCount();
 			final ItemTemplate template = ItemData.getInstance().getTemplate(itemId);
 			
-			// check that the current recipe has a rare production or not
-			if ((rareProdId != -1) && ((rareProdId == itemId) || PlayerConfig.CRAFT_MASTERWORK))
+			// check that the current recipe has a rare production or not (CP-0033: the rule and the product from Craft)
+			if (Craft.masterworkApplies(_recipeList) && (Rnd.get(100) < (_recipeList.getRarity() * PlayerConfig.CRAFT_MASTERWORK_CHANCE_RATE)))
 			{
-				if (Rnd.get(100) < (_recipeList.getRarity() * PlayerConfig.CRAFT_MASTERWORK_CHANCE_RATE))
-				{
-					itemId = rareProdId;
-					itemCount = _recipeList.getRareCount();
-				}
+				final ItemHolder rare = Craft.product(_recipeList, true);
+				itemId = rare.getId();
+				itemCount = (int) rare.getCount();
 			}
 			
 			_target.getInventory().addItem(ItemProcessType.CRAFT, itemId, itemCount, _target, _player);

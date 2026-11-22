@@ -144,23 +144,23 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
 
 **Interfaces:**
 - Produces (nested `public static final class Craft` in `RecipeManager`):
-  `static SystemMessageId refusal(Player crafter, RecipeList recipe)` (null when retail would start the craft: alive,
+  `static Refusal refusal(Player crafter, RecipeList recipe)` (an enum: several retail refusals send no message id) (null when retail would start the craft: alive,
   not in a transaction, crafting enabled, the recipe in the crafter's book, `recipe.getLevel() <= ` skill level, HP and
   MP as `calculateStatUse(false, false)` checks); `static int successRate(RecipeList)`;
   `static int masterworkRatePpm(RecipeList)` (0 unless `rareItemId != -1 && (rareItemId == itemId || CraftMasterwork)`);
   `static List<ItemHolder> materials(RecipeList)` (quantities > 0, recipe order); `static ItemHolder product(RecipeList, boolean masterwork)`;
   `static void consumeStats(Player crafter, RecipeList recipe)` (what `calculateStatUse(false, true)` takes).
 
-- [ ] **Step 1: Write the characterization test first, against upstream:** `retailCraftIsUnchanged` crafts 200 times
+- [x] **Step 1: Write the characterization test first, against upstream:** `retailCraftIsUnchanged` crafts 200 times
   with a bound `KeyedRandom` stream (recipe 1: Wooden Arrow, and one recipe with a rare product) recording success,
   product id and count, materials left and MP; store the sequence as expected values in the test. GREEN on upstream.
-- [ ] **Step 2: Write the failing tests:** `theRatesAreRetails` (`successRate` = `getSuccessRate()`; `masterworkRatePpm`
+- [x] **Step 2: Write the failing tests:** `theRatesAreRetails` (`successRate` = `getSuccessRate()`; `masterworkRatePpm`
   = `min(100, ceil(rarity × rate)) × 10 000` when eligible, 0 for Review Focus 4); `materialsAndProductAreRetails`;
   `refusalMatchesWhatRetailRefuses` (unknown recipe, low skill, too little MP, dead). RED (no `Craft`).
-- [ ] **Step 3: Implement** `Craft` and rewrite `RecipeItemMaker` to call it (`listItems`, `rewardPlayer`,
+- [x] **Step 3: Implement** `Craft` and rewrite `RecipeItemMaker` to call it (`listItems`, `rewardPlayer`,
   `calculateStatUse` share the rules; the two `Rnd` draws stay where they are).
-- [ ] **Step 4:** `CraftBoundaryTest` GREEN, `retailCraftIsUnchanged` still GREEN (Review Focus 5); behaviour locks GREEN.
-- [ ] **Step 5:** CP-0033 ledgered (revert proof: the new tests fail with `Craft` removed); commit
+- [x] **Step 4:** `CraftBoundaryTest` GREEN, `retailCraftIsUnchanged` still GREEN (Review Focus 5); behaviour locks GREEN.
+- [x] **Step 5:** CP-0033 ledgered (revert proof: the new tests fail with `Craft` removed); commit
   `Core: CP-0033 the crafting boundary`.
 
 ### Task 6: `craft` and owner rows

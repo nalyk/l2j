@@ -45,9 +45,22 @@ public class MailManager
 	
 	private final Map<Integer, MailMessage> _messages = new ConcurrentHashMap<>();
 	
+	/** Set once the instance has loaded (CP-0030), so a caller can tell without creating it. */
+	private static volatile boolean _loaded;
+	
 	protected MailManager()
 	{
 		load();
+		_loaded = true;
+	}
+	
+	/**
+	 * @return whether the instance exists, read without creating it (CP-0030: a server with mail off never loads it, and
+	 *         an event ending at boot runs before it is loaded)
+	 */
+	public static boolean isLoaded()
+	{
+		return _loaded;
 	}
 	
 	private void load()

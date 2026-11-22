@@ -23,6 +23,7 @@ package org.l2jmobius.gameserver.mechanics.script;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -42,23 +43,35 @@ import org.w3c.dom.Node;
 import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.commons.util.IXmlReader;
+import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.data.sql.AnnouncementsTable;
+import org.l2jmobius.gameserver.data.sql.ClanTable;
 import org.l2jmobius.gameserver.data.xml.ItemData;
 import org.l2jmobius.gameserver.data.xml.NpcData;
 import org.l2jmobius.gameserver.entity.Location;
 import org.l2jmobius.gameserver.entity.World;
+import org.l2jmobius.gameserver.entity.WorldObject;
 import org.l2jmobius.gameserver.entity.actor.Npc;
 import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.entity.actor.instance.Pet;
 import org.l2jmobius.gameserver.entity.actor.holders.npc.EventDropHolder;
+import org.l2jmobius.gameserver.entity.clan.Clan;
+import org.l2jmobius.gameserver.entity.item.enums.ItemLocation;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
+import org.l2jmobius.gameserver.entity.itemcontainer.Mail;
 import org.l2jmobius.gameserver.entity.spawns.Spawn;
 import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.managers.EventDropManager;
+import org.l2jmobius.gameserver.managers.ItemsOnGroundManager;
+import org.l2jmobius.gameserver.managers.MailManager;
 import org.l2jmobius.gameserver.mechanics.announce.EventAnnouncement;
 import org.l2jmobius.gameserver.mechanics.events.Containers;
 import org.l2jmobius.gameserver.mechanics.events.EventType;
 import org.l2jmobius.gameserver.mechanics.events.holders.OnServerStart;
 import org.l2jmobius.gameserver.mechanics.events.listeners.ConsumerEventListener;
+import org.l2jmobius.gameserver.network.holders.MailMessage;
 
 /**
  * Parent class for long time events.<br>
@@ -553,7 +566,11 @@ public class LongTimeEvent extends Script
 					}
 				}
 				
+				// CP-0030: and every other copy loaded in memory, which the deletion below would leave usable until the restart.
+				destroyLoaded(itemId);
+				
 				// Update database.
+				final Set<Integer> mails = new HashSet<>(); // CP-0030: the messages whose rows this deletes
 				try (Connection con = DatabaseFactory.getConnection();
 					PreparedStatement statement = con.prepareStatement("DELETE FROM items WHERE item_id=?"))
 				{
@@ -561,13 +578,148 @@ public class LongTimeEvent extends Script
 					Census.counting(con, Census.Holding.ITEMS, "item_id = ?", new Object[]
 					{
 						itemId
-					}, statement::executeUpdate); // counted before and after, posted on commit (CP-0025)
+					}, () ->
+					{
+						mails.addAll(mailsHolding(con, itemId)); // read with the rows it deletes, under their locks when counted
+						return statement.executeUpdate();
+					}); // counted before and after, posted on commit (CP-0025)
 				}
 				catch (SQLException e)
 				{
 					LOGGER.warning(e.toString());
 				}
+				
+				emptied(mails);
 			}
+		}
+	}
+	
+	/**
+	 * Destroys every copy of an item still loaded after the online inventories' item-id destruction (CP-0030): clan
+	 * warehouses, loaded mail attachments, online players' inventories (copies that destruction left), warehouses,
+	 * freight and buyback lists, every pet World keeps, and the ground. A copy moved concurrently from a container not yet swept into one already
+	 * swept is missed, and outlives the event as upstream's did.
+	 * @param itemId the item id
+	 */
+	private static void destroyLoaded(int itemId)
+	{
+		for (Clan clan : ClanTable.getInstance().getClans())
+		{
+			destroyAll(clan.getWarehouse(), itemId);
+		}
+		
+		if (MailManager.isLoaded()) // never loaded here: with mail off, or at boot before its place in the boot order
+		{
+			for (MailMessage message : MailManager.getInstance().getMessages())
+			{
+				final Mail attachments = message.getLoadedAttachments();
+				if (attachments != null)
+				{
+					destroyAll(attachments, itemId);
+					if (attachments.getSize() == 0)
+					{
+						message.removeAttachments(); // nothing left: retail's claim would charge cash on delivery for it
+					}
+				}
+			}
+		}
+		
+		for (Player player : World.getPlayers())
+		{
+			// What the item-id destruction above left: of a non-stackable item, it asks the unequipped copies for every
+			// copy, so one worn beside another leaves both.
+			for (Item item : player.getInventory().getAllItemsByItemId(itemId))
+			{
+				player.destroyItem(ItemProcessType.DESTROY, item, item.getCount(), player, true);
+			}
+			
+			destroyAll(player.getWarehouse(), itemId);
+			destroyAll(player.getFreight(), itemId);
+			if (player.hasRefund()) // the buyback list, from which RequestRefundItem returns an item to the inventory
+			{
+				destroyAll(player.getRefund(), itemId);
+			}
+		}
+		
+		// Every pet World keeps: summoned, or dead and kept loaded for an owner who logged out (Pet.java:1157-1165).
+		for (Pet pet : World.getPets())
+		{
+			if (pet.getInventory() != null)
+			{
+				for (Item item : pet.getInventory().getAllItemsByItemId(itemId))
+				{
+					pet.destroyItem(ItemProcessType.DESTROY, item.getObjectId(), item.getCount(), null, false);
+				}
+			}
+		}
+		
+		for (WorldObject object : World.getVisibleObjects())
+		{
+			if ((object instanceof Item item) && (item.getId() == itemId) && (item.getItemLocation() == ItemLocation.VOID) && item.isSpawned())
+			{
+				item.decayMe();
+				if (GeneralConfig.SAVE_DROPPED_ITEM)
+				{
+					ItemsOnGroundManager.getInstance().removeObject(item);
+				}
+			}
+		}
+	}
+	
+	/** @return the messages whose attachment rows hold the item (CP-0030), read on the deletion's own connection */
+	private static Set<Integer> mailsHolding(Connection con, int itemId) throws SQLException
+	{
+		final Set<Integer> mails = new HashSet<>();
+		try (PreparedStatement ps = con.prepareStatement("SELECT DISTINCT loc_data FROM items WHERE item_id = ? AND loc = 'MAIL'"))
+		{
+			ps.setInt(1, itemId);
+			try (ResultSet rs = ps.executeQuery())
+			{
+				while (rs.next())
+				{
+					mails.add(rs.getInt(1));
+				}
+			}
+		}
+		return mails;
+	}
+	
+	/**
+	 * A message the deletion left without attachments has none (CP-0030): retail's claim would otherwise charge its cash
+	 * on delivery for an empty container (RequestPostAttachment.java:118-186). Its row says so whether or not the mail
+	 * manager is loaded; a loaded message is told through its own removal.
+	 * @param mails the messages that held the item
+	 */
+	private static void emptied(Set<Integer> mails)
+	{
+		for (int messageId : mails)
+		{
+			try (Connection con = DatabaseFactory.getConnection();
+				PreparedStatement ps = con.prepareStatement("UPDATE messages SET hasAttachments = 'false' WHERE messageId = ? AND NOT EXISTS (SELECT 1 FROM items WHERE loc = 'MAIL' AND loc_data = ?)"))
+			{
+				ps.setInt(1, messageId);
+				ps.setInt(2, messageId);
+				if ((ps.executeUpdate() > 0) && MailManager.isLoaded())
+				{
+					final MailMessage message = MailManager.getInstance().getMessage(messageId);
+					if ((message != null) && (message.getAttachments() != null))
+					{
+						message.removeAttachments(); // loads the attachments, empty now, and drops them
+					}
+				}
+			}
+			catch (SQLException e)
+			{
+				LOGGER.warning(e.toString());
+			}
+		}
+	}
+	
+	private static void destroyAll(ItemContainer container, int itemId)
+	{
+		for (Item item : container.getAllItemsByItemId(itemId))
+		{
+			container.destroyItem(ItemProcessType.DESTROY, item, item.getCount(), null, null);
 		}
 	}
 	

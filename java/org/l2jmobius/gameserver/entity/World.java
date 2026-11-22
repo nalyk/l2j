@@ -301,6 +301,14 @@ public class World
 	}
 	
 	/**
+	 * @return every pet World keeps, summoned or dead and kept for an owner who logged out (CP-0030)
+	 */
+	public static Collection<Pet> getPets()
+	{
+		return _petsInstance.values();
+	}
+	
+	/**
 	 * @param ownerId ID of the owner
 	 * @return the pet instance from the given ownerId.
 	 */

@@ -94,8 +94,10 @@
    Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
    `$(ls a/*)` has the same newline problem: use `files=$(echo a/* b/*)`, and scp every edited file (specs and plans too)
    before the gate, or the md5 check fails at commit.
-5. **[2026-11-19] Never wait with `pgrep -f <pattern>` from a shell whose own command line contains the pattern**
+5. **[2026-11-19] Never wait with `pgrep -f <pattern>` (or kill with `pkill -f`) from a shell whose own command line contains the pattern**
    Do instead: start the jobs with `&`, collect `$!`, and `wait` on those pids; a `while pgrep -f "codex exec …"` loop matches its own wrapper shell and never ends.
+   To stop a gate on the build host: `docker stop` its `lc-build` container by id (testcontainers' ryuk then reaps its
+   MariaDB); an `ssh host 'pkill -f "timeout 5400 ./build.sh"'` killed its own ssh shell (exit 255, 2026-11-22).
 6. **[2026-11-19] `git rev-parse --short` takes one revision**
    Do instead: loop `for r in a b; do git rev-parse --short $r; done`; with two it fails and stops an `&&` chain silently.
 
@@ -109,4 +111,6 @@
 2. **[2026-11-19] Git hygiene CONTINUOUSLY, and validate it**
    Do instead: follow Execution & Validation item 1 after every green step, without being asked.
 3. **[2026-11-18] `main` and history belong to the user**
-   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, and again for the review answers + first intake; 2026-11-20 for N1); merge with `--no-ff -F <file>` (merge does not read `-F -`), and check `git rev-parse main^{tree}` equals the gated tree before pushing; never force-push or delete branches without it.
+   Do instead: merge into `main` only on the user's say (given 2026-11-19 for N2, and again for the review answers + first intake; 2026-11-20 for N1; 2026-11-22 for N4 part 5, "you know what and why we are doing, chose best"); merge with `--no-ff -F <file>` (merge does not read `-F -`), and check `git rev-parse main^{tree}` equals the gated tree before pushing; never force-push or delete branches without it.
+   Build the merge on `origin/main`, never the local `main` (on 2026-11-22 it was 11 commits behind: part 4 had been merged on
+   origin from another checkout): `git fetch origin`, then `git worktree add --detach ../l2j-merge origin/main` and merge there.

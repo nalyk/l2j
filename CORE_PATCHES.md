@@ -480,3 +480,96 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Invariant: the shutdown census is taken only once no task pool runs.
 - Proof: `SeamsTest.theBoundaryWaitsForTheTaskPoolsMobiusStopped` (the boundary follows `ThreadPool.shutdown` and calls
   `awaitTermination`); `LivingChronicleBootTest.aBoundaryWhileMobiusTasksStillRunTakesNoShutdownCensus`.
+
+## CP-0029 A clan hall put up for sale pays its deposit
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`, `java/org/l2jmobius/gameserver/entity/actor/instance/Auctioneer.java`
+- Reason: retail's sale page (`data/html/auction/AgitSale1.htm`) says the deposit, the hall's lease, "is taken out of the
+  clan warehouse at the moment the clan hall is put up for auction and is returned if the auction is completed
+  normally", and is lost on a cancel or an auction without bids. Upstream's `confirmAuction` took nothing, and
+  `endAuction` still paid the lease back (ClanHallAuction.java:473): every completed sale created the lease in Adena
+  from nothing (asset-service.md §11.29).
+- Change: `confirmAuction` destroys the deposit from the seller's clan warehouse before it registers the sale, and
+  returns what it did (`Confirmation`: confirmed, not enough Adena, already for sale, not written, unresolved); the
+  Auctioneer keeps the pending sale and says which: retail's not-enough-Adena message, "Invalid auction" when nothing was
+  taken, and for an unresolved write that the deposit is held until the next start checks the row. The destruction is retail's own (`destroyItemByItemId`, as the
+  bids' `takeItem` pays): a clan holding exactly the lease pays its whole stack, which shares upstream's race of a
+  whole-stack destruction with an addition into the stack (asset-service.md §11.32). Every auctioneer keeps its own
+  pending sales (Auctioneer.java:57), so two members at two auctioneers can confirm two sales of one hall: one lock
+  serialises every confirmation and every deletion of a sale (CP-0031), and a hall listed, or whose row still exists,
+  is refused before anything is taken. `endAuction`, `cancelAuction` and the auction without bids already return the
+  deposit only when the auction completes normally.
+- Invariant: what a seller is paid back as its deposit, it paid, and exactly the deposit; a completed sale creates no Adena.
+- Proof: `ClanHallDepositTest` (red on upstream: the deposit is not taken, a clan that cannot pay registers its sale, a
+  completed sale leaves the seller 500 000 Adena richer than its 90 %, a cancel keeps nothing; red without the lock
+  and checks: a second confirmation paid a second deposit and listed the hall twice, a hall whose row remained was put
+  up again; `aClanHoldingExactlyTheDepositPaysIt` guards the page's rule). An auction registered before this patch paid no
+  deposit and is still paid one at its end: that sale is a source, which the counters post exactly.
+
+## CP-0030 An ended event's items go wherever they are loaded
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/network/holders/MailMessage.java`, `java/org/l2jmobius/gameserver/managers/MailManager.java`, `java/org/l2jmobius/gameserver/entity/World.java`
+- Reason: `destroyItemsOnEnd` destroyed an ended event's items from online inventories (LongTimeEvent.java:551) and
+  deleted every other row of the item id by SQL (557); a copy loaded elsewhere kept living in memory: a clan warehouse
+  (always loaded), an online player's warehouse, freight or buyback list, a pet (summoned, or dead and kept loaded for an
+  owner who logged out, Pet.java:1157-1165, so a returning owner finds it, Player.java:7410), a loaded mail attachment,
+  the ground. It stayed usable until the restart, and a claim, a withdrawal or a buyback carried it into an inventory
+  (asset-service.md §11.30). Online inventories were not swept whole either: of a non-stackable item the destruction
+  asks for every copy, worn ones included (Player.java:3726), from the unequipped copies alone (PlayerInventory.java:657),
+  so a copy worn beside another left both. And a message whose attachments the event emptied, loaded or by the SQL
+  deletion, still said it had some, so retail's claim charged its cash on delivery for an empty container
+  (RequestPostAttachment.java:118-186).
+- Change: before the deletion, every copy of the item id in those containers, and every copy an online inventory still
+  holds after upstream's destruction, is destroyed through its container, and a copy on the ground decays as the
+  auto-destroy task decays it; a message left without attachments, by the sweep or by the deletion, has them removed
+  (its row's `hasAttachments` set false whether or not the mail manager is loaded, a loaded message told through
+  `removeAttachments`; the deletion reads which messages it empties inside its own counted work, under the rows'
+  locks when the counters run); every pet `World` keeps is swept, through `World.getPets`. `MailMessage.getLoadedAttachments` reads a message's attachments without loading them, and
+  `MailManager.isLoaded` whether the mail manager exists without creating it: an event that ended while the server was
+  down is swept during script loading (LongTimeEvent.java:128), before `MailManager` has its place in the boot order
+  (GameServer.java:424), and a server with `AllowMail` off never loads it, so the sweep reads mail only once it is
+  loaded and no attachment can be loaded before that.
+- Invariant: after an event ends, no copy of its items is left in a container Mobius has loaded, but for one moved
+  concurrently from a container not yet swept into one already swept; no message claims attachments it lost to it.
+- Proof: `EventEndTest` (red with the sweep's call removed: the clan warehouse, the player warehouse, a summoned pet and
+  a loaded mail attachment kept their copies, an inventory kept both copies of a sword when one was worn, a medal on the
+  ground stayed, a dead pet of a logged-out owner kept its copy; red without the buyback sweep and the mail emptying: the buyback list kept its copy, a loaded and an
+  unloaded cash-on-delivery mail kept their attachment flag; two unworn copies and a mail keeping its other
+  attachments pass on upstream and guard it), each moving the counters by the destroyed quantity once; truth's boot
+  report is unchanged (`PausedWorldTest`: with the mail manager read through `getInstance`, its load line moved ahead
+  of the event's).
+
+## CP-0031 A player's clan-hall sale ends on its date and leaves no row
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: a sale put up by a player is never scheduled to end (`startAutoTask` runs only for a sale loaded at startup,
+  ClanHallAuction.java:142-146; the constructor of a new sale, 149, and `confirmAuction`, 522, do not call it), so it
+  ends only after a restart. And a player's sale that ends without bids is dropped from memory only ("THIS MUST BE
+  CONFIRMED", ClanHallAuction.java:460-467): its `auction` row stays, so the hall's next sale fails its `INSERT` on the
+  primary key (logged, 545) and lives in memory only; at a restart the stale row comes back and ends again. With CP-0029
+  that next sale has paid a deposit (asset-service.md §11.31).
+- Change: `confirmAuction` writes the sale's row before it lists the sale, under the confirmations' lock. A failed write
+  is resolved by reading the row on a fresh connection (a lost acknowledgement may have written it), up to five times
+  a second apart: present, the sale is listed; absent, it is refused and the deposit given back; never readable, it is
+  refused and the deposit kept, logged (a refund of a written row would pay the deposit twice; a restart loads the row
+  with its deposit paid, or finds none). It then schedules the sale's end, and keeps the task: deleting a sale
+  (`deleteAuctionFromDB`, which now deletes the row before the listing, under the same lock) marks it over and cancels
+  its task; `endAuction`, `cancelAuction`, `setBid` and `cancelBid` run under the auction's monitor and do nothing for a
+  sale already over, so a timer that outlives a cancel neither pays the cancelled seller nor deletes the hall's next
+  sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. A sale closes
+  only once its bids are gone: a cancel and an end delete the bid rows first, and while that fails (CP-0026 refunds
+  nothing then) the sale stays open, nothing is paid and the hall changes no owner; `cancelAuction` returns whether it
+  cancelled, and the Auctioneer tells the seller either way (upstream always said "Your auction has been canceled"), so
+  a cancel is asked again; an end is retried a minute later. The branch without bids deletes the auction as a cancelled one is.
+- Invariant: a sale ends on its date, once; a hall's sale is listed exactly when its row exists, but after a failed
+  `DELETE`, which the next confirmation then refuses.
+- Proof: `ClanHallDepositTest`: `aConfirmedSaleEndsOnItsDate` (red on upstream: still listed after its end date),
+  `aSaleWithoutBidsKeepsItsDepositAndFreesTheHallForItsNextSale` (red on upstream: the row stayed and the next sale's
+  end date was never stored), `aCancelledSaleIsNotEndedByItsTimer` (red with the timer alone: the cancelled seller was
+  paid 527 000), `aCancelledSalesTimerLeavesTheNextSaleAlone` (red: the next sale's row was deleted),
+  `aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded` (red on upstream: listed, the deposit kept),
+  `aSaleWhoseRowCannotBeResolvedIsNotListedAndKeepsItsDeposit` (red when an unreadable row counted as written: listed),
+  `aBidAfterTheSaleClosedTakesNothing` (red on upstream: 30 000 taken into a deleted auction, its bid row stranded),
+  `aCancelWhoseBidsCannotBeDeletedCanBeRetried` and `anEndWhoseBidsCannotBeDeletedIsRetried` (red when the sale closed
+  before its bids: the bid stranded, the sale closed for good), `theAuctioneerSaysWhenACancelFailed` (through the
+  Auctioneer's bypass, its messages recorded: red on upstream's message, the sale still open).

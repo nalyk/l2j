@@ -120,6 +120,44 @@ class ClanHallDepositTest
 	}
 
 	@Test
+	void aClanHoldingExactlyTheDepositCannotPayIt()
+	{
+		// a whole-stack destruction races a deposit into the stack (ItemContainer.transferItem grows a target stack
+		// without its monitor), so the deposit is only ever a part of the clan's Adena
+		final Clan seller = clan(lease());
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+		assertFalse(auction.confirmAuction(), "refused");
+		assertEquals(lease(), seller.getWarehouse().getAdena(), "nothing taken");
+	}
+
+	@Test
+	void aHallWhoseRowStillExistsIsNotPutUpAgain() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		final ClanHallAuction stale = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+		assertTrue(stale.confirmAuction());
+		ClanHallAuctionManager.getInstance().getAuctions().remove(stale); // listed no more, its row not yet deleted
+		final ClanHallAuction next = new ClanHallAuction(HALL, seller, 7_200_000, 20_000, "Deposit Hall");
+		assertFalse(next.confirmAuction(), "its INSERT would fail on the row and the sale live in memory only");
+		assertEquals(1_000_000 - lease(), seller.getWarehouse().getAdena(), "one deposit");
+	}
+
+	@Test
+	void aConfirmedSaleEndsOnItsDate() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 300, 10_000, "Deposit Hall");
+		assertTrue(auction.confirmAuction());
+		final long deadline = System.currentTimeMillis() + 10_000;
+		while (registered() && (System.currentTimeMillis() < deadline))
+		{
+			Thread.sleep(100);
+		}
+		assertFalse(registered(), "upstream scheduled a sale's end only when it was loaded at startup");
+		assertEquals(-1, rows("id"), "ended without bids: deleted");
+	}
+
+	@Test
 	void theDepositComesBackWhenTheAuctionEndsWithAWinner()
 	{
 		final Clan seller = clan(1_000_000);
@@ -162,11 +200,11 @@ class ClanHallDepositTest
 	@Test
 	void aSaleWithoutBidsKeepsItsDepositAndFreesTheHallForItsNextSale() throws Exception
 	{
-		final Clan seller = clan(1_000_000);
+		final Clan seller = clan(2_000_000);
 		final ClanHallAuction unsold = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
 		assertTrue(unsold.confirmAuction());
 		unsold.endAuction();
-		assertEquals(1_000_000 - lease(), seller.getWarehouse().getAdena(), "retail: no bids, no deposit back");
+		assertEquals(2_000_000 - lease(), seller.getWarehouse().getAdena(), "retail: no bids, no deposit back");
 		assertFalse(registered());
 		assertEquals(-1, rows("id"), "upstream left the row, so the hall's next sale could not be written");
 		final ClanHallAuction next = new ClanHallAuction(HALL, seller, 7_200_000, 20_000, "Deposit Hall");

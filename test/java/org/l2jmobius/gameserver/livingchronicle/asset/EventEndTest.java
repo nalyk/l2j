@@ -15,6 +15,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.data.sql.ClanTable;
 import org.l2jmobius.gameserver.data.xml.NpcData;
 import org.l2jmobius.gameserver.entity.World;
@@ -91,6 +92,10 @@ class EventEndTest
 
 	private static long held(ItemContainer container, int itemId)
 	{
+		if (container == null)
+		{
+			return 0; // a message whose attachments were removed has none
+		}
 		long count = 0;
 		for (Item item : container.getAllItemsByItemId(itemId))
 		{
@@ -187,6 +192,63 @@ class EventEndTest
 		endEvent(MEDAL);
 		assertTrue(!medal.isSpawned(), "upstream left it on the ground until it decayed");
 		assertEquals(before, counted(MEDAL), "the unsaved ground is no counted holding");
+	}
+
+	@Test
+	void aBuybackListLosesTheEventsItems() throws Exception
+	{
+		final boolean allowed = GeneralConfig.ALLOW_REFUND;
+		GeneralConfig.ALLOW_REFUND = true;
+		try
+		{
+			final Player player = online();
+			player.getRefund().addItem(ItemProcessType.NONE, MEDAL, 2, player, null);
+			endEvent(MEDAL);
+			assertEquals(0, held(player.getRefund(), MEDAL), "RequestRefundItem would have bought it back after the event");
+		}
+		finally
+		{
+			GeneralConfig.ALLOW_REFUND = allowed;
+		}
+	}
+
+	private static MailMessage cashOnDelivery(Player receiver, int medals) throws Exception
+	{
+		final MailMessage mail = new MailMessage(online().getObjectId(), receiver.getObjectId(), true, "For sale", "Medals.", 1_000);
+		mail.createAttachments().addItem(ItemProcessType.NONE, MEDAL, medals, null, null);
+		MailManager.getInstance().sendMessage(mail);
+		return mail;
+	}
+
+	@Test
+	void aLoadedCashOnDeliveryMailEmptiedByTheEventHasNothingToClaim() throws Exception
+	{
+		final MailMessage mail = cashOnDelivery(online(), 3);
+		endEvent(MEDAL);
+		assertTrue(!mail.hasAttachments(), "retail's claim would charge 1 000 Adena for an empty delivery");
+	}
+
+	@Test
+	void anUnloadedCashOnDeliveryMailEmptiedByTheEventHasNothingToClaim() throws Exception
+	{
+		final MailMessage mail = cashOnDelivery(online(), 3);
+		final Method unload = MailMessage.class.getDeclaredMethod("unloadAttachments");
+		unload.setAccessible(true);
+		unload.invoke(mail);
+		assertTrue(mail.getLoadedAttachments() == null, "the attachments are unloaded");
+		endEvent(MEDAL);
+		assertTrue(!mail.hasAttachments(), "its rows were deleted by the purge");
+	}
+
+	@Test
+	void aMailKeepingOtherAttachmentsKeepsThem() throws Exception
+	{
+		final Player receiver = online();
+		final MailMessage mail = cashOnDelivery(receiver, 3);
+		mail.getAttachments().addItem(ItemProcessType.NONE, SWORD, 1, null, null);
+		endEvent(MEDAL);
+		assertTrue(mail.hasAttachments());
+		assertEquals(1, held(mail.getAttachments(), SWORD));
 	}
 
 	@Test

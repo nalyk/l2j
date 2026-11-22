@@ -240,7 +240,9 @@ it guarantees, and what it only watches, are stated separately.
    rows of two classes (`Player.doPickupItem`, `ItemContainer.addItem`, `ClanHallAuction.returnItem`) needs its changes
    told apart; a quantity a site computes apart (a refund's 10 %, a clamp) enters its balance; and a move whose two sides
    are different calls (a bid taken in `setBid`, refunded in `removeBids`; mail cash on delivery) is marked unpaired and
-   never alarmed, or every bid and every delivery would raise it.
+   never alarmed, or every bid and every delivery would raise it; and a window the journal writes flagged `stalled`
+   (fact-journal.md §3.3-§3.4) holds only part of its changes, so the bucket rows must carry that flag and a stalled
+   window must neither count toward the two consecutive windows nor be read as balanced: it restarts the count.
 
 **The shutdown boundary.** After Mobius's shutdown has disconnected every player and stopped its task pools
 (Shutdown.java:380, 403), and once those pools have terminated (`shutdownNow` only interrupts a running task; the
@@ -756,20 +758,29 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     (`data/html/auction/AgitSale1.htm`) takes the deposit, the hall's lease, from the clan warehouse when the hall is put
     up, returns it only when the auction completes normally, and keeps it on a cancel or an auction without bids: upstream
     created the lease in Adena from nothing on every completed sale. Core patch: `confirmAuction` destroys the deposit
-    from the seller's clan warehouse before it registers the sale, and refuses a clan that cannot pay, and a hall already
-    for sale (each auctioneer keeps its own pending sales, so two members could confirm two sales of one hall, each
+    from the seller's clan warehouse before it registers the sale, always as a part of the clan's Adena under the stack's
+    monitor (a deposit into the stack grows it without that monitor, ItemContainer.java:376, so a whole-stack destruction
+    could take it too: a clan holding exactly the lease is refused, by one Adena the patch's only departure from the
+    page); it refuses a clan that cannot pay, and a hall listed or whose row remains, under one lock with every deletion
+    of a sale (each auctioneer keeps its own pending sales, so two members could confirm two sales of one hall, each
     paying). An auction registered before the patch paid nothing and is still paid back: a source the counters post
     exactly.
 30. **An ended event's items outlive it in memory** (`destroyItemsOnEnd` destroys online inventories' copies,
     LongTimeEvent.java:551, then deletes every row of the item id, 557): a copy loaded elsewhere (a clan warehouse, a loaded
-    mail attachment, an online player's warehouse or freight, a summoned pet, the ground) stays usable until the
-    restart, and a claim or a withdrawal carries it into an inventory; and of a non-stackable item worn beside another
-    copy, an online inventory keeps both (the destruction asks the unequipped copies for every copy, Player.java:3726,
-    PlayerInventory.java:657). Core patch: those copies are destroyed through their containers before the deletion; one moved concurrently into a container already swept still outlives its row,
-    which the counters count out from what it counted (§2.6).
-31. **An auction that ends without bids keeps its row** (ClanHallAuction.java:460-467 drops it from memory only), so the
-    hall's next sale fails its `INSERT` (logged) and lives in memory only until a restart brings the stale row back. Core
-    patch: the auction is deleted as a cancelled one is, row and listing.
+    mail attachment, an online player's warehouse, freight or buyback list, a summoned pet, the ground) stays usable
+    until the restart, and a claim, a withdrawal or a buyback carries it into an inventory; of a non-stackable item worn
+    beside another copy, an online inventory keeps both (the destruction asks the unequipped copies for every copy,
+    Player.java:3726, PlayerInventory.java:657); and a message the event emptied still says it has attachments, so the
+    claim charges its cash on delivery for nothing (RequestPostAttachment.java:118-186). Core patch: those copies are
+    destroyed through their containers before the deletion, and a message left without attachments has them removed,
+    in its row whether or not the mail manager is loaded; one copy moved concurrently into a container already swept
+    still outlives its row, which the counters count out from what it counted (§2.6).
+31. **A player's sale never ends before a restart, and one that ends without bids keeps its row.** `startAutoTask` runs
+    only for a sale loaded at startup (ClanHallAuction.java:142-146; not for a new sale, 149, or at `confirmAuction`,
+    522), and the branch without bids drops the sale from memory only (460-467), so the hall's next sale fails its
+    `INSERT` (logged) and lives in memory only until a restart brings the stale row back. Core patch: a confirmed sale
+    is scheduled to end; an auction without bids is deleted as a cancelled one is, its row before its listing, under the
+    confirmations' lock.
 
 ## 12. Review record
 
@@ -780,6 +791,14 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   as the normal case. §2.6 and the site table say so. A sale that ends without bids is deleted with its row (§11.31,
   CP-0031), so the hall's next sale, which now pays a deposit, is stored. §2.6's watched part is built on the Fact Journal's telemetry
   capture (N5), since its changes happen on hot paths; the questions its attribution must answer are named there.
+- Amendment round 20 (Codex), NO SIGN-OFF: the deposit's whole-stack destruction could take a concurrent deposit into
+  the stack (1); a sale's deletion removed its listing before its row, outside the confirmations' lock, so a concurrent
+  confirmation could pay and fail its `INSERT` (2); a confirmed sale was never scheduled to end (3, upstream's); the
+  sweep missed the buyback list (4); a cash-on-delivery mail the event emptied could still be paid for (5); the deferral
+  did not say what a stalled window does to the alarm (6). Fixed (still revision 14): the deposit is always a part of
+  the clan's Adena, taken under the stack's monitor; confirmations refuse a hall listed or with a row, and deletions take
+  the same lock, row first; a confirmed sale is scheduled; the buyback list is swept; an emptied message has its
+  attachments removed, loaded or not; a stalled window restarts the alarm's count.
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

@@ -23,6 +23,7 @@ package org.l2jmobius.gameserver.mechanics.script;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -569,6 +570,7 @@ public class LongTimeEvent extends Script
 				destroyLoaded(itemId);
 				
 				// Update database.
+				final Set<Integer> mails = mailsHolding(itemId); // CP-0030
 				try (Connection con = DatabaseFactory.getConnection();
 					PreparedStatement statement = con.prepareStatement("DELETE FROM items WHERE item_id=?"))
 				{
@@ -582,6 +584,8 @@ public class LongTimeEvent extends Script
 				{
 					LOGGER.warning(e.toString());
 				}
+				
+				emptied(mails);
 			}
 		}
 	}
@@ -608,6 +612,10 @@ public class LongTimeEvent extends Script
 				if (attachments != null)
 				{
 					destroyAll(attachments, itemId);
+					if (attachments.getSize() == 0)
+					{
+						message.removeAttachments(); // nothing left: retail's claim would charge cash on delivery for it
+					}
 				}
 			}
 		}
@@ -623,6 +631,10 @@ public class LongTimeEvent extends Script
 			
 			destroyAll(player.getWarehouse(), itemId);
 			destroyAll(player.getFreight(), itemId);
+			if (player.hasRefund()) // the buyback list, from which RequestRefundItem returns an item to the inventory
+			{
+				destroyAll(player.getRefund(), itemId);
+			}
 			final Summon summon = player.getSummon();
 			if ((summon != null) && summon.isPet())
 			{
@@ -642,6 +654,60 @@ public class LongTimeEvent extends Script
 				{
 					ItemsOnGroundManager.getInstance().removeObject(item);
 				}
+			}
+		}
+	}
+	
+	/** @return the messages whose attachment rows hold the item (CP-0030), read before the deletion */
+	private static Set<Integer> mailsHolding(int itemId)
+	{
+		final Set<Integer> mails = new HashSet<>();
+		try (Connection con = DatabaseFactory.getConnection();
+			PreparedStatement ps = con.prepareStatement("SELECT DISTINCT loc_data FROM items WHERE item_id = ? AND loc = 'MAIL'"))
+		{
+			ps.setInt(1, itemId);
+			try (ResultSet rs = ps.executeQuery())
+			{
+				while (rs.next())
+				{
+					mails.add(rs.getInt(1));
+				}
+			}
+		}
+		catch (SQLException e)
+		{
+			LOGGER.warning(e.toString());
+		}
+		return mails;
+	}
+	
+	/**
+	 * A message the deletion left without attachments has none (CP-0030): retail's claim would otherwise charge its cash
+	 * on delivery for an empty container (RequestPostAttachment.java:118-186). Its row says so whether or not the mail
+	 * manager is loaded; a loaded message is told through its own removal.
+	 * @param mails the messages that held the item
+	 */
+	private static void emptied(Set<Integer> mails)
+	{
+		for (int messageId : mails)
+		{
+			try (Connection con = DatabaseFactory.getConnection();
+				PreparedStatement ps = con.prepareStatement("UPDATE messages SET hasAttachments = 'false' WHERE messageId = ? AND NOT EXISTS (SELECT 1 FROM items WHERE loc = 'MAIL' AND loc_data = ?)"))
+			{
+				ps.setInt(1, messageId);
+				ps.setInt(2, messageId);
+				if ((ps.executeUpdate() > 0) && MailManager.isLoaded())
+				{
+					final MailMessage message = MailManager.getInstance().getMessage(messageId);
+					if ((message != null) && (message.getAttachments() != null))
+					{
+						message.removeAttachments(); // loads the attachments, empty now, and drops them
+					}
+				}
+			}
+			catch (SQLException e)
+			{
+				LOGGER.warning(e.toString());
 			}
 		}
 	}

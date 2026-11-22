@@ -40,6 +40,7 @@ import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
+import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
 import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
@@ -452,16 +453,20 @@ public class ClanHallAuction
 	/** Remove auctions */
 	public void deleteAuctionFromDB()
 	{
-		ClanHallAuctionManager.getInstance().getAuctions().remove(this);
-		try (Connection con = DatabaseFactory.getConnection();
-			PreparedStatement ps = con.prepareStatement("DELETE FROM auction WHERE itemId=?"))
+		synchronized (CONFIRMATIONS) // CP-0031: the row, then the listing, so a confirmation never sees one without the other
 		{
-			ps.setInt(1, _itemId);
-			ps.execute();
-		}
-		catch (Exception e)
-		{
-			LOGGER.log(Level.SEVERE, "Exception: Auction.deleteFromDB(): " + e.getMessage(), e);
+			try (Connection con = DatabaseFactory.getConnection();
+				PreparedStatement ps = con.prepareStatement("DELETE FROM auction WHERE itemId=?"))
+			{
+				ps.setInt(1, _itemId);
+				ps.execute();
+			}
+			catch (Exception e)
+			{
+				LOGGER.log(Level.SEVERE, "Exception: Auction.deleteFromDB(): " + e.getMessage(), e);
+			}
+			
+			ClanHallAuctionManager.getInstance().getAuctions().remove(this);
 		}
 	}
 	
@@ -544,20 +549,19 @@ public class ClanHallAuction
 	public boolean confirmAuction()
 	{
 		// CP-0029: the deposit, the hall's lease, is taken from the seller's clan warehouse when the hall is put up, as
-		// retail's sale page says (AgitSale1.htm); upstream never took it and paid it back at the end (endAuction). The
-		// destruction is exact under the stack's lock: a clan warehouse holding less than the deposit pays nothing. Each
+		// retail's sale page says (AgitSale1.htm); upstream never took it and paid it back at the end (endAuction). Each
 		// auctioneer keeps its own pending sales, so two members can confirm two sales of one hall: one lock for every
-		// confirmation, and a hall already for sale is not put up again (upstream listed it twice).
+		// confirmation and every deletion, and a hall listed or still with a row is not put up again.
 		synchronized (CONFIRMATIONS)
 		{
-			if (ClanHallAuctionManager.getInstance().getAuction(_id) != null)
+			if ((ClanHallAuctionManager.getInstance().getAuction(_id) != null) || hasRow())
 			{
 				return false;
 			}
 			
 			final Clan seller = ClanTable.getInstance().getClanByName(_sellerClanName);
 			final long deposit = ClanHallTable.getInstance().getAuctionableHallById(_itemId).getLease();
-			if ((seller == null) || ((deposit > 0) && (seller.getWarehouse().destroyItemByItemId(ItemProcessType.FEE, ADENA_ID, deposit, null, null) == null)))
+			if ((seller == null) || ((deposit > 0) && !payDeposit(seller.getWarehouse(), deposit)))
 			{
 				return false;
 			}
@@ -587,7 +591,47 @@ public class ClanHallAuction
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.load(): " + e.getMessage(), e);
 		}
+		
+		startAutoTask(); // CP-0031: upstream scheduled a sale's end only when it loaded the sale at startup
 		return true;
+	}
+	
+	/**
+	 * Destroys the deposit as part of the clan's Adena, never the whole stack (CP-0029): a deposit into the stack grows
+	 * it without the stack's monitor (ItemContainer.transferItem), so a whole-stack destruction could take that deposit
+	 * too; decreases take the monitor, so under it a part stays a part.
+	 */
+	private static boolean payDeposit(ItemContainer warehouse, long deposit)
+	{
+		final Item adena = warehouse.getItemByItemId(ADENA_ID);
+		if (adena == null)
+		{
+			return false;
+		}
+		
+		synchronized (adena)
+		{
+			return (warehouse.getItemByObjectId(adena.getObjectId()) == adena) && !adena.isRetired() && (adena.getCount() > deposit) && (warehouse.destroyItem(ItemProcessType.FEE, adena, deposit, null, null) != null);
+		}
+	}
+	
+	/** @return whether this hall's sale still has its row (CP-0031), read under the confirmation lock */
+	private boolean hasRow()
+	{
+		try (Connection con = DatabaseFactory.getConnection();
+			PreparedStatement ps = con.prepareStatement("SELECT 1 FROM auction WHERE id = ?"))
+		{
+			ps.setInt(1, _id);
+			try (ResultSet rs = ps.executeQuery())
+			{
+				return rs.next();
+			}
+		}
+		catch (Exception e)
+		{
+			LOGGER.log(Level.WARNING, "Exception: Auction.hasRow(): " + e.getMessage(), e);
+			return true; // unreadable: refuse the sale rather than risk a second one
+		}
 	}
 	
 	/**

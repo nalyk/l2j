@@ -119,6 +119,8 @@ public class Item extends WorldObject
 	private long _posted;
 	/** Its row was deleted by a counted SQL statement while this copy stayed loaded (CP-0025): it never counts again. */
 	private boolean _forgotten;
+	/** Its first row is being inserted (CP-0025): from before the values it writes are read until Mobius knows the row. */
+	private volatile boolean _inserting;
 	/** In the saved ground list (SaveDroppedItem), a census holding (CP-0022), guarded by {@link EconomyCounter#lockFor}. */
 	private boolean _onSavedGround;
 	
@@ -497,6 +499,14 @@ public class Item extends WorldObject
 			final long delta = counted - _posted;
 			if (delta != 0)
 			{
+				if ((counted == 0) && (_existsInDb || _inserting))
+				{
+					EconomyCounter.countedOut(getObjectId()); // its row still holds it until Mobius writes or deletes it (CP-0025)
+				}
+				else if ((counted > 0) && (_posted == 0))
+				{
+					EconomyCounter.clearCountedOut(getObjectId()); // counted again: no longer out
+				}
 				_posted = counted;
 				EconomyCounter.post(_itemId, delta);
 			}
@@ -1910,9 +1920,11 @@ public class Item extends WorldObject
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("UPDATE items SET owner_id=?,count=?,loc=?,loc_data=?,enchant_level=?,custom_type1=?,custom_type2=?,mana_left=?,time=? WHERE object_id = ?"))
 		{
+			final long wroteCount = _count; // what this write puts in the row, whatever memory does meanwhile (CP-0025)
+			final ItemLocation wroteLoc = _loc;
 			ps.setInt(1, _ownerId);
-			ps.setLong(2, _count);
-			ps.setString(3, _loc.name());
+			ps.setLong(2, wroteCount);
+			ps.setString(3, wroteLoc.name());
 			ps.setInt(4, _locData);
 			ps.setInt(5, _enchantLevel);
 			ps.setInt(6, _type1);
@@ -1923,6 +1935,7 @@ public class Item extends WorldObject
 			ps.executeUpdate();
 			_existsInDb = true;
 			_storedInDb = true;
+			EconomyCounter.rowWritten(getObjectId(), EconomyCounter.counted(wroteLoc) ? wroteCount : 0); // (CP-0025)
 		}
 		catch (Exception e)
 		{
@@ -1943,10 +1956,13 @@ public class Item extends WorldObject
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("INSERT INTO items (owner_id,item_id,count,loc,loc_data,enchant_level,object_id,custom_type1,custom_type2,mana_left,time) VALUES (?,?,?,?,?,?,?,?,?,?,?)"))
 		{
+			_inserting = true; // before the values are read, so a destruction from now on leaves its mark (Codex amd16)
+			final long wroteCount = _count; // (CP-0025)
+			final ItemLocation wroteLoc = _loc;
 			ps.setInt(1, _ownerId);
 			ps.setInt(2, _itemId);
-			ps.setLong(3, _count);
-			ps.setString(4, _loc.name());
+			ps.setLong(3, wroteCount);
+			ps.setString(4, wroteLoc.name());
 			ps.setInt(5, _locData);
 			ps.setInt(6, _enchantLevel);
 			ps.setInt(7, getObjectId());
@@ -1958,6 +1974,8 @@ public class Item extends WorldObject
 			ps.executeUpdate();
 			_existsInDb = true;
 			_storedInDb = true;
+			EconomyCounter.rowWritten(getObjectId(), EconomyCounter.counted(wroteLoc) ? wroteCount : 0); // (CP-0025)
+			_inserting = false;
 			
 			if (_augmentation != null)
 			{
@@ -1972,6 +1990,11 @@ public class Item extends WorldObject
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Could not insert item " + this + " into DB: Reason: " + e.getMessage(), e);
+			if (_inserting && !_existsInDb)
+			{
+				EconomyCounter.rowWritten(getObjectId(), 0); // no row was written (CP-0025)
+			}
+			_inserting = false;
 		}
 	}
 	
@@ -1993,6 +2016,7 @@ public class Item extends WorldObject
 				ps.executeUpdate();
 				_existsInDb = false;
 				_storedInDb = false;
+				EconomyCounter.rowWritten(getObjectId(), 0); // (CP-0025)
 				if (_releaseIdOnDelete)
 				{
 					_releaseIdOnDelete = false;

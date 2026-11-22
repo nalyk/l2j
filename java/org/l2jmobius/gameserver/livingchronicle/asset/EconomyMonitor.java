@@ -166,6 +166,11 @@ public final class EconomyMonitor
 	 */
 	public static boolean atBoundary(Iterable<? extends ItemContainer> containers) throws SQLException
 	{
+		if (EconomyCounter.isUncertain())
+		{
+			LOGGER.severe("Living Chronicle: a counted statement's commit could not be read this run; no shutdown census, so the next start is a rebase");
+			return false;
+		}
 		boolean written = true;
 		for (ItemContainer container : containers)
 		{

@@ -28,7 +28,10 @@ public final class EconomyCounter
 	private static final Map<Integer, LongAdder> COUNTS = new ConcurrentHashMap<>();
 	/** Quantities asked of a change but not applied, by item id (a clamp, §2.7): watched, never part of the counts. */
 	private static final Map<Integer, LongAdder> CLAMPED = new ConcurrentHashMap<>();
+	private static final java.util.Set<Integer> COUNTED_OUT = ConcurrentHashMap.newKeySet();
 	private static volatile boolean _active;
+	/** A counted statement's commit could not be read either way: the counters may be off by its change (§2.6). */
+	private static volatile boolean _uncertain;
 
 	private EconomyCounter()
 	{
@@ -39,6 +42,8 @@ public final class EconomyCounter
 	{
 		COUNTS.clear();
 		CLAMPED.clear();
+		COUNTED_OUT.clear();
+		_uncertain = false;
 		base.forEach((itemId, quantity) -> COUNTS.computeIfAbsent(itemId, id -> new LongAdder()).add(quantity));
 		_active = true;
 	}
@@ -74,6 +79,55 @@ public final class EconomyCounter
 		{
 			CLAMPED.computeIfAbsent(itemId, id -> new LongAdder()).add(quantity);
 		}
+	}
+
+	/**
+	 * An object was counted out of the holdings in memory (destroyed, dropped, sold) while its row still holds it, until
+	 * Mobius writes or deletes the row: a counted SQL statement deleting that row first must not count it again (CP-0025).
+	 */
+	public static void countedOut(int objectId)
+	{
+		if (_active)
+		{
+			COUNTED_OUT.add(objectId);
+		}
+	}
+
+	/**
+	 * Mobius wrote or deleted the object's row: the mark goes only if the row as written holds nothing the census counts
+	 * ({@code rowCounted} 0). A save that began before the object was counted out and wrote its older quantity keeps the
+	 * mark, as that row still holds it (Codex amd15).
+	 */
+	public static void rowWritten(int objectId, long rowCounted)
+	{
+		if (rowCounted == 0)
+		{
+			COUNTED_OUT.remove(objectId);
+		}
+	}
+
+	/** The object counts again, or a counted statement settled its row. */
+	public static void clearCountedOut(int objectId)
+	{
+		COUNTED_OUT.remove(objectId);
+	}
+
+	/** @return whether memory counted this object out while its row still holds it */
+	public static boolean isCountedOut(int objectId)
+	{
+		return COUNTED_OUT.contains(objectId);
+	}
+
+	/** A counted statement's commit could not be read: no shutdown census may certify these counters (§2.6). */
+	public static void uncertain()
+	{
+		_uncertain = true;
+	}
+
+	/** @return whether a commit since the counters started could not be read */
+	public static boolean isUncertain()
+	{
+		return _uncertain;
 	}
 
 	/** @return every non-zero count, by item id */

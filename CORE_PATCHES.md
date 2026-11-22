@@ -405,8 +405,16 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   transaction writes its own row to `lc_economy_statement` (V018), which decides a commit whose acknowledgement is lost,
   read under its lock on a fresh connection (Codex amd12: quantities could be changed meanwhile by another writer); the
   loaded copies of the rows it locks are held under their leaf locks from the locking read to the posting, a copy of a
-  deleted row told to stop counting (`Item.forgetCounted`, `countedQuantity`, in CP-0021's file) and the posting of a
-  deleted row whose copy had counted itself out cancelled. An auction's row and its bids are
+  deleted row counting out what its copy counted, never the row's stale quantity, and then told to stop counting
+  (`Item.forgetCounted`, `countedQuantity`, in CP-0021's file); a deleted row whose object memory had counted out before
+  its row was written counts nothing more (`Item` marks it as it settles to nothing with a row, and clears it when its
+  row is written or deleted; Codex amd13: retail destruction counts out and leaves the world before deleting its row); a
+  commit that fails is rolled back before it is resolved, never committed by a later autocommit reset; the counted-out
+  mark is read before the commit, under the row lock Mobius's own deletion waits behind, and a committed statement is
+  posted even when the connection fails afterwards (Codex amd14); a row write clears the mark only when what it wrote
+  holds nothing counted, and a destruction during an object's first insert leaves it (`Item._inserting`, Codex
+  amd15-16); a commit whose outcome cannot be read makes the counters uncertain, so the boundary takes no census. A
+  restore racing a deletion of the same row (upstream's ghost race) is not settled: the restart census reports the ghost. An auction's row and its bids are
   deleted in one counted transaction, as its winning bid stops being taken off when the auction's row goes. With the
   counters inactive each statement runs as upstream.
 - Invariant: across each of these statements the existence counters move exactly as the census does.
@@ -415,7 +423,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   acknowledgement resolved both ways, and decided by the statement's own row while another deletion of the same rows
   commits meanwhile; a loaded copy of a deleted row stops counting, -60 for a 30-unit copy before; a copy destroyed while
   its row's deletion runs waits and counts nothing; a copy that counted itself out before its row went is not counted
-  twice; the last three red on the previous code).
+  twice; the last three red on the previous code; a partly consumed copy's row counted as memory holds it, an item
+  destroyed and gone from the world before its row went not counted twice, a commit failing with its transaction open
+  committing nothing: these three red on round 12's code).
 
 ## CP-0026 A clan-hall bid is refunded only once its row is gone
 
@@ -448,3 +458,15 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   after `DatabaseFactory.init`, recovery before the shutdown hook and the offline traders, the boundary right after
   `saveData` and before `DatabaseFactory.close`; 3/3 fail with CP-0027 reverted); every server-booting test boots
   through the seams in truth.
+
+## CP-0028 The task pools can be waited for
+
+- Files: `java/org/l2jmobius/commons/threads/ThreadPool.java`
+- Reason: `ThreadPool.shutdown()` only calls `shutdownNow()` (ThreadPool.java:224), which interrupts and returns: a task
+  already running can still change a holding after the shutdown boundary's census (asset-service.md §2.6, Codex round
+  amd15).
+- Change: `awaitTermination(millis)` waits until every pool has terminated and says whether all did; `shutdown()` is
+  unchanged.
+- Invariant: the shutdown census is taken only once no task pool runs.
+- Proof: `SeamsTest.theBoundaryWaitsForTheTaskPoolsMobiusStopped` (the boundary follows `ThreadPool.shutdown` and calls
+  `awaitTermination`); `LivingChronicleBootTest.aBoundaryWhileMobiusTasksStillRunTakesNoShutdownCensus`.

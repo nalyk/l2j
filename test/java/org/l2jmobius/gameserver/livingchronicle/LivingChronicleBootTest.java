@@ -79,7 +79,7 @@ class LivingChronicleBootTest
 		final long startups = censuses("STARTUP") + censuses("REBASE");
 		LivingChronicle.atDatabase();
 		LivingChronicle.beforeLogin();
-		LivingChronicle.atShutdown();
+		LivingChronicle.atShutdown(() -> true);
 		assertFalse(EconomyCounter.isActive());
 		assertEquals(startups, censuses("STARTUP") + censuses("REBASE"));
 	}
@@ -108,11 +108,21 @@ class LivingChronicleBootTest
 		shots.updateDatabase(true);
 		shots.changeCount(ItemProcessType.NONE, 5, null, null); // in memory only, as an offline leader's warehouse is never saved
 		final long shutdowns = censuses("SHUTDOWN");
-		LivingChronicle.atShutdown();
+		LivingChronicle.atShutdown(() -> true); // the pools terminated, as Shutdown leaves them
 		assertEquals(shutdowns + 1, censuses("SHUTDOWN"));
 		LivingChronicle.atDatabase();
 		assertEquals(EconomyMonitor.Kind.STARTUP, LivingChronicle.startup().kind());
 		assertEquals(Map.of(), LivingChronicle.startup().differences(), "the boundary wrote the clan warehouse, so its 5 were not lost");
+	}
+
+	@Test
+	void aBoundaryWhileMobiusTasksStillRunTakesNoShutdownCensus() throws Exception
+	{
+		System.setProperty(LivingChronicle.PROFILE, "dev");
+		LivingChronicle.atDatabase();
+		final long shutdowns = censuses("SHUTDOWN");
+		LivingChronicle.atShutdown(() -> false); // a task pool that did not terminate could still change a holding
+		assertEquals(shutdowns, censuses("SHUTDOWN"));
 	}
 
 	@Test
@@ -135,7 +145,7 @@ class LivingChronicleBootTest
 			statement.execute("CREATE TRIGGER lc_test_refuse_write BEFORE UPDATE ON items FOR EACH ROW BEGIN IF OLD.object_id = " + shots.getObjectId() + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused'; END IF; END");
 			try
 			{
-				LivingChronicle.atShutdown();
+				LivingChronicle.atShutdown(() -> true);
 			}
 			finally
 			{

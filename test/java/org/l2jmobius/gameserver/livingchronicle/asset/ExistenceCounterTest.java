@@ -256,6 +256,33 @@ class ExistenceCounterTest
 	}
 
 	@Test
+	void aCountedOutMarkLastsUntilItsRowHoldsNothing()
+	{
+		final Player player = player();
+		final Item shots = player.getInventory().addItem(ItemProcessType.NONE, SOULSHOT, 30, player, null);
+		shots.updateDatabase(true);
+		shots.setCount(0); // destroyed in memory, its row still holding 30
+		assertTrue(EconomyCounter.isCountedOut(shots.getObjectId()));
+		EconomyCounter.rowWritten(shots.getObjectId(), 30); // a save that began before and wrote the older quantity
+		assertTrue(EconomyCounter.isCountedOut(shots.getObjectId()), "that row still holds the 30");
+		shots.updateDatabase(true); // Mobius's own write of the destroyed object deletes its row
+		assertFalse(EconomyCounter.isCountedOut(shots.getObjectId()));
+	}
+
+	@Test
+	void aDestructionDuringTheFirstInsertLeavesItsMark() throws Exception
+	{
+		final Item fresh = new Item(IdManager.getInstance().getNextId(), SOULSHOT);
+		fresh.setCount(30);
+		fresh.setItemLocation(ItemLocation.INVENTORY, 0, false); // counted, its row not yet known to Mobius
+		final java.lang.reflect.Field inserting = Item.class.getDeclaredField("_inserting");
+		inserting.setAccessible(true);
+		inserting.set(fresh, true); // its INSERT has run, Mobius has not yet recorded the row
+		fresh.setCount(0); // destroyed meanwhile
+		assertTrue(EconomyCounter.isCountedOut(fresh.getObjectId()), "a row may hold it: a counted deletion must not count it again");
+	}
+
+	@Test
 	void anInactiveCounterPostsNothing()
 	{
 		final Player player = player();

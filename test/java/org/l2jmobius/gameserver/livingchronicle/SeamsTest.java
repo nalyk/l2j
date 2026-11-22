@@ -87,4 +87,11 @@ class SeamsTest
 		adjacent(calls, "Shutdown.saveData", "LivingChronicle.atShutdown");
 		inOrder(calls, "LivingChronicle.atShutdown", "DatabaseFactory.close");
 	}
+
+	@Test
+	void theBoundaryWaitsForTheTaskPoolsMobiusStopped() throws Exception
+	{
+		inOrder(callsAround("org/l2jmobius/gameserver/Shutdown", "LivingChronicle.atShutdown"), "ThreadPool.shutdown", "LivingChronicle.atShutdown");
+		assertTrue(callsAround("org/l2jmobius/gameserver/livingchronicle/LivingChronicle", "ThreadPool.awaitTermination").contains("ThreadPool.awaitTermination"), "shutdownNow only interrupts; the boundary waits for termination");
+	}
 }

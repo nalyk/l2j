@@ -188,6 +188,16 @@ public final class Census
 		return holdingStripes(copies, 0, new ArrayList<>(), () -> counted(connection, holding, where, params, work, rows, copies));
 	}
 
+	private static Set<Integer> loadedIds(List<Item> copies)
+	{
+		final Set<Integer> ids = new HashSet<>();
+		for (Item copy : copies)
+		{
+			ids.add(copy.getObjectId());
+		}
+		return ids;
+	}
+
 	/** Runs {@code body} holding the leaf locks of {@code copies}, each stripe once, in stripe order. */
 	private static int holdingStripes(List<Item> copies, int from, List<Integer> held, Work body) throws SQLException
 	{
@@ -208,25 +218,27 @@ public final class Census
 
 	private static int counted(Connection connection, Holding holding, String where, Object[] params, Work work, Map<Integer, long[]> rows, List<Item> copies) throws SQLException
 	{
-		final Set<Integer> settledOut = new HashSet<>(); // copies counted out before the read: their rows' postings cancel
 		final byte[] statement = new byte[16];
+		final Set<Integer> countedOut = new HashSet<>();
 		final Map<Integer, Long> before;
 		final Map<Integer, Long> after;
 		final Set<Integer> deleted;
 		final int result;
 		try
 		{
-			for (Item copy : copies)
-			{
-				if (copy.countedQuantity() == 0)
-				{
-					settledOut.add(copy.getObjectId());
-				}
-			}
 			before = count(connection, holding, where, params);
 			result = work.run();
 			after = count(connection, holding, where, params);
 			deleted = holding == Holding.ITEMS ? gone(connection, rows.keySet()) : Set.of();
+			// Read under the rows' locks, which Mobius's own deletion of such a row waits behind, so it cannot clear the mark
+			// first (Codex amd14); a copy counted out later is a loaded one, its leaf lock held.
+			for (int objectId : deleted)
+			{
+				if (!loadedIds(copies).contains(objectId) && EconomyCounter.isCountedOut(objectId))
+				{
+					countedOut.add(objectId);
+				}
+			}
 			java.nio.ByteBuffer.wrap(statement).putLong(GameClock.millis()).putLong(STATEMENTS.incrementAndGet()); // unique in a run; startup clears the rest
 			try (PreparedStatement mark = connection.prepareStatement("INSERT INTO lc_economy_statement (statement_id, staged_at) VALUES (?, ?)"))
 			{
@@ -241,46 +253,66 @@ public final class Census
 			connection.setAutoCommit(true);
 			throw e;
 		}
+		boolean committedOk = true;
 		try
 		{
 			connection.commit();
 		}
 		catch (SQLException e)
 		{
+			committedOk = false;
+			try
+			{
+				connection.rollback(); // a transaction the failed commit left open ends here, never in a later cleanup
+			}
+			catch (SQLException gone)
+			{
+				// the connection is gone: the server ends the transaction itself
+			}
 			// The server may have committed and lost only the acknowledgement: the statement's own row decides.
 			final Boolean committed = committed(statement);
 			if (!Boolean.TRUE.equals(committed))
 			{
 				if (committed == null)
 				{
-					LOGGER.severe("Living Chronicle: a counted statement on " + holding + " (" + where + ") ended unknown; the census will show it");
+					EconomyCounter.uncertain(); // no shutdown census follows: the next start is a rebase
+					LOGGER.severe("Living Chronicle: a counted statement on " + holding + " (" + where + ") ended unknown; the counters are uncertain until the next start");
 				}
 				throw e;
 			}
 		}
 		finally
 		{
-			try
+			if (committedOk)
 			{
-				connection.setAutoCommit(true);
-			}
-			catch (SQLException e)
-			{
-				// a connection that failed its commit may be gone; the pool replaces it
+				try
+				{
+					connection.setAutoCommit(true);
+				}
+				catch (SQLException e)
+				{
+					// committed: the connection failing afterwards changes nothing the posting below accounts for
+				}
 			}
 		}
 		post(before, after);
+		// Memory is the truth for a loaded object: a deleted row's posting gives way to what its copy counted.
+		final Set<Integer> loaded = new HashSet<>();
 		for (Item copy : copies)
 		{
+			loaded.add(copy.getObjectId());
 			if (deleted.contains(copy.getObjectId()))
 			{
+				final long[] row = rows.get(copy.getObjectId());
+				EconomyCounter.post((int) row[0], row[1] - copy.countedQuantity());
 				copy.forgetCounted();
-				if (settledOut.contains(copy.getObjectId()))
-				{
-					final long[] row = rows.get(copy.getObjectId());
-					EconomyCounter.post((int) row[0], row[1]); // its copy counted the quantity out already
-				}
 			}
+		}
+		for (int objectId : countedOut)
+		{
+			final long[] row = rows.get(objectId);
+			EconomyCounter.post((int) row[0], row[1]); // memory counted it out before its row went
+			EconomyCounter.clearCountedOut(objectId);
 		}
 		unmark(statement);
 		return result;
@@ -342,9 +374,12 @@ public final class Census
 	}
 
 	/** @return whether the statement whose commit failed did commit: its own row decides; null when it cannot be read */
+	/** Where a lost acknowledgement is resolved from: the database (a test replaces it to make the read fail). */
+	static Connections resolver = DatabaseFactory::getConnection;
+
 	private static Boolean committed(byte[] statement)
 	{
-		try (Connection fresh = DatabaseFactory.getConnection())
+		try (Connection fresh = resolver.open())
 		{
 			fresh.setAutoCommit(false);
 			try (PreparedStatement read = fresh.prepareStatement("SELECT 1 FROM lc_economy_statement WHERE statement_id = ? FOR UPDATE"))

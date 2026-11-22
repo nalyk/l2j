@@ -110,3 +110,11 @@ Codex rounds amd10 and amd11 reshaped Tasks 3-6: SQL sites count before and afte
 a lost acknowledgement; bids are counted where their rows are written; the saved ground settles with the item; a
 loaded copy of a row a counted statement deleted stops counting; CP-0026 refunds a clan-hall bid only once its row is
 gone. The full gate runs the 74 classes.
+
+Rounds amd12 to amd16 all attacked one place: a counted SQL deletion racing Mobius's own handling of the same item in
+memory. Loaded copies are held under their stripes, and a row whose copy was counted out in memory is marked
+(`EconomyCounter.countedOut`) until a write leaves its row holding nothing counted; the first INSERT marks it too
+(`Item._inserting`). A commit whose outcome cannot be read leaves the counters uncertain, and no shutdown census follows.
+CP-0028 makes the boundary wait for the task pools. One case stays unsettled, and §2.6 names it: Mobius restoring a
+container while such a deletion runs builds a copy of a row that no longer exists, and the restart census reports it.
+The full gate runs 75 classes.

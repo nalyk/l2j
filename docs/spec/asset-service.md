@@ -196,10 +196,20 @@ it guarantees, and what it only watches, are stated separately.
    counts in the rows it writes before and after it, and posts the difference only when it commits, so a statement that
    fails posts nothing; the transaction writes a row of its own (`lc_economy_statement`), so a commit whose
    acknowledgement is lost is decided by that row, read under its lock on a fresh connection, never by quantities other
-   writers may have changed since; and the loaded copies of the rows it locks are held under their leaf locks from its
-   locking read until its posting, so none settles in between: a copy of a row it deleted stops counting (an ended
-   event's item in a loaded warehouse: the deletion counted it), and the posting of a deleted row whose copy had counted
-   itself out before the read is cancelled. The ledger posts, once
+   writers may have changed since. Memory is the truth for an object Mobius has loaded: the loaded copies of the rows it
+   locks are held under their leaf locks from its locking read until its posting, so none settles in between, and a
+   deleted row whose copy is loaded counts out what that copy counted, never the row's stale quantity (the copy then
+   stops counting: an ended event's item in a loaded warehouse); a deleted row whose object memory had already counted
+   out (destroyed, dropped or sold, its row not yet written: Mobius counts and deletes in two steps) counts nothing
+   more, read under the row's lock, which Mobius's own deletion of the row waits behind, and kept until a write of the
+   row holds nothing counted (a save that began before and wrote the older quantity keeps it; a destruction while the
+   object's first row is being inserted leaves the mark too). A commit that fails is rolled
+   back before it is resolved, so no later cleanup commits it; one known to have committed is posted whatever happens to
+   the connection afterwards; one whose outcome cannot be read at all (the database failing the resolution too) makes the
+   counters uncertain, so no shutdown census follows and the next start is a rebase. A race this does not settle is upstream's own: Mobius restoring a container while a counted
+   statement deletes a row of it (the event and hero purges delete by item id over every owner) builds a copy of a row
+   already gone, a ghost; the counters count the ghost from its restored quantity, so once it changes the restart census
+   reports its difference, which is the ghost. The ledger posts, once
    its operation commits, each `SOURCE` and `SINK` leg that creates or removes rows (a reconciliation recognising rows as
    they are, §4.5, changes no holding and posts nothing). A clamp (a quantity asked of a change and not applied) is recorded
    apart for the watched part, never in the counters, which see what was applied. Restored state is already in the census and is never counted again: Mobius assigns a restored
@@ -219,7 +229,9 @@ it guarantees, and what it only watches, are stated separately.
    equal size in one window can hide each other.
 
 **The shutdown boundary.** After Mobius's shutdown has disconnected every player and stopped its task pools
-(Shutdown.java:380, 403), the service writes every authoritative container that Mobius does not (a clan warehouse whose
+(Shutdown.java:380, 403), and once those pools have terminated (`shutdownNow` only interrupts a running task; the
+boundary waits up to 30 seconds and, with a pool still running, takes no shutdown census, so the next start is a rebase),
+the service writes every authoritative container that Mobius does not (a clan warehouse whose
 leader is offline is skipped by `ItemContainer.updateDatabase`, ItemContainer.java:579: the service writes each clan
 warehouse's items itself), checks every write succeeded, and only then takes the `SHUTDOWN` census from the database and
 persists the counters. Ground items are a holding only when `SaveDroppedItem` is on (General.ini:217), counted from
@@ -765,6 +777,27 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   the copies' leaf locks are held from the locking read to the posting, and a deleted row whose copy had counted itself
   out is not counted again; modules register their holding policies with the bootstrap; an adoption that leaves the mail
   unknown and attachment rows without the flag are INV12 violations, the flag also checked per operation.
+- Amendment round 13 (Codex), NO SIGN-OFF: retail destruction counts an item out and takes it from the world before its
+  row goes, so a counted deletion between the two found no copy and counted it again (1); a partly consumed copy's row
+  was counted out at its stale quantity (2); a commit that failed with its transaction open could be committed by the
+  autocommit reset (3). Fixed (still revision 13): memory is the truth for loaded objects (a deleted row whose copy is
+  loaded counts out what the copy counted; one whose object memory counted out before its row was written counts
+  nothing more, tracked until Mobius writes or deletes the row); a failed commit is rolled back before it is resolved.
+- Amendment round 14 (Codex), NO SIGN-OFF: Mobius's late row deletion could clear the counted-out mark before the
+  statement read it after its commit (1); a restore racing the statement could build a copy of a deleted row (2); a
+  failed autocommit reset after a good commit skipped the posting (3). Fixed (still revision 13): the mark is read before
+  the commit, under the row's lock that Mobius's deletion waits behind; a committed statement is posted whatever the
+  connection does afterwards; (2) is upstream's ghost race, now named in §2.6 as the one race the counters do not settle,
+  and reported by the restart census as the ghost it is.
+- Amendment round 15 (Codex), NO SIGN-OFF: a save that began before an object was counted out cleared the mark though
+  the row it wrote still held the quantity, a double count with no restore (1); `ThreadPool.shutdown` only interrupts, so
+  a task still running could change a holding after the boundary's census (2). Fixed (still revision 13): a row write
+  clears the mark only when what it wrote holds nothing counted; the boundary waits for the pools to terminate
+  (CP-0028) and takes no census otherwise; the ghost race is named as a race the counters do not settle, not the only one.
+- Amendment round 16 (Codex), NO SIGN-OFF: a destruction while an object's first row was being inserted left no mark,
+  a double count (1); a commit whose resolution read failed was an unnamed limit (2). Fixed (still revision 13): the
+  object marks itself inserting before reading the values it writes, and a destruction then leaves its mark; an
+  unreadable outcome makes the counters uncertain and the boundary takes no census.
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

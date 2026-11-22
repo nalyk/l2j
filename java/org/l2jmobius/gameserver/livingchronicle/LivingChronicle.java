@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import org.l2jmobius.commons.database.DatabaseFactory;
+import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.gameserver.data.sql.ClanTable;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
@@ -130,11 +131,28 @@ public final class LivingChronicle
 		}
 	}
 
-	/** Seam C, the shutdown boundary (asset-service.md §2.6): every clan warehouse written, then the shutdown census. */
+	/** How long the boundary waits for Mobius's task pools to terminate (asset-service.md §2.6). */
+	static final long QUIET_MILLIS = 30_000;
+
+	/**
+	 * Seam C, the shutdown boundary (asset-service.md §2.6): once Mobius's task pools have terminated, every clan warehouse
+	 * written, then the shutdown census. A pool still running after {@link #QUIET_MILLIS} means no shutdown census.
+	 */
 	public static void atShutdown()
+	{
+		atShutdown(() -> ThreadPool.awaitTermination(QUIET_MILLIS));
+	}
+
+	/** The boundary with {@code quiet} deciding whether nothing else can change a holding any more. */
+	static void atShutdown(java.util.function.BooleanSupplier quiet)
 	{
 		if ((profile() == Profile.TRUTH) || !EconomyCounter.isActive())
 		{
+			return;
+		}
+		if (!quiet.getAsBoolean())
+		{
+			LOGGER.severe("Living Chronicle: Mobius's task pools are still running at the shutdown boundary; no shutdown census, so the next start is a rebase");
 			return;
 		}
 		final List<ItemContainer> warehouses = new ArrayList<>();

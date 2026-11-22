@@ -1,6 +1,7 @@
 package org.l2jmobius.gameserver.livingchronicle.asset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -399,6 +401,169 @@ class CensusTest
 		{
 		});
 		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before));
+	}
+
+	@Test
+	void aPartlyConsumedCopysRowIsCountedAsMemoryHoldsIt() throws Exception
+	{
+		final org.l2jmobius.gameserver.entity.item.instance.Item copy = loadedCopy(30);
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		copy.changeCount(org.l2jmobius.gameserver.entity.item.enums.ItemProcessType.NONE, -10, null, null); // consumed, not yet written
+		deleteCounted(copy, () ->
+		{
+		});
+		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before), "10 consumed, then the 20 memory held; never the row's stale 30");
+	}
+
+	@Test
+	void anItemDestroyedAndGoneFromTheWorldBeforeItsRowWentIsNotCountedTwice() throws Exception
+	{
+		final org.l2jmobius.gameserver.entity.item.instance.Item copy = loadedCopy(30);
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		copy.setCount(0); // as ItemManager.destroyItem counts it out ...
+		org.l2jmobius.gameserver.entity.World.removeObject(copy); // ... and takes it from the world, its row deleted a step later
+		deleteCounted(copy, () ->
+		{
+		});
+		assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before));
+	}
+
+	@Test
+	void aCommitThatFailsWithItsTransactionOpenCommitsNothingAndPostsNothing() throws Exception
+	{
+		final int owner = IDS.incrementAndGet();
+		item(owner, SOULSHOT, 40, "INVENTORY");
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		try (Connection real = DatabaseFactory.getConnection())
+		{
+			final Connection connection = (Connection) java.lang.reflect.Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]
+			{
+				Connection.class
+			}, (proxy, method, args) ->
+			{
+				if (method.getName().equals("commit"))
+				{
+					throw new SQLException("the commit never reached the server"); // the transaction stays open
+				}
+				try
+				{
+					return method.invoke(real, args);
+				}
+				catch (java.lang.reflect.InvocationTargetException e)
+				{
+					throw e.getCause();
+				}
+			});
+			final PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE owner_id = ?");
+			delete.setInt(1, owner);
+			assertThrows(SQLException.class, () -> Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+			{
+				owner
+			}, delete::executeUpdate));
+		}
+		assertEquals(before, EconomyCounter.snapshot());
+		try (Connection connection = DatabaseFactory.getConnection())
+		{
+			assertEquals(Map.of(SOULSHOT, 40L), Census.count(connection, Holding.ITEMS, "owner_id = ?", owner), "rolled back, never committed by a cleanup");
+		}
+	}
+
+	@Test
+	void anItemWhoseLateRowDeletionRunsBehindTheStatementIsCountedOnce() throws Exception
+	{
+		for (int i = 0; i < 20; i++)
+		{
+			final org.l2jmobius.gameserver.entity.item.instance.Item copy = loadedCopy(30);
+			final Map<Integer, Long> before = EconomyCounter.snapshot();
+			copy.setCount(0); // ItemManager.destroyItem counts it out ...
+			org.l2jmobius.gameserver.entity.World.removeObject(copy); // ... leaves the world ...
+			final Thread persist = new Thread(() -> copy.updateDatabase(true)); // ... and deletes its row, waiting behind the statement
+			deleteCounted(copy, () ->
+			{
+				persist.start();
+				final long until = System.nanoTime() + 2_000_000_000L;
+				while ((persist.getState() != Thread.State.WAITING) && (persist.getState() != Thread.State.TIMED_WAITING) && (persist.getState() != Thread.State.TERMINATED) && (System.nanoTime() < until))
+				{
+					Thread.onSpinWait();
+				}
+			});
+			persist.join();
+			assertEquals(Map.of(SOULSHOT, -30L), minus(EconomyCounter.snapshot(), before), "iteration " + i);
+		}
+	}
+
+	@Test
+	void aCommittedStatementIsPostedEvenIfHandingTheConnectionBackFails() throws Exception
+	{
+		final int owner = IDS.incrementAndGet();
+		item(owner, SOULSHOT, 40, "INVENTORY");
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		try (Connection real = DatabaseFactory.getConnection())
+		{
+			final boolean[] committed = new boolean[1];
+			final Connection connection = (Connection) java.lang.reflect.Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]
+			{
+				Connection.class
+			}, (proxy, method, args) ->
+			{
+				if (method.getName().equals("commit"))
+				{
+					real.commit();
+					committed[0] = true;
+					return null;
+				}
+				if (method.getName().equals("setAutoCommit") && committed[0] && Boolean.TRUE.equals(args[0]))
+				{
+					throw new SQLException("the connection failed after its commit");
+				}
+				try
+				{
+					return method.invoke(real, args);
+				}
+				catch (java.lang.reflect.InvocationTargetException e)
+				{
+					throw e.getCause();
+				}
+			});
+			final PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE owner_id = ?");
+			delete.setInt(1, owner);
+			assertEquals(1, Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+			{
+				owner
+			}, delete::executeUpdate));
+			real.setAutoCommit(true);
+		}
+		assertEquals(Map.of(SOULSHOT, -40L), minus(EconomyCounter.snapshot(), before), "it committed: it is posted");
+	}
+
+	@Test
+	void aCommitWhoseOutcomeCannotBeReadLeavesTheCountersUncertainAndTheBoundaryCertifiesNothing() throws Exception
+	{
+		final int owner = IDS.incrementAndGet();
+		item(owner, SOULSHOT, 40, "INVENTORY");
+		final Map<Integer, Long> before = EconomyCounter.snapshot();
+		final Connections resolver = Census.resolver;
+		Census.resolver = () ->
+		{
+			throw new SQLException("the database is down while the commit is resolved");
+		};
+		try (Connection real = DatabaseFactory.getConnection())
+		{
+			final Connection connection = losingTheAcknowledgement(real, true);
+			final PreparedStatement delete = connection.prepareStatement("DELETE FROM items WHERE owner_id = ?");
+			delete.setInt(1, owner);
+			assertThrows(SQLException.class, () -> Census.counting(connection, Holding.ITEMS, "owner_id = ?", new Object[]
+			{
+				owner
+			}, delete::executeUpdate));
+			assertTrue(EconomyCounter.isUncertain());
+			assertFalse(EconomyMonitor.atBoundary(List.of()), "uncertain counters certify no shutdown census: the next start is a rebase");
+		}
+		finally
+		{
+			Census.resolver = resolver;
+			EconomyCounter.activate(before);
+		}
 	}
 
 	@Test

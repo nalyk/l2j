@@ -21,6 +21,7 @@
 package org.l2jmobius.commons.threads;
 
 import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledFuture;
@@ -232,6 +233,40 @@ public class ThreadPool
 		{
 			LOGGER.warning(StringUtil.concat("ThreadPool: Exception occurred during shutdown: ", t.getMessage()));
 		}
+	}
+	
+	/**
+	 * Waits until every pool has terminated after {@link #shutdown()} (CP-0028): {@code shutdownNow} only interrupts, so a
+	 * running task can still change state; the shutdown boundary (asset-service.md §2.6) needs them gone.
+	 * @param millis the longest wait
+	 * @return whether every pool terminated
+	 */
+	public static boolean awaitTermination(long millis)
+	{
+		final long deadline = System.nanoTime() + (millis * 1_000_000L);
+		boolean terminated = true;
+		for (ExecutorService pool : new ExecutorService[]
+		{
+			SCHEDULED_POOL,
+			INSTANT_POOL,
+			HIGH_PRIORITY_SCHEDULED_POOL
+		})
+		{
+			if (pool == null)
+			{
+				continue;
+			}
+			try
+			{
+				terminated &= pool.awaitTermination(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+			}
+			catch (InterruptedException e)
+			{
+				Thread.currentThread().interrupt();
+				return false;
+			}
+		}
+		return terminated;
 	}
 	
 	/**

@@ -364,6 +364,59 @@ public final class AssetTx implements AutoCloseable
 		}, custody);
 	}
 
+	/**
+	 * Relocates a kill's selected drops (§4.3 {@code relocate}, §2.5 {@code RELOCATED_DROP}; aden-remembers.md §4.3.1):
+	 * each enters from the {@code RELOCATED_DROP} source, referenced by the kill ({@code Kill.ref}), into its own Guild
+	 * warehouse custody, which it must be eligible for by its template (§4.4) and whose owner must hold it. All or nothing.
+	 * The caller writes the kill's settlement key.
+	 */
+	public void relocate(long kill, List<Relocation> drops)
+	{
+		if (drops.isEmpty())
+		{
+			throw new IllegalArgumentException("a relocation relocates something");
+		}
+		final List<Relocation> relocated = List.copyOf(drops);
+		final TreeSet<Integer> custodies = new TreeSet<>();
+		for (Relocation drop : relocated)
+		{
+			custodies.add(drop.custody());
+		}
+		step(execution ->
+		{
+			for (int custody : custodies)
+			{
+				final Custody target = execution.open(custody);
+				execution.notFrozen(target);
+				execution.allowsHolding(target);
+			}
+			for (Relocation drop : relocated)
+			{
+				final String refusal = Eligibility.templateRefusal(ItemData.getInstance().getTemplate(drop.itemId()));
+				if (refusal != null)
+				{
+					throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, "item " + drop.itemId() + " may not enter custody " + drop.custody() + ": " + refusal);
+				}
+			}
+			final String code = "RELOCATED_DROP";
+			final Map<Integer, List<Map<String, Object>>> legs = new TreeMap<>();
+			for (Relocation drop : relocated)
+			{
+				final Asset asset = new Asset(drop.itemId(), drop.count(), null);
+				execution.give(drop.custody(), drop.custody(), asset);
+				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, kill, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, drop.custody(), null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), asset.qty());
+				legs.computeIfAbsent(drop.custody(), custody -> new ArrayList<>()).add(legOf(asset));
+			}
+			for (Map.Entry<Integer, List<Map<String, Object>>> entry : legs.entrySet())
+			{
+				execution.touched(entry.getKey());
+				execution.facts().add(AssetFact.of("DropRelocated", entry.getKey(), "operation", _op.hex(), "kill", kill, "custody", entry.getKey(), "legs", entry.getValue()));
+			}
+		}, custodies.stream().mapToInt(Integer::intValue).toArray());
+	}
+
 	/** A drop as the rows it becomes: one of its count if its item stacks, else rows of one. */
 	private static List<Asset> units(RoutedDrop drop)
 	{

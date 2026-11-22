@@ -129,12 +129,12 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
 **Files:** Modify `AssetTx.java`; Test `test/java/org/l2jmobius/gameserver/livingchronicle/asset/RelocateTest.java`
 
 **Interfaces:**
-- Produces: `record Relocation(int itemId, long count, int custody)`; `void AssetTx.relocate(List<Relocation> drops)`.
+- Produces: `record Relocation(int itemId, long count, int custody)`; `void AssetTx.relocate(long kill, List<Relocation> drops)` (`kill` = `Kill.ref()`, epoch << 40 | seq).
 
-- [ ] **Step 1: Write the failing tests:** `eachDropGoesToItsOwnWarehouseCustody` (two `POOL` custodies, three drops →
+- [x] **Step 1: Write the failing tests:** `eachDropGoesToItsOwnWarehouseCustody` (two `POOL` custodies, three drops →
   rows in each, `RELOCATED_DROP` SOURCE legs, fact `Asset.DropRelocated`); `anIneligibleDropRefusesTheWholeRelocation`;
   `aFrozenOwnerRefusesIt` (asset-service.md §4.2 rule 5).
-- [ ] **Step 2:** RED. **Step 3:** implement as `route` without mail. **Step 4:** GREEN. **Step 5:** commit `Asset: relocate`.
+- [x] **Step 2:** RED. **Step 3:** implement as `route` without mail. **Step 4:** GREEN. **Step 5:** commit `Asset: relocate`.
 
 ### Task 5: The crafting boundary (CP-0033)
 

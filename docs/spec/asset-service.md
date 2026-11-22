@@ -151,7 +151,7 @@ change.
 |---|---|---|---|
 | `FEE_NOTARIUS`, `FEE_BROKER`, `FEE_QUESTIONING`, `FEE_ALIAS`, `FEE_GAZETTE` | SINK | — | institutional fees (15 §6, 16 §7, 17 §2) |
 | `TOWN_SUPPLY` | — | — | **withdrawn** (revision 10): caravans move a Guild warehouse's real goods custody to custody (`move`), so no supply budget is minted or sunk (aden-remembers.md §4.6) |
-| `RELOCATED_DROP` | SOURCE | kill key | a kill's retail-rolled family items that Aden Remembers relocates into a Guild warehouse instead of the ground or an inventory, exactly the items and counts the retail roll made (aden-remembers.md §4.3.1); like `LOOT_DROP`, one operation per kill |
+| `RELOCATED_DROP` | SOURCE | kill key (its number, epoch × 2^40 + sequence, §11.33) | a kill's retail-rolled family items that Aden Remembers relocates into a Guild warehouse instead of the ground or an inventory, exactly the items and counts the retail roll made (aden-remembers.md §4.3.1); like `LOOT_DROP`, one operation per kill |
 | `SINK_RECYCLE` | SOURCE | Guild pool | Adena credited to a Guild pool once a day, at most `RecyclePermille` of the Adena its territory's retail teleport fees destroyed the previous day as the journal recorded it (aden-remembers.md §4.6): a source bounded by a recorded sink |
 | `CROWN_UPKEEP` | SINK | law | road wardens' wages paid from an Open Roads law's custody (aden-remembers.md §4.5) |
 | `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again as a drop the ledger's own code creates on the ground, counted like any drop (§2.6) when it is picked up or saved |
@@ -159,7 +159,7 @@ change.
 | `ADMIN_CORRECTION` | SOURCE / SINK | audit fact | a corrective admin operation (§4.5) |
 | `CRAFT_INPUT` | SINK | contract | a contractual craft's materials, consumed from the contract's custody exactly as retail consumes them from an inventory (pact.md §4.3) |
 | `CRAFT_OUTPUT` | SOURCE | contract | a contractual craft's product, created exactly as retail creates it in an inventory, and sent straight to the client by system mail (pact.md §4.3) |
-| `LOOT_DROP` | SOURCE | charter | a kill's drops routed by a Loot Charter (pact.md §4.5), the same items and counts the kill made: reserved and rotated ones sent straight to their receiver by system mail, auctioned (custody-eligible) ones into the charter's custody, instead of on the ground or in an inventory |
+| `LOOT_DROP` | SOURCE | charter (its custody's `owner_ref`) | a kill's drops routed by a Loot Charter (pact.md §4.5), the same items and counts the kill made: reserved and rotated ones sent straight to their receiver by system mail, auctioned (custody-eligible) ones into the charter's custody, instead of on the ground or in an inventory |
 | `PACT_PARCHMENT` | SOURCE | contract | the non-tradable Notarized Contract item of a signed contract (pact.md §4.8) |
 | `LEDGER_SEAL` | SOURCE | Ledger contract | the non-tradable, valueless Torn Black Seal given by system mail to a mark who killed a hunter of a Black Contract on them (black-ledger.md §4.9) |
 | `FEE_BRIBE` | SINK | — | a bribe paid to a witness NPC (black-ledger.md §4.7) |
@@ -811,7 +811,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     `UNCERTAIN` commit resolved on that thread first (§3.2); what no router took goes to retail unchanged. A router that
     throws took nothing; a position outside its list is ignored. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
-    consumer derives its `OpId`. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
+    consumer derives its `OpId`; as a posting's reference the key is the number epoch × 2^40 + sequence. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
     are never offered. Stated limit, the consumers' own (pact.md §4.5): a JVM death between the kill and a commit loses
     what that router held, as retail's own ground drops of the kill are.
 34. **A craft's rules live inside one runnable** (`RecipeItemMaker`, RecipeManager.java:171-782): validation, the success
@@ -831,6 +831,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   in the operation's transaction. Implementing `route` found that an amount of a non-stackable item given to a custody
   was merged into one row counting several (a correction's amounts could do it too): such an amount is now that many
   rows of one, in a custody and in a mail alike.
+  §2.5 says what number each new reference is: a charter by its custody's owner reference, a kill by epoch × 2^40 +
+  sequence.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

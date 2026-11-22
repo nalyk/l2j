@@ -219,6 +219,7 @@ class DropSeamTest
 		kill();
 		assertEquals("kill/7/1", watcher.kills.get(0).key());
 		assertEquals("kill/7/2", watcher.kills.get(1).key());
+		assertEquals((7L << 40) | 2, watcher.kills.get(1).ref(), "a posting's reference: epoch << 40 | seq");
 		assertSame(_victim, watcher.kills.get(0).npc());
 		assertSame(_killer, watcher.kills.get(0).owner());
 		assertTrue(watcher.kills.get(0).seq() < watcher.kills.get(1).seq());

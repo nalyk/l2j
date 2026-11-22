@@ -13,6 +13,12 @@ import org.l2jmobius.gameserver.entity.actor.Player;
  */
 public record Kill(int epoch, long seq, Attackable npc, Player owner)
 {
+	/** @return the key as a number, {@code epoch << 40 | seq}: the reference of a posting made for the kill */
+	public long ref()
+	{
+		return ((long) epoch << 40) | seq;
+	}
+
 	/** @return {@code kill/<epoch>/<seq>} */
 	public String key()
 	{

@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 13, under review; revision 12 signed off by Codex in amendment round 9; record in §12)
+- Status: reviewed (revision 13; signed off by Codex in amendment round 19; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -813,6 +813,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   exist, so a destruction afterwards left no mark, a double count (1). Fixed (still revision 13): a failed insert leaves
   the object marked as possibly having a row until an insert of it succeeds; the orphan row a lost acknowledgement
   leaves is upstream's, reported by the restart census.
+- Amendment round 19 (Codex): revision 13 **SIGN-OFF**: no further unnamed case the counters do not settle and no claim
+  the code does not keep; the unsettled cases stand named (the restore/deletion ghost, an unreadable counted commit, the
+  orphan row of an insert whose acknowledgement was lost).
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

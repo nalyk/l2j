@@ -102,7 +102,8 @@ database opens), `Shutdown.java` (after `saveData`, before the database closes).
 
 - [ ] Failing tests: `truth` starts nothing and activates no counter; `dev` runs recovery and the census;
   `shutdownBoundary` writes every clan warehouse and the shutdown census.
-- [ ] Independent code review of parts 4-5; full gate; merge to `main`.
+- [x] Independent code review of parts 4-5 (fixed in round 17); full gate (gate 15 green); Codex round amd19 SIGN-OFF.
+- [ ] Merge to `main`, on the user's say.
 
 ## Outcome
 
@@ -117,4 +118,4 @@ memory. Loaded copies are held under their stripes, and a row whose copy was cou
 (`Item._inserting`). A commit whose outcome cannot be read leaves the counters uncertain, and no shutdown census follows.
 CP-0028 makes the boundary wait for the task pools. One case stays unsettled, and §2.6 names it: Mobius restoring a
 container while such a deletion runs builds a copy of a row that no longer exists, and the restart census reports it.
-The full gate runs 75 classes.
+The full gate runs 75 classes. Rounds amd17-18 found the INSERT whose acknowledgement is lost; amd19 signed off.

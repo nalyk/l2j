@@ -163,6 +163,59 @@ class ClanHallDepositTest
 	}
 
 	@Test
+	void aSaleWhoseRowCannotBeResolvedIsNotListedAndKeepsItsDeposit() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		try (Connection con = DatabaseFactory.getConnection();
+			java.sql.Statement statement = con.createStatement())
+		{
+			statement.execute("CREATE TRIGGER lc_test_refuse_sale BEFORE INSERT ON auction FOR EACH ROW BEGIN IF NEW.id = " + HALL + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused'; END IF; END");
+			try
+			{
+				final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall")
+				{
+					private int _reads;
+
+					@Override
+					protected Boolean rowState()
+					{
+						return (++_reads == 1) ? super.rowState() : null; // the database fails after the insert
+					}
+				};
+				assertFalse(auction.confirmAuction(), "an unreadable outcome is no row");
+				assertFalse(registered(), "not listed: a restart would lose it");
+				assertEquals(1_000_000 - lease(), seller.getWarehouse().getAdena(), "kept: had the row been written, a refund would pay the deposit twice");
+			}
+			finally
+			{
+				statement.execute("DROP TRIGGER lc_test_refuse_sale");
+			}
+		}
+	}
+
+	@Test
+	void aBidAfterTheSaleClosedTakesNothing() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		final Clan bidder = clan(1_000_000);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+		assertTrue(auction.confirmAuction());
+		auction.endAuction(); // closed without bids, while an auctioneer still holds the reference
+		auction.setBid(World.getPlayer(bidder.getLeaderId()), 30_000);
+		assertEquals(1_000_000, bidder.getWarehouse().getAdena(), "upstream took the bid into a deleted auction");
+		try (Connection con = DatabaseFactory.getConnection();
+			PreparedStatement ps = con.prepareStatement("SELECT COUNT(*) FROM auction_bid WHERE auctionId = ?"))
+		{
+			ps.setInt(1, HALL);
+			try (java.sql.ResultSet rs = ps.executeQuery())
+			{
+				rs.next();
+				assertEquals(0, rs.getInt(1), "no bid row");
+			}
+		}
+	}
+
+	@Test
 	void aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded() throws Exception
 	{
 		final Clan seller = clan(1_000_000);

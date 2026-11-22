@@ -279,6 +279,12 @@ public class ClanHallAuction
 	 */
 	public synchronized void setBid(Player bidder, long bid)
 	{
+		if (_over) // CP-0031: a bid that waited on this monitor while the sale closed takes nothing
+		{
+			bidder.sendMessage("Invalid auction");
+			return;
+		}
+		
 		// CP-0023: a clan pays the difference over its own standing bid, as upstream charged only the highest bidder; a clan
 		// outbid and bidding again paid its whole new bid and lost the standing one, which its new bid overwrites.
 		final Bidder standing = bidder.getClan() == null ? null : _bidders.get(bidder.getClanId());
@@ -531,6 +537,11 @@ public class ClanHallAuction
 	 */
 	public synchronized void cancelBid(int bidder)
 	{
+		if (_over) // CP-0031: the sale's deletion already returned every bid
+		{
+			return;
+		}
+		
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("DELETE FROM auction_bid WHERE auctionId=? AND bidderId=?"))
 		{
@@ -587,14 +598,26 @@ public class ClanHallAuction
 				return false;
 			}
 			
-			if (!insertRow() && !hasRow()) // a lost acknowledgement may have written it: the row decides
+			if (!insertRow()) // a lost acknowledgement may have written it: the row decides, and only a row read
 			{
-				if (deposit > 0)
+				final Boolean row = resolveRow();
+				if (row == null)
 				{
-					seller.getWarehouse().addItem(ItemProcessType.REFUND, ADENA_ID, deposit, null, null); // nothing was put up
+					// Unknown: not listed, and the deposit kept, since a refund of a written row would pay it twice; a
+					// restart loads the row with its deposit paid, or finds none and the deposit is lost, as logged here.
+					LOGGER.severe("Clan hall sale " + _id + " of clan " + _sellerClanName + ": its row could not be resolved; deposit " + deposit + " kept, sale not listed.");
+					return false;
 				}
 				
-				return false;
+				if (!row)
+				{
+					if (deposit > 0)
+					{
+						seller.getWarehouse().addItem(ItemProcessType.REFUND, ADENA_ID, deposit, null, null); // nothing was put up
+					}
+					
+					return false;
+				}
 			}
 			
 			ClanHallAuctionManager.getInstance().getAuctions().add(this);
@@ -635,6 +658,37 @@ public class ClanHallAuction
 	/** @return whether this hall's sale still has its row (CP-0031), read under the confirmation lock */
 	private boolean hasRow()
 	{
+		return rowState() != Boolean.FALSE;
+	}
+	
+	/** @return the row's state after a failed insert, read up to five times a second apart; null if never readable */
+	private Boolean resolveRow()
+	{
+		for (int attempt = 0; attempt < 5; attempt++)
+		{
+			final Boolean row = rowState();
+			if (row != null)
+			{
+				return row;
+			}
+			
+			try
+			{
+				Thread.sleep(1000);
+			}
+			catch (InterruptedException e)
+			{
+				Thread.currentThread().interrupt();
+				return null;
+			}
+		}
+		
+		return null;
+	}
+	
+	/** @return whether this hall's sale has its row: true, false, or null when it cannot be read (CP-0031) */
+	protected Boolean rowState()
+	{
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("SELECT 1 FROM auction WHERE id = ?"))
 		{
@@ -646,8 +700,8 @@ public class ClanHallAuction
 		}
 		catch (Exception e)
 		{
-			LOGGER.log(Level.WARNING, "Exception: Auction.hasRow(): " + e.getMessage(), e);
-			return true; // unreadable: refuse the sale rather than risk a second one
+			LOGGER.log(Level.WARNING, "Exception: Auction.rowState(): " + e.getMessage(), e);
+			return null;
 		}
 	}
 	

@@ -545,17 +545,22 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   CONFIRMED", ClanHallAuction.java:460-467): its `auction` row stays, so the hall's next sale fails its `INSERT` on the
   primary key (logged, 545) and lives in memory only; at a restart the stale row comes back and ends again. With CP-0029
   that next sale has paid a deposit (asset-service.md §11.31).
-- Change: `confirmAuction` writes the sale's row before it lists the sale, under the confirmations' lock; a row it could
-  not write (read again on a fresh connection, since a lost acknowledgement may have written it) refuses the sale and
-  gives the deposit back. It then schedules the sale's end, and keeps the task: deleting a sale (`deleteAuctionFromDB`,
-  which now deletes the row before the listing, under the same lock) marks it over and cancels its task, and
-  `endAuction` and `cancelAuction` run under the auction's monitor and do nothing for a sale already over, so a timer
-  that outlives a cancel neither pays the cancelled seller nor deletes the hall's next sale (both delete by hall). The
-  branch without bids deletes the auction as a cancelled one is.
+- Change: `confirmAuction` writes the sale's row before it lists the sale, under the confirmations' lock. A failed write
+  is resolved by reading the row on a fresh connection (a lost acknowledgement may have written it), up to five times
+  a second apart: present, the sale is listed; absent, it is refused and the deposit given back; never readable, it is
+  refused and the deposit kept, logged (a refund of a written row would pay the deposit twice; a restart loads the row
+  with its deposit paid, or finds none). It then schedules the sale's end, and keeps the task: deleting a sale
+  (`deleteAuctionFromDB`, which now deletes the row before the listing, under the same lock) marks it over and cancels
+  its task; `endAuction`, `cancelAuction`, `setBid` and `cancelBid` run under the auction's monitor and do nothing for a
+  sale already over, so a timer that outlives a cancel neither pays the cancelled seller nor deletes the hall's next
+  sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. The branch
+  without bids deletes the auction as a cancelled one is.
 - Invariant: a sale ends on its date, once; a hall's sale is listed exactly when its row exists, but after a failed
   `DELETE`, which the next confirmation then refuses.
 - Proof: `ClanHallDepositTest`: `aConfirmedSaleEndsOnItsDate` (red on upstream: still listed after its end date),
   `aSaleWithoutBidsKeepsItsDepositAndFreesTheHallForItsNextSale` (red on upstream: the row stayed and the next sale's
   end date was never stored), `aCancelledSaleIsNotEndedByItsTimer` (red with the timer alone: the cancelled seller was
   paid 527 000), `aCancelledSalesTimerLeavesTheNextSaleAlone` (red: the next sale's row was deleted),
-  `aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded` (red on upstream: listed, the deposit kept).
+  `aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded` (red on upstream: listed, the deposit kept),
+  `aSaleWhoseRowCannotBeResolvedIsNotListedAndKeepsItsDeposit` (red when an unreadable row counted as written: listed),
+  `aBidAfterTheSaleClosedTakesNothing` (red on upstream: 30 000 taken into a deleted auction, its bid row stranded).

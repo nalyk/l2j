@@ -778,10 +778,12 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     only for a sale loaded at startup (ClanHallAuction.java:142-146; not for a new sale, 149, or at `confirmAuction`,
     522), the branch without bids drops the sale from memory only (460-467), and a row `confirmAuction` failed to write is
     logged and the sale listed anyway (545), so the hall's next sale lives in memory only until a restart brings a stale
-    row back. Core patch: a sale is listed only once its row is written (read again after a failure: a lost
-    acknowledgement may have written it), else refused with its deposit given back; a confirmed sale is scheduled to
-    end, and its task is cancelled when the sale is deleted, which then ends or cancels nothing more; an auction without
-    bids is deleted as a cancelled one is, its row before its listing, under the confirmations' lock.
+    row back. Core patch: a sale is listed only once its row is read as written (after a failure: a lost acknowledgement
+    may have written it), refused with its deposit given back when the row is absent, and refused with the deposit kept
+    when it cannot be read (a refund of a written row would pay twice; the restart decides); a confirmed sale is
+    scheduled to end, and its task is cancelled when the sale is deleted, after which nothing ends, cancels or bids on it
+    any more; an auction without bids is deleted as a cancelled one is, its row before its listing, under the
+    confirmations' lock.
 32. **A whole-stack destruction races an addition into the stack.** `transferItem` grows a target stack
     without its monitor (ItemContainer.java:339, 376), while `destroyItem` decides on the whole stack under the item's
     monitor and then removes it (425-460): an addition between the two lands on the removed object and is destroyed with
@@ -812,6 +814,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   sale page (3). Fixed (still revision 14): the task is cancelled with the sale, and a sale over is ended or cancelled no
   more; the row is written before the listing, under the lock, a failure refused and refunded unless the row is there;
   the deposit is retail's own destruction again, its whole-stack race named as upstream's (§11.32).
+- Amendment round 22 (Codex), NO SIGN-OFF: an unreadable resolution of a failed insert counted as a written row, so
+  the sale was listed without one (1); a bid that waited on the auction's monitor while the sale closed took the
+  bidder's Adena into a deleted auction (2). Fixed (still revision 14): the resolution is present, absent or unknown,
+  read up to five times, an unknown one refused with the deposit kept and logged; a bid or a bid's cancellation on a
+  sale already over does nothing.
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

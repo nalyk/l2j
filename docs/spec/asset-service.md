@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 14; signed off by Codex in amendment round 25; record in §12)
+- Status: draft (revision 15, under review; revision 14 signed off by Codex in amendment round 25; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -426,6 +426,9 @@ the same id, so a retry after an uncertain commit can never apply twice.
 7. While an owner module is frozen, no operation on its custodies commits except corrective admin operations (§4.5).
 8. A retired item leaves memory for good: after `DONE` it is discarded, its object id stays reserved by its row (§11.6).
 9. A debit is visible to its owner at once; nothing credited is visible to anyone before `COMMITTED`.
+10. The owner module may write rows of its own tables (`lc_<module>_…`, the module's name in lower case) in the
+    operation's transaction (`ownerRow`, §4.1): its state rows, such as a craft's outcome (pact.md §4.3); never another
+    module's table or Mobius's, which only the operation's own legs write.
 
 ### 4.3 Operations offered
 
@@ -463,6 +466,11 @@ An item may enter a custody only if, for the holder it leaves:
 - its item id is not one a classified blanket deletion targets (§2.7: event items, hero items);
 - for a clan warehouse, the same checks without the player-bound ones;
 - a partial debit leaves at least one unit in the stack: taking a whole stack is a whole-object debit (§3.3).
+
+An item a source leg creates straight into a custody (`route`'s auctioned drops, `relocate`) leaves no holder, so the
+checks that need none apply to its template: tradeable, not a quest item, not time-limited or shadow, its item id not one
+a blanket deletion targets. An operation with one that fails is refused whole, before it writes anything; the
+consumer's own forms refuse such items earlier (pact.md §4.5; aden-remembers.md §2.2's families).
 
 ### 4.5 Corrective admin operations
 
@@ -793,8 +801,34 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     last stack); the counters post what was destroyed, so conservation is not broken, but the addition is lost. Closing it
     needs the target's monitor in every transfer, ordered across both stacks to stay free of deadlock; not done here.
 
+33. **Nothing lets a module see a kill's drops before retail hands them out.** `Attackable.doItemDrop` computes the
+    death-drop list (`calculateDrops(DropType.DROP, …)`, Attackable.java:1176) and drops or auto-loots each item in the
+    loop that follows (1179-1204). Core patch (03 §4.2): one call right after the list is computed, in the branch whose drop
+    owner is a player, hands the list to the drop seam; with no router installed (always in `truth`) the seam returns
+    the very list it was given after one volatile read. Installed routers run in order on the dropping thread (the
+    Loot Charter's `route`, then Aden Remembers' `relocate`): each is offered what is left, as positions of a list (an
+    item id may appear twice, one per group that rolled it), and returns the positions whose operation committed, an
+    `UNCERTAIN` commit resolved on that thread first (§3.2); what no router took goes to retail unchanged. A router that
+    throws took nothing; a position outside its list is ignored. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
+    given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
+    consumer derives its `OpId`. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
+    are never offered. Stated limit, the consumers' own (pact.md §4.5): a JVM death between the kill and a commit loses
+    what that router held, as retail's own ground drops of the kill are.
+34. **A craft's rules live inside one runnable** (`RecipeItemMaker`, RecipeManager.java:171-782): validation, the success
+    and masterwork draws (:416, :679), the materials (:608-660) and the product (:669-686) cannot be used apart. Core
+    patch (03 §4.3): `RecipeManager.Craft` holds them as functions (`refusal`, `successRate`, `masterworkRatePpm`,
+    `materials`, `product`, `consumeStats`), the maker calls them, and its two `Rnd` draws stay where and as they are.
+    The masterwork rate in parts per million is `min(100, ceil(rarity × CraftMasterworkChanceRate)) × 10 000` when the
+    recipe has a rare product that applies (its id is the product's, or `CraftMasterwork` is on), else 0: the
+    probability retail's draw `Rnd.get(100) < rarity × rate` has.
+
 ## 12. Review record
 
+- Revision 15 (amendment, under review): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
+  Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
+  (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates
+  straight into a custody to the checks that need no holder; §4.2 rule 10 lets an owner module write its own state rows
+  in the operation's transaction.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

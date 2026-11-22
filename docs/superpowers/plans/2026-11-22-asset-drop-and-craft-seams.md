@@ -57,17 +57,17 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
 - Modify: `docs/spec/asset-service.md` (§4.2, §4.3, §4.4, §11, §12, status line), `docs/spec/asset-economy-sites.csv` (no
   new site: the seam and the operations write through the ledger)
 
-- [ ] **Step 1:** §4.4: an item a source leg creates straight into a custody (`route`'s auctioned drops, `relocate`) passes
+- [x] **Step 1:** §4.4: an item a source leg creates straight into a custody (`route`'s auctioned drops, `relocate`) passes
   the same checks on its template: tradeable, not a quest item, not time-limited or shadow, its id not blanket-deleted;
   an operation with one that fails is refused whole.
-- [ ] **Step 2:** §4.2: the owner module may write rows of its own tables (`lc_<module>_…`) in the operation's
+- [x] **Step 2:** §4.2: the owner module may write rows of its own tables (`lc_<module>_…`) in the operation's
   transaction through `ownerRow`, never another module's or Mobius's.
-- [ ] **Step 3:** §11.33: the drop seam's contract (Global Constraints above) and where it is: the player branch of
-  `doItemDrop` only (Attackable.java:1173-1191); the fake-player branch (`FakePlayerCanDropItems`, off by default)
+- [x] **Step 3:** §11.33: the drop seam's contract (Global Constraints above) and where it is: the player branch of
+  `doItemDrop` only (Attackable.java:1176-1204); the fake-player branch (`FakePlayerCanDropItems`, off by default)
   follows retail untouched; spoil is never offered. §11.34: the craft rules made callable, retail's draws unchanged.
-- [ ] **Step 4:** status line `draft (revision 15, under review; revision 14 …)`; §12 entry; run
+- [x] **Step 4:** status line `draft (revision 15, under review; revision 14 …)`; §12 entry; run
   `python3 tools/spec/traceability.py`, then `SpecTraceabilityTest` and `AssetEconomySitesTest` green.
-- [ ] **Step 5:** commit `Asset rev 15: the drop and craft seams`.
+- [x] **Step 5:** commit `Asset rev 15: the drop and craft seams`.
 
 ### Task 2: The drop seam (CP-0032)
 

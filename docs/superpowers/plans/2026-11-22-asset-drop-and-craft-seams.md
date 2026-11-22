@@ -111,16 +111,16 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
 
 **Interfaces:**
 - Produces: `record RoutedDrop(int itemId, long count, int receiverCharId)` (in `asset`; `receiverCharId` 0 = the
-  custody); `void AssetTx.route(int custody, List<RoutedDrop> drops)`; `static String Eligibility.templateRefusal(ItemTemplate t)`.
+  custody); `void AssetTx.route(int custody, List<RoutedDrop> drops, String subject, String content)` (the service mail names its institution, as `release`'s); `static String Eligibility.templateRefusal(ItemTemplate t)`.
 
-- [ ] **Step 1: Write the failing tests** (`AssetFixtures` as `ReleaseTest` uses):
+- [x] **Step 1: Write the failing tests** (`AssetFixtures` as `ReleaseTest` uses):
   - `routedDropsReachTheirReceiversByServiceMailAndTheAuctionedOnesTheCustody`: two receivers and one auctioned drop →
     one service mail per receiver with exactly its drops (INV12 holds), one `ESCROW` row in the custody; postings
     `LOOT_DROP` SOURCE legs equal to the drops; counters up by the drops; fact `Asset.LootRouted` with custody and legs.
   - `anIneligibleAuctionedDropRefusesTheWholeRoute`: a quest item with receiver 0 → `AssetAbort` (reason `INELIGIBLE`),
     no row, no mail, no posting, counters unchanged.
   - `aSecondRouteOfOneKillAbortsAsSettled`: same settlement key `("PACT", "kill/7/1")` twice → the second aborts.
-- [ ] **Step 2:** RED. **Step 3:** implement `route` by composing the existing service-mail writer `release` uses and the
+- [x] **Step 2:** RED. **Step 3:** implement `route` by composing the existing service-mail writer `release` uses and the
   custody row writer `correct` uses for SOURCE legs; code `LOOT_DROP`, reference = custody. **Step 4:** GREEN; the whole
   `asset` test package GREEN. **Step 5:** commit `Asset: route`.
 

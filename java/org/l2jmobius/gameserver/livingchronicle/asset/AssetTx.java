@@ -27,6 +27,8 @@ import org.l2jmobius.gameserver.livingchronicle.journal.DurableFact;
 import org.l2jmobius.gameserver.managers.CastleManager;
 import org.l2jmobius.gameserver.mechanics.siege.Castle;
 import org.l2jmobius.gameserver.mechanics.variables.ItemVariables;
+import org.l2jmobius.gameserver.data.xml.ItemData;
+import org.l2jmobius.gameserver.entity.item.ItemTemplate;
 
 /**
  * One asset operation (docs/spec/asset-service.md §3.2, §4.1, §4.2). The caller declares what the operation does; nothing
@@ -268,6 +270,114 @@ public final class AssetTx implements AutoCloseable
 			execution.mailed(message, receiverCharId, reason);
 			execution.facts().add(AssetFact.of("EscrowReleased", custody, "custody", custody, "receiver", receiverCharId, "mail", message, "reason", reason.name(), "legs", legs));
 		}, custody);
+	}
+
+	/**
+	 * Routes a kill's drops (§4.3 {@code route}, §2.5 {@code LOOT_DROP}; pact.md §4.5): each enters from the
+	 * {@code LOOT_DROP} source, referenced by the charter (the custody's owner); each receiver's by one service mail, the auctioned
+	 * ones (receiver 0) into the custody, which they must be eligible for by their template (§4.4). All or nothing: an
+	 * ineligible auctioned drop or a receiver gone refuses the whole operation. A non-stackable count is rows of one. The
+	 * caller writes the kill's settlement key.
+	 */
+	public void route(int custody, List<RoutedDrop> drops, String subject, String content)
+	{
+		if ((subject == null) || subject.isBlank() || (content == null))
+		{
+			throw new IllegalArgumentException("a service mail names its institution and says why");
+		}
+		if (drops.isEmpty())
+		{
+			throw new IllegalArgumentException("a route routes something");
+		}
+		final List<RoutedDrop> routed = List.copyOf(drops);
+		final Map<Integer, List<RoutedDrop>> byReceiver = new LinkedHashMap<>();
+		final List<RoutedDrop> auctioned = new ArrayList<>();
+		for (RoutedDrop drop : routed)
+		{
+			if (drop.receiverCharId() == 0)
+			{
+				auctioned.add(drop);
+			}
+			else
+			{
+				byReceiver.computeIfAbsent(drop.receiverCharId(), receiver -> new ArrayList<>()).add(drop);
+				_characters.add(drop.receiverCharId());
+			}
+		}
+		step(execution ->
+		{
+			final Custody target = execution.open(custody);
+			execution.notFrozen(target);
+			final long charter = target.ownerRef(); // the posting's reference is the charter (§2.5), the custody's owner
+			for (RoutedDrop drop : auctioned)
+			{
+				final String refusal = Eligibility.templateRefusal(ItemData.getInstance().getTemplate(drop.itemId()));
+				if (refusal != null)
+				{
+					throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, "item " + drop.itemId() + " may not enter custody " + custody + ": " + refusal);
+				}
+			}
+			for (int receiver : byReceiver.keySet())
+			{
+				if (!execution.receiverAlive(receiver))
+				{
+					throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + receiver + " is gone or marked for deletion");
+				}
+			}
+			final String code = "LOOT_DROP";
+			final List<Map<String, Object>> legs = new ArrayList<>();
+			final Connection connection = execution.connection();
+			for (Map.Entry<Integer, List<RoutedDrop>> entry : byReceiver.entrySet())
+			{
+				final int message = insertServiceMail(connection, entry.getKey(), subject, content);
+				for (RoutedDrop drop : entry.getValue())
+				{
+					for (Asset asset : units(drop))
+					{
+						try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
+						{
+							attach.setInt(1, _service.ids().next());
+							attach.setInt(2, asset.itemId());
+							attach.setLong(3, asset.qty());
+							attach.setInt(4, message);
+							attach.executeUpdate();
+						}
+						execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+						execution.existence(asset.itemId(), asset.qty());
+						legs.add(legOf(asset));
+					}
+				}
+				execution.mailed(message, entry.getKey(), MailReason.PAYOUT);
+			}
+			for (RoutedDrop drop : auctioned)
+			{
+				final Asset asset = new Asset(drop.itemId(), drop.count(), null);
+				execution.give(custody, custody, asset);
+				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), asset.qty());
+				legs.add(legOf(asset));
+			}
+			execution.touched(custody);
+			execution.facts().add(AssetFact.of("LootRouted", custody, "operation", _op.hex(), "custody", custody, "legs", legs));
+		}, custody);
+	}
+
+	/** A drop as the rows it becomes: one of its count if its item stacks, else rows of one. */
+	private static List<Asset> units(RoutedDrop drop)
+	{
+		final ItemTemplate template = ItemData.getInstance().getTemplate(drop.itemId());
+		if ((template == null) || template.isStackable())
+		{
+			return List.of(new Asset(drop.itemId(), drop.count(), null));
+		}
+		final List<Asset> units = new ArrayList<>();
+		for (long i = 0; i < drop.count(); i++)
+		{
+			units.add(new Asset(drop.itemId(), 1, null));
+		}
+		return units;
 	}
 
 	/**
@@ -1759,6 +1869,22 @@ public final class AssetTx implements AutoCloseable
 					move.setInt(2, asset.objectId());
 					move.setInt(3, source);
 					expectOne(move.executeUpdate(), asset.objectId());
+				}
+				return;
+			}
+			final ItemTemplate template = ItemData.getInstance().getTemplate(asset.itemId());
+			if ((template != null) && !template.isStackable())
+			{
+				// an amount of a non-stackable item is that many objects, never one row counting several
+				for (long i = 0; i < asset.qty(); i++)
+				{
+					try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, 1, 0, 'ESCROW', ?, NULL, 0, 0, -1, 0)"))
+					{
+						insert.setInt(1, _service.ids().next());
+						insert.setInt(2, asset.itemId());
+						insert.setInt(3, custody);
+						insert.executeUpdate();
+					}
 				}
 				return;
 			}

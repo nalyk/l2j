@@ -828,7 +828,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates
   straight into a custody to the checks that need no holder; §4.2 rule 10 lets an owner module write its own state rows
-  in the operation's transaction.
+  in the operation's transaction. Implementing `route` found that an amount of a non-stackable item given to a custody
+  was merged into one row counting several (a correction's amounts could do it too): such an amount is now that many
+  rows of one, in a custody and in a mail alike.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

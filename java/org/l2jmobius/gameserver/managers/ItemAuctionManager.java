@@ -38,6 +38,7 @@ import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.gameserver.config.GeneralConfig;
 import org.l2jmobius.gameserver.config.ServerConfig;
 import org.l2jmobius.gameserver.entity.item.auction.ItemAuctionInstance;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 
 /**
  * @author Forsaiken
@@ -139,17 +140,21 @@ public class ItemAuctionManager
 	{
 		try (Connection con = DatabaseFactory.getConnection())
 		{
-			try (PreparedStatement ps = con.prepareStatement("DELETE FROM item_auction WHERE auctionId=?"))
+			// The auction and its bids, counted together (CP-0025): its open bids leave the census, its winning one was paid.
+			Census.counting(con, Census.Holding.ITEM_AUCTION_BIDS, "1 = 1", new Object[0], () ->
 			{
-				ps.setInt(1, auctionId);
-				ps.execute();
-			}
-			
-			try (PreparedStatement ps = con.prepareStatement("DELETE FROM item_auction_bid WHERE auctionId=?"))
-			{
-				ps.setInt(1, auctionId);
-				ps.execute();
-			}
+				try (PreparedStatement ps = con.prepareStatement("DELETE FROM item_auction WHERE auctionId=?"))
+				{
+					ps.setInt(1, auctionId);
+					ps.execute();
+				}
+				
+				try (PreparedStatement ps = con.prepareStatement("DELETE FROM item_auction_bid WHERE auctionId=?"))
+				{
+					ps.setInt(1, auctionId);
+					return ps.executeUpdate();
+				}
+			});
 		}
 		catch (SQLException e)
 		{

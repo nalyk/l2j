@@ -1,10 +1,10 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 12: service mail's exact fields, expiry and patch points, from planning N4 part 3, under review; revision 11 was signed off; record in §12)
+- Status: reviewed (revision 13; signed off by Codex in amendment round 19; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
-- DDL: `sql/migrations/V010__lc_asset.sql`. Classified sites: `docs/spec/asset-economy-sites.csv` (§2.7).
+- DDL: `sql/migrations/V010__lc_asset.sql`, `V018__lc_economy_statement.sql`. Classified sites: `docs/spec/asset-economy-sites.csv` (§2.7).
 - Upstream facts cited as `file:line` are at the fork's current upstream snapshot (`upstream` c9ca4c31, Mobius
   f1e2649e33cc); paths are under `java/org/l2jmobius/gameserver/` unless they start with `dist/`.
 
@@ -96,6 +96,7 @@ lc_economy_bucket(window_start TIMESTAMP, item_id INT, site VARCHAR(48), class {
 lc_economy_census(census_id BIGINT, taken_at TIMESTAMP(3), kind {SHUTDOWN|STARTUP|REBASE}, item_id INT, holding VARCHAR(16),
                   qty BIGINT UNSIGNED, PRIMARY KEY(census_id, item_id, holding))
 lc_economy_counter(item_id INT PK, existence BIGINT, as_of_census BIGINT)
+lc_economy_statement(statement_id BINARY(16) PK, staged_at TIMESTAMP(3))   -- V018: a counted SQL statement's own row (§2.6)
 lc_module_state(module VARCHAR(16) PK, state {RUNNING|FROZEN}, reason VARCHAR(64), since TIMESTAMP(3), evidence_fact_id BIGINT NULL)
 ```
 
@@ -153,7 +154,7 @@ change.
 | `RELOCATED_DROP` | SOURCE | kill key | a kill's retail-rolled family items that Aden Remembers relocates into a Guild warehouse instead of the ground or an inventory, exactly the items and counts the retail roll made (aden-remembers.md §4.3.1); like `LOOT_DROP`, one operation per kill |
 | `SINK_RECYCLE` | SOURCE | Guild pool | Adena credited to a Guild pool once a day, at most `RecyclePermille` of the Adena its territory's retail teleport fees destroyed the previous day as the journal recorded it (aden-remembers.md §4.6): a source bounded by a recorded sink |
 | `CROWN_UPKEEP` | SINK | law | road wardens' wages paid from an Open Roads law's custody (aden-remembers.md §4.5) |
-| `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again through the classified site `lc_raid_drop` (§2.7) when it is dropped |
+| `RAID_SHARE` | SINK | caravan | the share of a raided manifest that the raid drops: it leaves the custody here and enters the world again as a drop the ledger's own code creates on the ground, counted like any drop (§2.6) when it is picked up or saved |
 | `ROAD_LOSS` | SINK | caravan | the rest of a raided manifest |
 | `ADMIN_CORRECTION` | SOURCE / SINK | audit fact | a corrective admin operation (§4.5) |
 | `CRAFT_INPUT` | SINK | contract | a contractual craft's materials, consumed from the contract's custody exactly as retail consumes them from an inventory (pact.md §4.3) |
@@ -184,6 +185,42 @@ it guarantees, and what it only watches, are stated separately.
    disconnects players before stopping its task pools (Shutdown.java:380, 403), so a task can change a container after
    its final save, and that change is lost and reported.
 
+   **The existence counters** hold, per item id, the quantity in the holdings the census counts, kept from the changes
+   themselves. An item's quantity counts while its location is one the census counts (every `ItemLocation` but `VOID`,
+   `REFUND` and `LEASE`; the ground list too when `SaveDroppedItem` is on), so a change of its count or of its location
+   is counted where it happens (`Item.setCount`, `Item.changeCount`, `Item.setItemLocation`, and joining or leaving the
+   saved ground list, which settles with the item under the same lock); a treasury counts where Mobius changes it
+   (`Castle.addToTreasuryNoTax`); an open bid where its row is written (the bid tables, and an item auction's state, which
+   says when its winning bid was paid, are that holding's truth, so a write that fails counts nothing); a statement that writes census rows directly (an SQL site in §2.7 classed `SOURCE`, `SINK` or `MOVE`)
+   runs in a transaction of its own (a connection already in one is refused) that reads, under locks, what the census
+   counts in the rows it writes before and after it, and posts the difference only when it commits, so a statement that
+   fails posts nothing; the transaction writes a row of its own (`lc_economy_statement`), so a commit whose
+   acknowledgement is lost is decided by that row, read under its lock on a fresh connection, never by quantities other
+   writers may have changed since. Memory is the truth for an object Mobius has loaded: the loaded copies of the rows it
+   locks are held under their leaf locks from its locking read until its posting, so none settles in between, and a
+   deleted row whose copy is loaded counts out what that copy counted, never the row's stale quantity (the copy then
+   stops counting: an ended event's item in a loaded warehouse); a deleted row whose object memory had already counted
+   out (destroyed, dropped or sold, its row not yet written: Mobius counts and deletes in two steps) counts nothing
+   more, read under the row's lock, which Mobius's own deletion of the row waits behind, and kept until a write of the
+   row holds nothing counted (a save that began before and wrote the older quantity keeps it; a destruction while the
+   object's first row is being inserted leaves the mark too; an insert that fails keeps it, and the object stays one
+   whose row may exist, so a later destruction leaves the mark as well, since a lost acknowledgement may have left the
+   row: Mobius, believing it has none, never deletes it, and the restart census reports that orphan). A commit that fails is rolled
+   back before it is resolved, so no later cleanup commits it; one known to have committed is posted whatever happens to
+   the connection afterwards; one whose outcome cannot be read at all (the database failing the resolution too) makes the
+   counters uncertain, so no shutdown census follows and the next start is a rebase. A race this does not settle is upstream's own: Mobius restoring a container while a counted
+   statement deletes a row of it (the event and hero purges delete by item id over every owner) builds a copy of a row
+   already gone, a ghost; the counters count the ghost from its restored quantity, so once it changes the restart census
+   reports its difference, which is the ghost. The ledger posts, once
+   its operation commits, each `SOURCE` and `SINK` leg that creates or removes rows (a reconciliation recognising rows as
+   they are, §4.5, changes no holding and posts nothing). A clamp (a quantity asked of a change and not applied) is recorded
+   apart for the watched part, never in the counters, which see what was applied. Restored state is already in the census and is never counted again: Mobius assigns a restored
+   row's location without `setItemLocation` (Item.java:1559-1566), and the object starts counted at its count. The
+   service's own takes and returns (a stack decrease, a treasury commit or return, a whole object retired) move quantity
+   between Mobius's memory and custody rows and post nothing, so a quantity taken and then lost shows as the difference
+   it is. A count and a location changing at once on one item settle under a lock of their own, never an item's or a
+   container's monitor, so the counters are exact when the server is quiet, as at the boundary.
+
 **Watched (alarm, not proof):**
 
 3. Every place that changes an item's existence or quantity is a classified site, and each change is counted under its
@@ -194,14 +231,21 @@ it guarantees, and what it only watches, are stated separately.
    equal size in one window can hide each other.
 
 **The shutdown boundary.** After Mobius's shutdown has disconnected every player and stopped its task pools
-(Shutdown.java:380, 403), the service writes every authoritative container that Mobius does not (a clan warehouse whose
+(Shutdown.java:380, 403), and once those pools have terminated (`shutdownNow` only interrupts a running task; the
+boundary waits up to 30 seconds and, with a pool still running, takes no shutdown census, so the next start is a rebase),
+the service writes every authoritative container that Mobius does not (a clan warehouse whose
 leader is offline is skipped by `ItemContainer.updateDatabase`, ItemContainer.java:579: the service writes each clan
-warehouse's items itself), checks every write succeeded, posts each memory-only holding about to be discarded as a sink
-(ground items when `SaveDroppedItem = False`, General.ini:217; with it on they are counted from `itemsonground` instead),
-and only then takes the `SHUTDOWN` census from the database and persists the counters. Refund lists are already
+warehouse's items itself), checks every write succeeded, and only then, with the counters certain, takes the `SHUTDOWN` census from the database
+and persists the counters (uncertain counters still have the warehouses written; only the census depends on them). A
+fault inside the boundary is logged and takes no census; it never stops Mobius closing the database. Ground items are a holding only when `SaveDroppedItem` is on (General.ini:217), counted from
+`itemsonground`; with it off a drop leaves the counted holdings and a pickup enters them, so nothing on the ground is
+posted at the boundary. Refund lists are already
 destroyed at logout (Player.java:12131, PlayerRefund.java:85) through a classified sink site, so they are never counted.
 
-**At startup**, before any login, the database is counted again (`STARTUP`) and compared with the persisted counters. A
+**At startup**, right after the database opens and before any other startup step (Mobius's own cleanup,
+DatabaseIdManager.java:161-171, is a counted site), the database is counted again (`STARTUP`), compared with the persisted
+counters, and the counters start from it; this needs only the database. Recovery (§3.2, §7), which needs Mobius's mail
+manager for INV12, runs later, once Mobius's managers are up and before any server-start listener or login. A
 difference is a conservation failure somewhere in Mobius or here (for instance a background task changing a player's
 container after its final save, which Mobius's shutdown order allows, Shutdown.java:380-403; the census reports such a
 loss, it does not hide it): `Asset.ConservationBroken` with the per-item
@@ -226,19 +270,31 @@ the bid to the seller (ClanHallAuction.java:470-473), with any clamp a sink.
 
 ### 2.7 The site table
 
-`docs/spec/asset-economy-sites.csv`: one row per site, `site, file, member, class, holding_from, holding_to, reason`. It is
-reviewed like the spec. A static test (AT-ASSET-12) scans the compiled core and every datapack script for each call that
-can change an item's existence or quantity (`ItemManager.createItem`, `ItemManager.destroyItem`, `Item.changeCount`,
-`Item.setCount`, the `Item` constructors) and for every SQL string that deletes or updates `items`, and fails on any
-site the table does not classify, and on any table row that no longer matches a site. Known sites that must be in it from
-the start: direct item construction for lottery and race tickets (`dist/game/data/scripts/handlers/bypass/npc/Loto.java:242`,
-RaceManager.java:171) and mercenary tickets (MercTicketManager.java:195), restores (`RESTORE`), and the blanket SQL
-deletions of event and hero items (LongTimeEvent.java:557, Hero.java:81: `SINK`). A constructor followed by
-`setCount` on the fresh object, before it enters any holding, is one site (the quantity first exists there); a
-reconstruction from rows is `RESTORE`. A site that computes several quantities (a returned part, a penalty, a clamp) counts
-each under its own class where it computes it. A row whose class is not yet decided is `PENDING`, and AT-ASSET-12 fails on
-any `PENDING` row: the table is complete only when the scan and the review agree. The table in this commit is the seed
-(the sites the reviews named); completing it is the exit criterion of AT-ASSET-12 in N4, not a claim of this spec.
+`docs/spec/asset-economy-sites.csv`: rows `site, file, member, class, holding_from, holding_to, reason`, reviewed like the
+spec. A **site** is a member (a method or a constructor; a lambda belongs to the member that writes it) of the compiled
+core or of a datapack script that calls something able to change an item's existence or quantity
+(`ItemManager.createItem`, `ItemManager.destroyItem`, `Item.changeCount`, `Item.setCount`, `Item.setItemLocation`, an
+`Item` constructor; never one overload delegating to another), that loads an SQL string writing a census table (`DELETE`, `UPDATE`, `INSERT` or
+`REPLACE` on `items`, `itemsonground`, `item_auction_bid` or `auction_bid`, or an `UPDATE castle` setting `treasury`), or
+that calls the existence counters (§2.6), so every counter hook is a classified site too. A static test (AT-ASSET-12)
+scans the fork's compiled core (upstream with its core patches, so a patch that moves a site moves its row), Living
+Chronicle's own package excepted (its changes are ledger legs), and every datapack script
+compiled as Mobius compiles them at boot, and fails on a site no row names, on a row naming no site, and on a `PENDING`
+row. Classes: `SOURCE`, `SINK`, `MOVE`, `RESTORE` (state rebuilt from rows, never counted), `PERSIST` (writes a holding's
+row from memory, changing no quantity), `COUNTER` (the counters' own settle, which posts what a change classified at
+another site does; not a site of the watched buckets) and `PENDING` (not yet decided). A member that does two things has a row for each
+(ItemContainer.addItem creates by item id and merges into a stack). A constructor followed by `setCount` on the fresh
+object, before it enters any holding, is one site, where the quantity first exists; a quantity a site computes apart (a
+returned part, a penalty, a clamp) is named in that site's reason under its own class, and the counters see the quantity
+applied, never the one asked, so a clamp in `Item.changeCount` or in a treasury is counted where it is computed.
+Known sites that must be in it from the start: direct item construction for lottery and race tickets
+(`dist/game/data/scripts/handlers/bypass/npc/Loto.java:242`, RaceManager.java:171) and mercenary tickets
+(MercTicketManager.java:195), restores (`RESTORE`), and the blanket SQL deletions of event and hero items
+(LongTimeEvent.java:557, Hero.java:81: `SINK`).
+
+**Ledger rows** (`file` = `ledger`, `member` = a posting code) classify Living Chronicle's own sources and sinks, which the
+ledger posts (§2.5, §2.6). AT-ASSET-12 checks that they are exactly §2.5's `SOURCE` and `SINK` codes, each in every kind
+§2.5 permits it, and that every `SinkCode` is one of them; it does not scan for them.
 
 ## 3. State machines
 
@@ -369,7 +425,7 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `relocate(drops)` | `RELOCATED_DROP` source → for each selected item its own destination warehouse custody (a kill's families may go to different towns), exactly the kill's selected items; one operation per kill, whole or nothing, under the kill key, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
 | `recycle(pool, amount, day)` | `SINK_RECYCLE` source → the pool, once per (pool, day), refused above the recorded share | `Asset.SinkRecycled` |
 | `track(objectId)` | no legs: if the live object has no live lifecycle, one is begun (`began_op` null, `began_kind` `TRACKED`), under the object's stack lock like any operation that reads it (§3.3); idempotent; ended by the existing end sites (chronicle.md §4.6, under review) | `Asset.LifecycleTracked` |
-| `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, through `lc_raid_drop`) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
+| `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, as a ground drop, §2.5) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
 | `issue(character, item, code)` | a representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`) source → system mail | `Asset.ParchmentIssued` or `Asset.SealIssued` |
@@ -456,7 +512,7 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | ASSET-INV09 | `LazyItemsUpdate = False` (GeneralConfig.java:80, General.ini:193) | at startup; the module refuses to start otherwise |
 | ASSET-INV10 | an object id is never released while a row with that id exists | by the core patch (§11.6) on every destroy; at every census |
 | ASSET-INV11 | per custody and item id: Σ CREDIT − Σ DEBIT of the custody's postings = Σ `count` of its `ESCROW` rows | per operation for the custodies it touches; full pass at every census and at startup, including after a crash |
-| ASSET-INV12 | every `lc_mail_delivery` with `claimed_at` unset names an existing service mail (§2.1: `senderId = -1`, `sendBySystem` nonzero, `reqAdena = 0`) whose attachment rows are exactly the operation's `MAIL` credit legs to that message, and `MailManager` knows it; a missing message for an unclaimed delivery is a violation, not a claim | per operation; at every census (which also adopts a message `MailManager` lacks, and sets `claimed_at` for a message whose attachments retail cleared, RequestPostAttachment.java:232) |
+| ASSET-INV12 | every `lc_mail_delivery` with `claimed_at` unset names an existing service mail (§2.1: `senderId = -1`, `sendBySystem` nonzero, `reqAdena = 0`, `hasAttachments = 'true'`, without which retail shows no attachment) whose attachment rows are exactly the operation's `MAIL` credit legs to that message, and `MailManager` knows it; a missing message for an unclaimed delivery is a violation, not a claim | per operation; at every census (which also adopts a message `MailManager` lacks, and sets `claimed_at` for a message whose attachments retail cleared, RequestPostAttachment.java:232) |
 | ASSET-INV13 | a pending mark exists only while its operation is between `MARKED` and `DONE` | at startup (none may survive recovery); at every census |
 
 A violation of INV01-INV05, INV07, INV08, INV10-INV13 writes `Asset.InvariantViolated`, freezes the owning module through
@@ -521,7 +577,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R09 | An escrowed item's object id MUST stay reserved while its row exists, at runtime and across restarts. | AT-ASSET-00, AT-ASSET-09 |
 | ASSET-R10 | Every credit to a character MUST be system mail written in the operation's transaction; no asset MUST be credited to a live Mobius container. | AT-ASSET-10 |
 | ASSET-R11 | Service mail MUST be built as §2.1 says (not rejectable, not cash on delivery, never expiring) and MUST keep its attachments until claimed; the claim itself is retail and has retail's guarantees, no more. | AT-ASSET-11 |
-| ASSET-R12 | Every site that changes an item's existence or quantity, and every SQL statement deleting or updating `items`, MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
+| ASSET-R12 | Every site that changes an item's existence or quantity, every SQL statement writing a census table and every counter hook MUST be classified; a clean restart MUST either conserve every item id exactly or report the exact per-item difference; a move imbalance beyond tolerance for two windows MUST raise an alarm. | AT-ASSET-12 |
 | ASSET-R13 | Clamps at `MAX_ADENA` and at 0, in stacks and in castle treasuries, MUST be classified sinks. | AT-ASSET-13 |
 | ASSET-R14 | Living Chronicle MUST NOT create an asset except audited `ADMIN_CORRECTION`, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` exactly as the retail craft or kill computed them at the seam, `SINK_RECYCLE` within its recorded share, and the valueless `PACT_PARCHMENT` and `LEDGER_SEAL`. | AT-ASSET-14 |
 | ASSET-R15 | A violated invariant MUST freeze the owning module and, if it is `OPEN`, the custody (a `CLOSED` custody stays `CLOSED`), write evidence, and change nothing else; only corrective operations may then commit. | AT-ASSET-15 |
@@ -553,7 +609,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-09 | integration, restart | the allocator never hands out an escrowed or mailed object id, at runtime and after restart; a failed row delete keeps the id reserved |
 | AT-ASSET-10 | integration | releases, refunds and corrections arrive only as system mail; the live containers are untouched |
 | AT-ASSET-11 | integration | service mail as written: rejecting it, deleting it with attachments, waiting past every expiry run, an offline receiver, a full inventory and a full inbox: its attachments survive until claimed; startup cleanup keeps it (DatabaseIdManager.java:68) |
-| AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row and a stale row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
+| AT-ASSET-12 | unit, integration | the static site scan fails on an unclassified site, a `PENDING` row, a stale row and a `SinkCode` without a ledger row; a dupe injected into a retail transfer raises the move alarm within two windows; a clean restart conserves every item id; a crash produces a rebase, never a pass |
 | AT-ASSET-13 | unit | gains over `MAX_ADENA` and losses below 0, in stacks and castle treasuries, are counted as clamp sinks |
 | AT-ASSET-14 | integration | every operation kind, randomised: no SOURCE leg except audited corrections, `CRAFT_OUTPUT`, `LOOT_DROP` and `RELOCATED_DROP` legs equal to what the retail seam computed for that craft or kill (compared with a retail run of the same keyed inputs), `SINK_RECYCLE` at most its share of the previous day's recorded teleport-fee sink and once per pool and day, and `PACT_PARCHMENT` and `LEDGER_SEAL` of their items only; an `exchange` refused whole when either side fails |
 | AT-ASSET-15 | integration | a forged `ESCROW` row under an open custody: module and custody frozen; under a closed custody: module frozen, the custody still `CLOSED`; evidence written, rows untouched; only a correction (taking the rows out, §4.5) commits |
@@ -651,9 +707,115 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     claim whose patch step did not run.
 22. **Login** restores a character's items from rows (Player.java:7358-7360) with plain reads that do not wait for an
     uncommitted change. Core patch: the restore waits while `lc_asset_pending` marks the character. → ASSET-R26.
+24. **No hook counts existence** (§2.6). Core patch: `Item.setCount`, `Item.changeCount` and `Item.setItemLocation`
+    settle the item's counted quantity under a leaf lock, `Item.changeCount` records its clamp apart, and the service's
+    `tryDecrease` and `retire` hand their quantity to a custody under the same lock; `Item.restoreFromDb` marks a restored
+    object counted at its count;
+    `Castle.addToTreasuryNoTax` posts the change it applied; `ItemsOnGroundManager.save`, `removeObject` and `load`
+    change the saved ground list and the item's membership under the item's lock (`Item.setOnSavedGround`,
+    `restoreOnSavedGround`); `ItemAuction.updatePlayerBidInternal` and `storeMe` and `ClanHallAuction.updateInDB`,
+    `cancelBid` and `removeBids` count the bid rows they write, and `ClanHallAuction.returnItem` records its clamp; each
+    SQL site classed `SOURCE`, `SINK` or `MOVE` runs in a transaction that counts its
+    rows under locks before and after it and posts the difference when it commits. Until a profile starts
+    Living Chronicle the hooks do nothing (profiles.md §4.2 rule 4). → ASSET-R12, INV06.
+25. **Boot and shutdown have no module seams.** Core patch: GameServer calls Living Chronicle twice, right after the
+    database opens (the `STARTUP` census and the counters, §2.6; before `ThreadPool.init`, GameServer.java:213-216, so it
+    uses nothing but the database) and once Mobius's managers are up, before the shutdown hook is registered and before
+    offline traders and players are restored, which load characters as a login does (GameServer.java:436-447:
+    recovery, §3.2, and the service; a recovery that fails stops the start); Shutdown calls it after `saveData` and
+    before the database closes (the boundary, §2.6: every clan warehouse written from memory, then the census, only if
+    every write succeeded). In `truth` each returns at once.
+26. **A clan-hall re-bid after being outbid loses the first bid** (ClanHallAuction.java:272, 386-390): the clan pays its
+    whole new bid, and its standing bid is overwritten and never returned. Core patch: a clan pays the difference over
+    its own standing bid, as Mobius already charges the highest bidder raising its own.
+27. **The saved ground restores a placed mercenary ticket twice and truncates counts.** With `SaveDroppedItem`, every
+    ground item but a cursed weapon is saved (ItemsOnGroundManager.java:216-219), placed tickets included, and both
+    `ItemsOnGroundManager.load` and `MercTicketManager.load` rebuild them at startup (ItemsOnGroundManager.java:106,
+    MercTicketManager.java:195); the load reads a stack's count with `getInt` (ItemsOnGroundManager.java:110-112). Core
+    patch: placed tickets are not saved to the ground, which `MercTicketManager` owns, a ticket row saved before is not
+    restored from it and its row is deleted, counted; counts are read as `long`.
+28. **A clan-hall bid whose row could not be deleted was refunded anyway** (`cancelBid` and `removeBids` log a failed
+    `DELETE` and go on to `returnItem`, ClanHallAuction.java:494-512, 403-431), so the bid stayed and was paid back, a
+    second time at its next removal. Core patch: a bid is refunded only once its row is gone.
 
 ## 12. Review record
 
+- Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
+  counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
+  mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL
+  sink counts its rows before it runs; the ledger posts its sources and sinks; the service's own takes post nothing. The
+  boundary no longer posts ground items as a sink (a drop already leaves the counted holdings), and the startup census
+  comes before every other startup step. §2.7 defines a site as a member, extends the scan to SQL writing any census
+  table and to the counter hooks, adds `PERSIST`, and keys Living Chronicle's rows by posting code (`ledger`), every
+  `SinkCode` with one. The table is complete for the upstream snapshot: 50 rows of Mobius sites, 17 ledger rows.
+  §11.24-26 name the hooks, the boot and shutdown seams, and a clan-hall re-bid that loses the first bid.
+- Amendment round 10 (Codex), NO SIGN-OFF: an SQL count taken before the statement posts a deletion that then fails, and
+  misses concurrent writes (1); a `MOVE` SQL site (the admin repair) was left outside the counters (2); the lease a
+  clan-hall seller gets back had lost its row (3); recovery before `ThreadPool.init` would start the mail manager without
+  its deletion task (4); the scan saw neither counter hooks nor location changes (5); "complete for the upstream
+  snapshot" was the fork's code, and the stack clamp had lost its row (6); mercenary tickets and herbs ignored the saved
+  ground (7); the ledger check covered `SinkCode` only, missing `ADMIN_CORRECTION` (8); the re-bid loss and its fix were
+  confirmed (9). Fixed (still revision 13): every SQL site classed `SOURCE`, `SINK` or `MOVE` counts under locks before
+  and after it in its own transaction and posts on commit; the startup census and the counters run before
+  `ThreadPool.init`, recovery after Mobius's managers; the scan also finds `setItemLocation` calls and counter posts, and
+  the table names every hook (`COUNTER` for the settle itself, the clamp, the service's takes), the bid transitions and
+  the lease credit with the hooks that make them sites; the baseline is the fork's code; the ledger rows are exactly
+  §2.5's codes in each kind; §11.27 adds the saved ground's double ticket and count truncation.
+- Amendment round 11 (Codex), NO SIGN-OFF: a drop racing a pickup could lose the saved ground's quantity (1); an SQL
+  deletion of a row a loaded copy still held, then the copy's destruction, counted the sink twice (2); a counted
+  statement on a connection already in a transaction committed or rolled back the caller's work (3); a commit whose
+  acknowledgement was lost posted nothing (4); a failed clan-hall bid deletion still refunded and posted (5); the ledger
+  posting every SOURCE and SINK leg contradicted a reconciliation that changes no row (6, fixed in the same revision
+  before the round ended); ticket rows saved before CP-0024 were still restored twice (7); the clan-hall refund's clamp
+  was not recorded (8). Fixed (still revision 13): ground membership settles with the item under its lock; a counted
+  statement refuses a connection in a transaction, resolves a lost acknowledgement from the rows, and makes a loaded
+  copy of a row it deleted stop counting; bids are counted where their rows are written, item auctions' state included,
+  so a failed write counts nothing, and a clan-hall bid is refunded only once its row is gone (§11.28); stale ticket rows
+  are dropped at load, counted; `returnItem` records its clamp.
+- Amendment round 12 (Codex), NO SIGN-OFF: a lost acknowledgement was still decided by quantities another writer could
+  change meanwhile (1); a loaded copy destroyed while its row's counted deletion was between commit and forgetting
+  counted the sink twice (2); the bootstrap gave recovery no holding policies, so every populated custody would freeze
+  (3); a failed adoption was reported as one (4); attachment rows without `hasAttachments` passed, a payout retail cannot
+  show (5). Fixed (still revision 13): a counted statement's own row in `lc_economy_statement` (V018) decides its commit;
+  the copies' leaf locks are held from the locking read to the posting, and a deleted row whose copy had counted itself
+  out is not counted again; modules register their holding policies with the bootstrap; an adoption that leaves the mail
+  unknown and attachment rows without the flag are INV12 violations, the flag also checked per operation.
+- Amendment round 13 (Codex), NO SIGN-OFF: retail destruction counts an item out and takes it from the world before its
+  row goes, so a counted deletion between the two found no copy and counted it again (1); a partly consumed copy's row
+  was counted out at its stale quantity (2); a commit that failed with its transaction open could be committed by the
+  autocommit reset (3). Fixed (still revision 13): memory is the truth for loaded objects (a deleted row whose copy is
+  loaded counts out what the copy counted; one whose object memory counted out before its row was written counts
+  nothing more, tracked until Mobius writes or deletes the row); a failed commit is rolled back before it is resolved.
+- Amendment round 14 (Codex), NO SIGN-OFF: Mobius's late row deletion could clear the counted-out mark before the
+  statement read it after its commit (1); a restore racing the statement could build a copy of a deleted row (2); a
+  failed autocommit reset after a good commit skipped the posting (3). Fixed (still revision 13): the mark is read before
+  the commit, under the row's lock that Mobius's deletion waits behind; a committed statement is posted whatever the
+  connection does afterwards; (2) is upstream's ghost race, now named in §2.6 as the one race the counters do not settle,
+  and reported by the restart census as the ghost it is.
+- Amendment round 15 (Codex), NO SIGN-OFF: a save that began before an object was counted out cleared the mark though
+  the row it wrote still held the quantity, a double count with no restore (1); `ThreadPool.shutdown` only interrupts, so
+  a task still running could change a holding after the boundary's census (2). Fixed (still revision 13): a row write
+  clears the mark only when what it wrote holds nothing counted; the boundary waits for the pools to terminate
+  (CP-0028) and takes no census otherwise; the ghost race is named as a race the counters do not settle, not the only one.
+- Amendment round 16 (Codex), NO SIGN-OFF: a destruction while an object's first row was being inserted left no mark,
+  a double count (1); a commit whose resolution read failed was an unnamed limit (2). Fixed (still revision 13): the
+  object marks itself inserting before reading the values it writes, and a destruction then leaves its mark; an
+  unreadable outcome makes the counters uncertain and the boundary takes no census.
+- Amendment round 17 (Codex), NO SIGN-OFF: an insert that failed cleared the mark although a lost acknowledgement may
+  have left its row (1); a commit resolved as done handed the connection back outside autocommit (2). Fixed (still
+  revision 13): a failed insert keeps the mark, which Mobius's own deletion of the row clears; any ended commit restores
+  autocommit. An independent code review in the same round found a fault in the boundary able to stop Mobius's database close, server-start
+  listeners running before recovery, a difference of 0 reported, and uncertain counters skipping the warehouse writes;
+  each is fixed with a test red before it. Its claim that a deletion of more than 65 535 rows fails on the parameter
+  limit was tested and does not hold: a 70 000-row counted deletion succeeds, server-side prepares requested or not
+  (Connector/J prepares it client-side).
+- Amendment round 18 (Codex), NO SIGN-OFF: after a failed insert the object no longer counted as one whose row may
+  exist, so a destruction afterwards left no mark, a double count (1). Fixed (still revision 13): a failed insert leaves
+  the object marked as possibly having a row until an insert of it succeeds; the orphan row a lost acknowledgement
+  leaves is upstream's, reported by the restart census.
+- Amendment round 19 (Codex): revision 13 **SIGN-OFF**: no further unnamed case the counters do not settle and no claim
+  the code does not keep; the unsettled cases stand named (the restore/deletion ghost, an unreadable counted commit, the
+  orphan row of an insert whose acknowledgement was lost).
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens
@@ -666,7 +828,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 - Amendment round 8 (Codex): revision 11 **SIGN-OFF WITH FIXES**: §6, ASSET-R15 and AT-ASSET-15 still froze a `CLOSED`
   custody, which §3.1 makes terminal (24). Fixed: an `OPEN` custody freezes, a `CLOSED` one stays `CLOSED` and only its
   module freezes, as the implementation already does (CustodyCheckTest pins it).
-- Revision 12 (amendment, under review): planning N4 part 3 against the code found that the client shows a mail's expiry
+- Amendment round 9 (Codex): revision 12 **SIGN-OFF**, with the expiry rule, the claim hook and the guard placement
+  each verified against the upstream code.
+- Revision 12 (amendment): planning N4 part 3 against the code found that the client shows a mail's expiry
   as `int` epoch seconds, so "beyond any server lifetime" cannot be sent; §2.1 now fixes service mail's fields
   (`sendBySystem` = 1, `expiration` = the latest instant the client can show) and makes the deletion task never schedule
   it; §11.19, §11.21 and §11.23 name the patch points (`MailManager.adopt`, `markToDeleteChar` with

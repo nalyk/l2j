@@ -50,6 +50,7 @@ import org.l2jmobius.gameserver.entity.actor.instance.GrandBoss;
 import org.l2jmobius.gameserver.entity.actor.instance.Guard;
 import org.l2jmobius.gameserver.entity.actor.instance.RiftInvader;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.network.SystemMessageId;
 import org.l2jmobius.gameserver.network.serverpackets.SystemMessage;
 
@@ -223,7 +224,11 @@ public class CursedWeaponsManager
 						{
 							delete.setInt(1, playerId);
 							delete.setInt(2, itemId);
-							if (delete.executeUpdate() != 1)
+							if (Census.counting(con, Census.Holding.ITEMS, "owner_id = ? AND item_id = ?", new Object[]
+							{
+								playerId,
+								itemId
+							}, delete::executeUpdate) != 1) // (CP-0025)
 							{
 								LOGGER.warning("Error while deleting cursed weapon " + itemId + " from userId " + playerId);
 							}

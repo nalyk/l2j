@@ -41,6 +41,8 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.ClanHallAuctionManager;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.network.SystemMessageId;
@@ -269,7 +271,10 @@ public class ClanHallAuction
 	 */
 	public synchronized void setBid(Player bidder, long bid)
 	{
-		final long requiredAdena = _highestBidderName.equals(bidder.getClan().getLeaderName()) ? bid - _highestBidderMaxBid : bid;
+		// CP-0023: a clan pays the difference over its own standing bid, as upstream charged only the highest bidder; a clan
+		// outbid and bidding again paid its whole new bid and lost the standing one, which its new bid overwrites.
+		final Bidder standing = bidder.getClan() == null ? null : _bidders.get(bidder.getClanId());
+		final long requiredAdena = standing == null ? bid : bid - standing.getBid();
 		if ((((_highestBidderId > 0) && (bid > _highestBidderMaxBid)) || ((_highestBidderId == 0) && (bid >= _startingBid))) && takeItem(bidder, requiredAdena))
 		{
 			updateInDB(bidder, bid);
@@ -313,6 +318,7 @@ public class ClanHallAuction
 		
 		// avoid overflow on return
 		final long limit = MAX_ADENA - cwh.getAdena();
+		EconomyCounter.postClamp(ADENA_ID, Math.max(0, amount - limit)); // the part past MAX_ADENA, a sink (CP-0022)
 		amount = Math.min(amount, limit);
 		cwh.addItem(ItemProcessType.REFUND, ADENA_ID, amount, null, null);
 	}
@@ -354,7 +360,10 @@ public class ClanHallAuction
 					ps.setLong(4, System.currentTimeMillis());
 					ps.setInt(5, _id);
 					ps.setInt(6, bidder.getClanId());
-					ps.execute();
+					Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+					{
+						_id
+					}, ps::executeUpdate); // the bid holding is counted where its rows are written (CP-0022)
 				}
 			}
 			else
@@ -368,7 +377,10 @@ public class ClanHallAuction
 					ps.setLong(5, bid);
 					ps.setString(6, bidder.getClan().getName());
 					ps.setLong(7, System.currentTimeMillis());
-					ps.execute();
+					Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+					{
+						_id
+					}, ps::executeUpdate); // the bid holding is counted where its rows are written (CP-0022)
 				}
 				
 				if (World.getPlayer(_highestBidderName) != null)
@@ -406,11 +418,15 @@ public class ClanHallAuction
 			PreparedStatement ps = con.prepareStatement("DELETE FROM auction_bid WHERE auctionId=?"))
 		{
 			ps.setInt(1, _id);
-			ps.execute();
+			Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+			{
+				_id
+			}, ps::executeUpdate); // (CP-0022)
 		}
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.deleteFromDB(): " + e.getMessage(), e);
+			return; // CP-0026: bids whose rows stay are not refunded, or a later removal would refund them again
 		}
 		
 		for (Bidder b : _bidders.values())
@@ -498,11 +514,15 @@ public class ClanHallAuction
 		{
 			ps.setInt(1, _id);
 			ps.setInt(2, bidder);
-			ps.execute();
+			Census.counting(con, Census.Holding.CLAN_HALL_BIDS, "auctionId = ?", new Object[]
+			{
+				_id
+			}, ps::executeUpdate); // (CP-0022)
 		}
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.cancelBid(String bidder): " + e.getMessage(), e);
+			return; // CP-0026: a bid whose row stays is not refunded
 		}
 		
 		returnItem(_bidders.get(bidder).getClanName(), _bidders.get(bidder).getBid(), true);

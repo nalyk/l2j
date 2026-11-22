@@ -53,6 +53,7 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.enums.ItemLocation;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.managers.ItemAuctionManager;
 import org.l2jmobius.gameserver.network.SystemMessageId;
 import org.l2jmobius.gameserver.network.serverpackets.SystemMessage;
@@ -581,17 +582,21 @@ public class ItemAuctionInstance
 			if ((auctionState == ItemAuctionState.FINISHED) && (startingTime < (System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(GeneralConfig.ALT_ITEM_AUCTION_EXPIRED_AFTER, TimeUnit.DAYS))))
 			{
 				LOGGER.log(Level.INFO, getClass().getSimpleName() + ": Clearing expired auction: " + auctionId);
-				try (PreparedStatement ps = con.prepareStatement(DELETE_AUCTION_INFO_BY_AUCTION_ID))
+				// The auction and its unrefunded losing bids, counted together (CP-0025); its winning bid was paid when it finished.
+				Census.counting(con, Census.Holding.ITEM_AUCTION_BIDS, "1 = 1", new Object[0], () ->
 				{
-					ps.setInt(1, auctionId);
-					ps.execute();
-				}
-				
-				try (PreparedStatement ps = con.prepareStatement(DELETE_AUCTION_BID_INFO_BY_AUCTION_ID))
-				{
-					ps.setInt(1, auctionId);
-					ps.execute();
-				}
+					try (PreparedStatement ps = con.prepareStatement(DELETE_AUCTION_INFO_BY_AUCTION_ID))
+					{
+						ps.setInt(1, auctionId);
+						ps.execute();
+					}
+					
+					try (PreparedStatement ps = con.prepareStatement(DELETE_AUCTION_BID_INFO_BY_AUCTION_ID))
+					{
+						ps.setInt(1, auctionId);
+						return ps.executeUpdate();
+					}
+				});
 				
 				return null;
 			}

@@ -62,6 +62,22 @@ public final class Migrations
 	}
 
 	/**
+	 * Applies every migration to the server's own database once, as the operator does before a server starts
+	 * (platform.md §4.3): a test that counts existence needs Living Chronicle's tables.
+	 */
+	public static void ensure() throws IOException, SQLException
+	{
+		try (Connection connection = org.l2jmobius.commons.database.DatabaseFactory.getConnection();
+			java.sql.ResultSet tables = connection.getMetaData().getTables(null, null, "lc_custody", null))
+		{
+			if (!tables.next())
+			{
+				applyAll(connection);
+			}
+		}
+	}
+
+	/**
 	 * Applies every migration, in order.
 	 */
 	public static void applyAll(Connection connection) throws IOException, SQLException

@@ -16,8 +16,10 @@
    Do instead: `scp` the changed files to `nalyk@build-host:gits/l2j/...`, run `./build.sh` (full gate) or `./build.sh test -Dtest.only=<Class>Test` there, write output to `build/gate.log` and read `build/test-reports/TEST-*.xml` for failures.
 4. **[2026-11-18] A golden is recorded by copying, and trusted only after a second run**
    Do instead: on ultra copy `build/lock-actual/<golden>` to `test/lock/<golden>`, rerun the classes whose goldens changed (`./build.sh test -Dtest.only=<Class>Test`), commit only when they reproduce byte for byte; then `scp` the goldens back.
-5. **[2026-11-19] A gate is 8 minutes: run it in the background and prepare the next step meanwhile**
-   Do instead: start the gate with `run_in_background`, write the next patch as a script in the scratchpad (dry-run it on copies), apply it only after the current step is committed.
+5. **[2026-11-21] A gate is 25 minutes: run it detached on ultra, never as a live ssh from WSL**
+   Do instead: `ssh -f ultra 'setsid nohup bash -c "./build.sh > /tmp/gateN.log 2>&1; echo $? > /tmp/gateN.done" >/dev/null 2>&1 </dev/null &'`,
+   then a background `until ssh ... test -f /tmp/gateN.done; do sleep 60; done` poll; Claude Code's memory reaper killed a
+   live-ssh gate once, and without `-f` the launching ssh stays attached.
 6. **[2026-11-19] A "failed" pipeline may only be `grep -v` finding nothing**
    Do instead: judge the gate by `BUILD SUCCESSFUL` in `build/gate.log` and by `failures="0"` in the report XML, not by the shell's exit code.
 
@@ -56,16 +58,27 @@
    Do instead: add a new `config/Custom/*.ini` to `TruthProfile.MODULES`; its `= true` lines are turned off by rule (only AllowedPlayerRaces kept), numeric neutral values go in `NEUTRAL_VALUES`. To test a custom path (random spawns), set the config static in a `try/finally`, together with any list its loader fills only when switched on (`MOBS_LIST_NOT_RANDOM`).
 
 ## Core & Datapack Guardrails
-1. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
-   Do instead: add `CP-NNNN` (files, reason, change, invariant, proof) in the same commit; `check-core-ledger` fails the build otherwise.
-2. **[2026-11-19] Upstream files mix CRLF and LF**
+1. **[2026-11-20] Asset tests need tradeable items and a character in the World**
+   Do instead: use the Short Sword (id 1), not the Squire's Sword (2369, a starter item with is_tradable=false, which §4.4
+   refuses), and call `World.addObject(player)` after `TestPlayers.create` for anything that looks players up by id.
+2. **[2026-11-18] Every edit to an upstream file needs a CORE_PATCHES.md entry**
+   Do instead: add `CP-NNNN` (files, reason, change, invariant, proof) in the same commit; `check-core-ledger` fails the
+   build otherwise. Put every file of an entry on its one `- Files:` line (the check reads only that line);
+   for a revert proof that restores a file to upstream, drop it from a temporary ledger on ultra too, or the stale check
+   stops the build before any test runs.
+3. **[2026-11-19] Upstream files mix CRLF and LF**
    Do instead: edit them byte-wise in Python, check whether `\r\n` is present first and write the same endings back.
-3. **[2026-11-19] `-XX:hashCode=2` makes every identity hash equal in tests**
+4. **[2026-11-19] `-XX:hashCode=2` makes every identity hash equal in tests**
    Do instead: key test maps by object id (Integer), never by world objects; expect maps keyed by objects to degrade to one bucket.
-4. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
+5. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
    Do instead: use `java.lang.classfile` to swap `invokevirtual X.m(args)R` for `invokestatic W.m(X,args)R` (same stack effect) at listed sites; `MethodRedirector` handles static calls only and never touches instructions.
 
-5. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
+6. **[2026-11-22] Test a reviewer's database-limit claim before fixing it**
+   A review said a counted deletion over 65,535 rows fails on the placeholder limit; a 70,000-row test passed with and
+   without `useServerPrepStmts=true` (Connector/J prepares client-side, falling back when the server refuses).
+   Do instead: write the failing test first; if it passes on the unfixed code, drop the fix and record the claim refuted.
+
+7. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
    MariaDB raises error 1442 on `FOR UPDATE` of the table that fired the trigger.
    Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
 

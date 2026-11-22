@@ -29,6 +29,7 @@ import java.util.logging.Logger;
 import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.handler.IAdminCommandHandler;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 
 /**
  * This class handles following admin commands: - delete = deletes target
@@ -98,10 +99,14 @@ public class AdminRepairChar implements IAdminCommandHandler
 			statement.close();
 			
 			// connection = DatabaseFactory.getConnection();
-			statement = con.prepareStatement("UPDATE items SET loc=\"INVENTORY\" WHERE owner_id=?");
-			statement.setInt(1, objId);
-			statement.execute();
-			statement.close();
+			final PreparedStatement repair = con.prepareStatement("UPDATE items SET loc=\"INVENTORY\" WHERE owner_id=?");
+			repair.setInt(1, objId);
+			// A row from a location the census does not count becomes counted, so the move is counted (CP-0025).
+			Census.counting(con, Census.Holding.ITEMS, "owner_id = ?", new Object[]
+			{
+				objId
+			}, repair::executeUpdate);
+			repair.close();
 		}
 		catch (Exception e)
 		{

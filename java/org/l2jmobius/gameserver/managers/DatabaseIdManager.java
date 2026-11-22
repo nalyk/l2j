@@ -37,6 +37,7 @@ import java.util.logging.Logger;
 import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.gameserver.config.IdManagerConfig;
 import org.l2jmobius.gameserver.config.custom.WeddingConfig;
+import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 
 /**
  * Manages database cleanup operations and retrieval of used IDs for ID allocation.
@@ -163,7 +164,8 @@ public class DatabaseIdManager
 			try (Connection con = DatabaseFactory.getConnection();
 				Statement statement = con.createStatement())
 			{
-				cleanCount += statement.executeUpdate(query);
+				final Census.Holding holding = Census.written(query); // a census table's rows are counted (CP-0025)
+				cleanCount += holding == null ? statement.executeUpdate(query) : Census.counting(con, holding, holding == Census.Holding.ITEM_AUCTION_BIDS ? "1 = 1" : Census.whereOf(query), new Object[0], () -> statement.executeUpdate(query));
 			}
 			catch (Exception e)
 			{

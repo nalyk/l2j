@@ -65,6 +65,7 @@ import org.l2jmobius.gameserver.entity.item.holders.Elementals;
 import org.l2jmobius.gameserver.entity.item.type.EtcItemType;
 import org.l2jmobius.gameserver.entity.item.type.ItemType;
 import org.l2jmobius.gameserver.geoengine.GeoEngine;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.managers.ItemsOnGroundManager;
 import org.l2jmobius.gameserver.managers.MercTicketManager;
@@ -114,6 +115,14 @@ public class Item extends WorldObject
 	
 	/** Taken by the Asset Service (CP-0010): never written by Mobius again, refused by every Mobius operation. */
 	private volatile boolean _retired;
+	/** The quantity of this object the existence counters include (CP-0021), guarded by {@link EconomyCounter#lockFor}. */
+	private long _posted;
+	/** Its row was deleted by a counted SQL statement while this copy stayed loaded (CP-0025): it never counts again. */
+	private boolean _forgotten;
+	/** A row of it may exist that Mobius does not know (CP-0025): from before an INSERT's values are read until Mobius knows the row; after a failed INSERT for good, since a lost acknowledgement may have left the row. */
+	private volatile boolean _inserting;
+	/** In the saved ground list (SaveDroppedItem), a census holding (CP-0022), guarded by {@link EconomyCounter#lockFor}. */
+	private boolean _onSavedGround;
 	
 	/** Quantity of the item; changed by compare-and-set (CP-0009), so concurrent changes never lose one another. */
 	private volatile long _count;
@@ -423,6 +432,7 @@ public class Item extends WorldObject
 		_loc = loc;
 		_locData = locData;
 		_storedInDb = false;
+		settleCounted();
 		
 		if (checkSkills)
 		{
@@ -450,6 +460,7 @@ public class Item extends WorldObject
 		
 		_count = count >= -1 ? count : 0;
 		_storedInDb = false;
+		settleCounted();
 	}
 	
 	/**
@@ -458,7 +469,139 @@ public class Item extends WorldObject
 	 */
 	public void retire()
 	{
-		_retired = true;
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			// The whole object is a custody's now: counted at its count, including a change not yet settled (CP-0021).
+			EconomyCounter.post(_itemId, Math.max(0, _count) - _posted);
+			_posted = 0;
+			_retired = true;
+		}
+	}
+	
+	/**
+	 * Settles the quantity of this object the existence counters include (CP-0021, docs/spec/asset-service.md §2.6): its
+	 * count while its location is one the census counts, otherwise nothing. Called after every change of count or location;
+	 * the lock is a leaf, so concurrent changes settle exactly.
+	 */
+	private void settleCounted()
+	{
+		if (!EconomyCounter.isActive() || _retired)
+		{
+			return;
+		}
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			if (_retired || _forgotten)
+			{
+				return;
+			}
+			final long counted = (EconomyCounter.counted(_loc) || _onSavedGround) ? Math.max(0, _count) : 0;
+			final long delta = counted - _posted;
+			if (delta != 0)
+			{
+				if ((counted == 0) && (_existsInDb || _inserting))
+				{
+					EconomyCounter.countedOut(getObjectId()); // its row still holds it until Mobius writes or deletes it (CP-0025)
+				}
+				else if ((counted > 0) && (_posted == 0))
+				{
+					EconomyCounter.clearCountedOut(getObjectId()); // counted again: no longer out
+				}
+				_posted = counted;
+				EconomyCounter.post(_itemId, delta);
+			}
+		}
+	}
+	
+	/** @return the quantity of this object the existence counters include; read under {@link EconomyCounter#lockFor} (CP-0025) */
+	public long countedQuantity()
+	{
+		return _posted;
+	}
+	
+	/** @return whether a counted SQL statement deleted this loaded copy's row (CP-0025): its row must not come back */
+	public boolean isForgotten()
+	{
+		return _forgotten;
+	}
+	
+	/**
+	 * A counted SQL statement deleted this object's row while the object stayed loaded (an ended event's items in a loaded
+	 * warehouse): the deletion counted its quantity out, so this copy never counts again (CP-0025).
+	 */
+	public void forgetCounted()
+	{
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_posted = 0;
+			_forgotten = true;
+		}
+	}
+	
+	/**
+	 * This object entered ({@code true}) or left the saved ground list (CP-0022). The caller holds
+	 * {@link EconomyCounter#lockFor} across the list's change and this call, so the membership and its count settle together.
+	 */
+	public void setOnSavedGround(boolean onSavedGround)
+	{
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_onSavedGround = onSavedGround;
+			settleCounted();
+		}
+	}
+	
+	/** A saved ground row rebuilt at startup joins the list counted at its count, posting nothing: it is in the census (CP-0022). */
+	public void restoreOnSavedGround()
+	{
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_onSavedGround = true;
+			if (EconomyCounter.isActive())
+			{
+				_posted = Math.max(0, _count);
+			}
+		}
+	}
+	
+	/** Marks a restored object as included at its count: its row is already in the census (CP-0021). */
+	private void markCounted()
+	{
+		if (!EconomyCounter.isActive())
+		{
+			return;
+		}
+		synchronized (EconomyCounter.lockFor(getObjectId()))
+		{
+			_posted = (EconomyCounter.counted(_loc) || _onSavedGround) ? Math.max(0, _count) : 0;
+		}
+	}
+
+	/**
+	 * Waits for a write of this item already in progress to finish (CP-0017): takes and releases its write lock. After a
+	 * {@link #retire()} every later write is a no-op, so the Asset Service's row is the last word (asset-service.md §3.3).
+	 */
+	public void awaitWrites()
+	{
+		_dbLock.lock();
+		_dbLock.unlock();
+	}
+	
+	/**
+	 * Records that this item's row now exists (CP-0019): the Asset Service inserted it in its own transaction, from memory,
+	 * while holding this item's write lock, so Mobius's next write updates it instead of inserting a second.
+	 */
+	public void markRowWritten()
+	{
+		_existsInDb = true;
+	}
+	
+	/**
+	 * @return this item's write lock (CP-0017): the Asset Service holds a debited stack's from the debit to {@code DONE}
+	 */
+	public ReentrantLock writeLock()
+	{
+		return _dbLock;
 	}
 	
 	/**
@@ -506,6 +649,26 @@ public class Item extends WorldObject
 		{
 			throw new IllegalArgumentException("a decrease is positive, not " + quantity);
 		}
+		if (!EconomyCounter.isActive())
+		{
+			return decrease(quantity);
+		}
+		synchronized (EconomyCounter.lockFor(getObjectId())) // with its counted quantity, so no settle falls between (CP-0021)
+		{
+			if (!decrease(quantity))
+			{
+				return false;
+			}
+			// The quantity is a custody's now: what this object was counted with moves silently, the rest is counted here.
+			final long fromThisObject = Math.min(_posted, quantity);
+			_posted -= fromThisObject;
+			EconomyCounter.post(_itemId, quantity - fromThisObject);
+			return true;
+		}
+	}
+	
+	private boolean decrease(long quantity)
+	{
 		long old;
 		do
 		{
@@ -558,6 +721,8 @@ public class Item extends WorldObject
 		while (!COUNT.compareAndSet(this, old, next));
 		
 		_storedInDb = false;
+		settleCounted();
+		EconomyCounter.postClamp(_itemId, count - (next - old)); // asked minus applied: what the clamps took or refused (ASSET-R13, CP-0021)
 		
 		if ((process != null) && (process != ItemProcessType.NONE))
 		{
@@ -1657,6 +1822,7 @@ public class Item extends WorldObject
 		inst._locData = locData;
 		inst._existsInDb = true;
 		inst._storedInDb = true;
+		inst.markCounted(); // its row is already in the census (CP-0021)
 		
 		// Setup life time for shadow weapons.
 		inst._mana = manaLeft;
@@ -1754,9 +1920,11 @@ public class Item extends WorldObject
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("UPDATE items SET owner_id=?,count=?,loc=?,loc_data=?,enchant_level=?,custom_type1=?,custom_type2=?,mana_left=?,time=? WHERE object_id = ?"))
 		{
+			final long wroteCount = _count; // what this write puts in the row, whatever memory does meanwhile (CP-0025)
+			final ItemLocation wroteLoc = _loc;
 			ps.setInt(1, _ownerId);
-			ps.setLong(2, _count);
-			ps.setString(3, _loc.name());
+			ps.setLong(2, wroteCount);
+			ps.setString(3, wroteLoc.name());
 			ps.setInt(4, _locData);
 			ps.setInt(5, _enchantLevel);
 			ps.setInt(6, _type1);
@@ -1767,6 +1935,7 @@ public class Item extends WorldObject
 			ps.executeUpdate();
 			_existsInDb = true;
 			_storedInDb = true;
+			EconomyCounter.rowWritten(getObjectId(), EconomyCounter.counted(wroteLoc) ? wroteCount : 0); // (CP-0025)
 		}
 		catch (Exception e)
 		{
@@ -1787,10 +1956,13 @@ public class Item extends WorldObject
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("INSERT INTO items (owner_id,item_id,count,loc,loc_data,enchant_level,object_id,custom_type1,custom_type2,mana_left,time) VALUES (?,?,?,?,?,?,?,?,?,?,?)"))
 		{
+			_inserting = true; // before the values are read, so a destruction from now on leaves its mark (Codex amd16)
+			final long wroteCount = _count; // (CP-0025)
+			final ItemLocation wroteLoc = _loc;
 			ps.setInt(1, _ownerId);
 			ps.setInt(2, _itemId);
-			ps.setLong(3, _count);
-			ps.setString(4, _loc.name());
+			ps.setLong(3, wroteCount);
+			ps.setString(4, wroteLoc.name());
 			ps.setInt(5, _locData);
 			ps.setInt(6, _enchantLevel);
 			ps.setInt(7, getObjectId());
@@ -1802,6 +1974,8 @@ public class Item extends WorldObject
 			ps.executeUpdate();
 			_existsInDb = true;
 			_storedInDb = true;
+			EconomyCounter.rowWritten(getObjectId(), EconomyCounter.counted(wroteLoc) ? wroteCount : 0); // (CP-0025)
+			_inserting = false;
 			
 			if (_augmentation != null)
 			{
@@ -1816,6 +1990,7 @@ public class Item extends WorldObject
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Could not insert item " + this + " into DB: Reason: " + e.getMessage(), e);
+			// _inserting stays: a lost acknowledgement may have left its row, so a mark stays and a later destruction leaves one (Codex amd17-18, CP-0025)
 		}
 	}
 	
@@ -1837,6 +2012,7 @@ public class Item extends WorldObject
 				ps.executeUpdate();
 				_existsInDb = false;
 				_storedInDb = false;
+				EconomyCounter.rowWritten(getObjectId(), 0); // (CP-0025)
 				if (_releaseIdOnDelete)
 				{
 					_releaseIdOnDelete = false;

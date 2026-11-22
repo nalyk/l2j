@@ -57,6 +57,7 @@ import org.l2jmobius.gameserver.entity.residences.AbstractResidence;
 import org.l2jmobius.gameserver.entity.zone.type.CastleZone;
 import org.l2jmobius.gameserver.entity.zone.type.ResidenceTeleportZone;
 import org.l2jmobius.gameserver.entity.zone.type.SiegeZone;
+import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.managers.CastleManager;
 import org.l2jmobius.gameserver.managers.CastleManorManager;
 import org.l2jmobius.gameserver.managers.FortManager;
@@ -376,6 +377,8 @@ public class Castle extends AbstractResidence
 			}
 		}
 		while (!TREASURY.compareAndSet(this, old, next));
+		EconomyCounter.post(Inventory.ADENA_ID, next - old); // the treasury is a census holding (CP-0022)
+		EconomyCounter.postClamp(Inventory.ADENA_ID, amountValue - (next - old)); // a gain past MAX_ADENA clamped away
 		
 		// The row is written under the treasury lock from the value in memory when the lock is held, so the last writer
 		// writes the last value (the Asset Service writes the row under the same lock).
@@ -1003,6 +1006,46 @@ public class Castle extends AbstractResidence
 	public double getTaxRate()
 	{
 		return _taxRate;
+	}
+	
+	/**
+	 * Takes {@code amount} from the treasury in memory only, if it holds that much (CP-0017); the caller holds
+	 * {@link #treasuryLock()} and writes the row in its own transaction (asset-service.md §3.3).
+	 * @return whether it was taken
+	 */
+	public boolean tryDebitTreasury(long amount)
+	{
+		long old;
+		do
+		{
+			old = _treasury;
+			if (old < amount)
+			{
+				return false;
+			}
+		}
+		while (!TREASURY.compareAndSet(this, old, old - amount));
+		return true;
+	}
+	
+	/**
+	 * Adds {@code amount} to the treasury in memory only, refusing (never clamping) a credit past {@code MAX_ADENA}
+	 * (CP-0017, asset-service.md §4.2 rule 4); the caller holds {@link #treasuryLock()} and has committed the row.
+	 * @return whether it was added
+	 */
+	public boolean creditTreasuryInMemory(long amount)
+	{
+		long old;
+		do
+		{
+			old = _treasury;
+			if ((old + amount) > Inventory.MAX_ADENA)
+			{
+				return false;
+			}
+		}
+		while (!TREASURY.compareAndSet(this, old, old + amount));
+		return true;
 	}
 	
 	/**

@@ -269,3 +269,214 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   written to a marked character (the release refuses it under the same row lock).
 - Proof: `DeletionGuardTest.aCharacterWithUnclaimedServiceMailIsNotMarked` (and marked once the mail is claimed),
   `aCharacterWithAPendingMarkIsNotMarked`, `aMarkedCharacterReceivesNoServiceMail`; on upstream both refusals failed.
+
+## CP-0017 The taking seams
+
+- Files: `java/org/l2jmobius/gameserver/entity/itemcontainer/ItemContainer.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`
+- Reason: the Asset Service takes items out of live containers under Mobius's own locks (asset-service.md §3.3), but
+  Mobius keeps what it needs private: a container's `removeItem` is protected (its overrides unequip and clear the Adena
+  caches, Inventory.java:891, PlayerInventory.java:770), an item's write lock (`_dbLock`, Item.java:167) is private, and a
+  treasury change always writes its row (Castle.java:333-373), where the service writes the row in its own transaction.
+- Change: `ItemContainer.removeForAsset(item)` (the virtual `removeItem`, then `refreshWeight`); `Item.awaitWrites()`
+  (take and release the write lock) and `Item.writeLock()`; `Castle.tryDebitTreasury(amount)` and
+  `creditTreasuryInMemory(amount)`, compare-and-set only, a credit past `MAX_ADENA` refused. Nothing calls them but the
+  Asset Service; Mobius's behaviour is unchanged.
+- Invariant: the service takes items and treasury amounts exactly as Mobius's own code would, without new locks.
+- Proof: `TakingSeamsTest.anItemTakenForAnAssetLeavesItsContainerAsRetailRemovalDoes`,
+  `awaitingWritesWaitsForAWriteInProgress`, `aTreasuryChangesInMemoryOnlyAndRefusesAnOverdrawOrAPassOverTheCap`.
+
+## CP-0018 The login wait
+
+- Files: `java/org/l2jmobius/gameserver/network/GameClient.java`
+- Reason: a login restores a character's items from rows with plain reads that do not wait for an uncommitted change
+  (Player.java:7357-7360); while an asset operation has taken an item in memory and not yet committed or refunded, the
+  item's row still says where it was, so a login in between would restore a second, live `Item` (asset-service.md §2.4,
+  §11.22, ASSET-R26).
+- Change: `GameClient.load` waits, before `Player.load`, while `lc_asset_pending` marks the character
+  (`PendingMarks.awaitNone`: a plain read polled every 50 ms, taking no lock); if a mark outlives four times
+  `UncertainCommitLookupMillis`, the login is refused and the character not loaded. When Living Chronicle is not
+  running nothing waits.
+- Invariant: no character is loaded while an operation that took its items is pending.
+- Proof: `LoginWaitTest.aLoginWaitsWhileAnOperationOfTheCharacterIsPending` (upstream loaded it at once),
+  `aLoginIsRefusedIfTheMarkOutlivesTheBound` (upstream loaded it), `anUnmarkedLoginDoesNotWait`,
+  `markingCommitsOnItsOwnConnection`.
+
+## CP-0019 A row the Asset Service wrote
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: when the Asset Service takes part of a stack that Mobius has never saved, its transaction must insert the
+  stack's row from memory (else a crash would leave the taken part in escrow and no debited stack in the database:
+  Adena from nowhere, asset-service.md §3.3 step 2); Mobius then must know the row exists, or its next write would
+  insert a second one (Item.java `insertIntoDb`, `_existsInDb`, private).
+- Change: `Item.markRowWritten()` sets `_existsInDb`; the service calls it after its commit, holding the stack's write
+  lock. Nothing else calls it.
+- Invariant: after the service has written a stack's row, Mobius updates that row and never inserts another.
+- Proof: `StackDebitTest.aStackNeverSavedGetsItsRowInTheOperationAndMobiusKnowsIt`.
+
+## CP-0020 Clan warehouse events for operations that happen
+
+- Files: `java/org/l2jmobius/gameserver/entity/itemcontainer/ClanWarehouse.java`
+- Reason: `ClanWarehouse.addItem`, `destroyItem` and `transferItem` notified scripts before calling `super`, so an
+  operation `super` refused (now including any on an item the Asset Service retired, CP-0010) still fired its event, and
+  `transferItem` dereferenced `getItemByObjectId(objectId)` unchecked: a NullPointerException in retail when the item was
+  already gone (asset-service.md §3.3, the part 2 obligation).
+- Change: each calls `super` first and notifies only when the operation happened, with the same event and arguments;
+  `transferItem` checks for a missing item. Retail operations that succeed fire exactly the events they fired before.
+- Invariant: a clan warehouse event means its operation happened.
+- Proof: `ClanAndTreasuryDebitTest.clanWarehouseEventsFireOnlyForOperationsThatHappen` (a refused destroy fires nothing; a
+  missing object's transfer returns null).
+
+## CP-0021 Existence counters: the item hooks
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: asset-service.md §2.6 (revision 13) compares the census across a clean restart with existence counters kept
+  from the changes themselves (INV06), and Mobius has no hook that counts an item's quantity entering or leaving the
+  holdings the census counts.
+- Change: `setCount`, `changeCount` and `setItemLocation` settle the object's counted quantity (its count while its
+  location is one the census counts, otherwise nothing) under a leaf lock of `EconomyCounter`, never an item's or a
+  container's monitor; `changeCount` records what its clamps took or refused apart from the counts; `restoreFromDb` marks
+  a restored object counted at its count without posting; the Asset Service's `tryDecrease` (CP-0009) and `retire`
+  (CP-0010) hand their quantity to a custody under the same lock, posting only what the object was not counted with. Until
+  `EconomyCounter.activate`, every hook returns at once, so `truth` runs as upstream.
+- Invariant: when the server is quiet, the counters equal the census of the counted holdings plus what the service and
+  the SQL sites posted.
+- Proof: `ExistenceCounterTest` (creation, merge, destroy, drop and pickup, moves between counted holdings, a sale to the
+  buyback list, a restore then a change, the service's takes, a clamp, a count and a location changing together and a
+  stack decrease racing a Mobius change, each exact; an inactive counter posts nothing).
+
+## CP-0022 Existence counters: the treasury, saved-ground and bid hooks
+
+- Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`, `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java`, `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: a castle treasury, the saved ground list and the open bids of both auctions are census holdings
+  (asset-service.md §2.6) that no item call changes, so their changes need hooks of their own (§11.24).
+- Change: `Castle.addToTreasuryNoTax` posts the change it applied and records its clamp apart; `ItemsOnGroundManager.save`,
+  `removeObject` and `load` change the saved list and the item's membership together under the item's leaf lock
+  (`Item.setOnSavedGround`, `restoreOnSavedGround`), so the item settles its counted quantity as for a location (CP-0021); the bids are counted where their rows are written:
+  `ItemAuction.updatePlayerBidInternal` and `storeMe` (an auction's state says when its winning bid was paid) and
+  `ClanHallAuction.updateInDB`, `cancelBid` and `removeBids` run their statements through `Census.counting`, so a write
+  that fails counts nothing; `ClanHallAuction.returnItem` records the part of a credit past MAX_ADENA it clamps away.
+  No retail behaviour changes; with the counters inactive every hook returns at once. Codex round amd11 found the first
+  design (posts beside the in-memory changes) losing a drop that raced a pickup and posting a bid change whose write
+  failed.
+- Invariant: a move between one of these holdings and an inventory or warehouse nets to nothing in the counters.
+- Proof: `HoldingHooksTest` (tax in, a withdrawal out, the service's treasury commitment and return, a clamp; a drop to
+  and a pickup from the saved ground, and an entry racing a removal and a destruction, red on the first design at
+  iteration 33; an item-auction bid placed, raised, cancelled and won; a clan-hall bid placed and cancelled; an ended
+  clan-hall auction paying the seller's share and the lease and refunding a loser; a credit past the cap recorded as
+  clamped, red without the record).
+
+## CP-0023 A clan-hall re-bid pays the difference over the clan's standing bid
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: `setBid` subtracted a standing bid only for the current highest bidder (ClanHallAuction.java:272), and
+  `updateInDB` replaces a clan's standing bid with its new one (344-354, 386-390): a clan outbid and bidding again paid
+  its whole new bid and lost the standing one (asset-service.md §11.26, confirmed by Codex round amd10).
+- Change: the Adena taken is the new bid less the clan's own standing bid, if it has one. For the highest bidder raising
+  its own bid this is what upstream charged.
+- Invariant: what a clan has paid into an auction equals its standing bid.
+- Proof: `ClanHallRebidTest.aClanOutbidPaysOnlyTheDifferenceOverItsStandingBid` (red on upstream: 60 000 paid for a
+  40 000 bid).
+
+## CP-0024 The saved ground: no placed tickets, whole counts
+
+- Files: `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/managers/MercTicketManager.java`
+- Reason: with `SaveDroppedItem`, every ground item but a cursed weapon was saved (ItemsOnGroundManager.java:216-219),
+  placed mercenary tickets included, which `ItemsOnGroundManager.load` and `MercTicketManager.load` both rebuilt at
+  startup, a duplicate per restart; and the load read a stack's count with `getInt` (110-112), so a stack past 2^31
+  came back as a single unit (asset-service.md §11.27).
+- Change: `save` keeps placed tickets and cursed weapons out of the ground list (their managers own them; the cursed
+  weapons were already never written); the ticket check is the static `MercTicketManager.ticketCastleId`, since that
+  manager drops its restored tickets while it is still being built; the load skips a ticket row saved before this patch
+  and deletes it, counted out of the saved ground; the load reads the count as a `long`.
+- Invariant: a placed ticket exists once after a restart; a saved stack comes back whole.
+- Proof: `SavedGroundTest` (a ticket is not saved and posts nothing; a ticket row saved before is not restored and goes,
+  counted; a saved stack of 3 000 000 000 Adena, restored as 1 by upstream, comes back whole and posts nothing).
+
+## CP-0025 Existence counters: SQL sites counted in their own transaction
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/mechanics/olympiad/Hero.java`, `java/org/l2jmobius/gameserver/entity/actor/holders/player/CursedWeapon.java`, `java/org/l2jmobius/gameserver/managers/CursedWeaponsManager.java`, `java/org/l2jmobius/gameserver/managers/CastleManager.java`, `java/org/l2jmobius/gameserver/network/GameClient.java`, `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`, `java/org/l2jmobius/gameserver/managers/ItemAuctionManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuctionInstance.java`, `dist/game/data/scripts/handlers/chat/commands/admin/AdminRepairChar.java`
+- Reason: these statements write census rows directly (an ended event's and a new hero period's items, an offline
+  owner's cursed weapon and circlet, a deleted character's items, the startup cleanup, a deleted or expired item auction's
+  bids, the admin repair), so no item hook sees them (asset-service.md §2.6, §11.24; Codex round amd10 found a count
+  taken before the statement posting a deletion that then fails).
+- Change: each runs through `Census.counting`: in a transaction of its own, the rows it writes are locked and counted
+  before and after it, and the difference is posted only when it commits; a statement that fails rolls back and posts
+  nothing, and the connection is handed back in autocommit; a connection already in a transaction is refused; the
+  transaction writes its own row to `lc_economy_statement` (V018), which decides a commit whose acknowledgement is lost,
+  read under its lock on a fresh connection (Codex amd12: quantities could be changed meanwhile by another writer); the
+  loaded copies of the rows it locks are held under their leaf locks from the locking read to the posting, a copy of a
+  deleted row counting out what its copy counted, never the row's stale quantity, and then told to stop counting
+  (`Item.forgetCounted`, `countedQuantity`, `isForgotten`); a deleted row whose object memory had counted out before
+  its row was written counts nothing more (`Item.settleCounted` marks it as it settles to nothing with a row;
+  `updateInDb`, `insertIntoDb` and `removeFromDb` report what they wrote through `EconomyCounter.rowWritten`; Codex amd13: retail destruction counts out and leaves the world before deleting its row); a
+  commit that fails is rolled back before it is resolved, never committed by a later autocommit reset; the counted-out
+  mark is read before the commit, under the row lock Mobius's own deletion waits behind, and a committed statement is
+  posted even when the connection fails afterwards (Codex amd14); a row write clears the mark only when what it wrote
+  holds nothing counted, and a destruction during an object's first insert leaves it (`Item._inserting`, Codex
+  amd15-16), a failed insert too, and the object stays one whose row may exist until an insert of it succeeds, so a
+  later destruction leaves the mark as well, since a lost acknowledgement may have left its row (Codex amd17-18; the
+  orphan row upstream then never deletes is reported by the restart census); a commit whose
+  outcome cannot be read makes the counters uncertain, so the boundary takes no census; any commit that ended hands
+  the connection back in autocommit (Codex amd17). A
+  restore racing a deletion of the same row (upstream's ghost race) is not settled: the restart census reports the ghost. An auction's row and its bids are
+  deleted in one counted transaction, as its winning bid stops being taken off when the auction's row goes. With the
+  counters inactive each statement runs as upstream.
+- Invariant: across each of these statements the existence counters move exactly as the census does.
+- Proof: `SqlSitesTest` (each of the ten sites, the counters' change equal to the census's); `CensusTest` (a failed
+  statement posts nothing and rolls back; a connection in a transaction is refused and its work kept apart; a lost
+  acknowledgement resolved both ways, and decided by the statement's own row while another deletion of the same rows
+  commits meanwhile; a loaded copy of a deleted row stops counting, -60 for a 30-unit copy before; a copy destroyed while
+  its row's deletion runs waits and counts nothing; a copy that counted itself out before its row went is not counted
+  twice; the last three red on the previous code; a partly consumed copy's row counted as memory holds it, an item
+  destroyed and gone from the world before its row went not counted twice, a commit failing with its transaction open
+  committing nothing: these three red on round 12's code; a resolved commit handing back an autocommit connection, red
+  on round 16's code); `ExistenceCounterTest.aFailedInsertKeepsTheMarkItsRowMayNeed`
+  (red on round 16's code) and `aDestructionAfterAFailedInsertLeavesItsMark` (red on round 17's code).
+
+## CP-0026 A clan-hall bid is refunded only once its row is gone
+
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Reason: `cancelBid` and `removeBids` logged a failed `DELETE` of the bid rows and went on to refund them
+  (ClanHallAuction.java:494-512, 403-431): the bid stayed and was paid back, again at its next removal
+  (asset-service.md §11.28, Codex round amd11).
+- Change: each returns after a failed deletion, refunding nothing.
+- Invariant: a clan-hall bid is refunded at most once, and only once its row is gone.
+- Proof: `HoldingHooksTest.aClanHallBidWhoseRowCannotBeDeletedIsNotRefunded` (a trigger refuses the deletion; upstream
+  refunded the bid and the counters moved by -2 000; now nothing moves).
+
+## CP-0027 Living Chronicle's seams in boot and shutdown
+
+- Files: `java/org/l2jmobius/gameserver/GameServer.java`, `java/org/l2jmobius/gameserver/Shutdown.java`
+- Reason: Mobius has no module seams in its boot or shutdown (asset-service.md §11.25): the startup census must precede
+  every other startup step (Mobius's own cleanup is a counted site), recovery must finish before any character loads
+  (offline traders and players are restored before the login listener opens), and the shutdown boundary must follow
+  Mobius's last save and precede the database closing.
+- Change: `GameServer` calls `LivingChronicle.atDatabase()` right after `DatabaseFactory.init()` (before
+  `ThreadPool.init`: it uses the database only) and `LivingChronicle.beforeLogin()` once the mail managers are up and
+  before the `ON_SERVER_START` listeners are told (a datapack script could otherwise act before recovery), the shutdown
+  hook is registered and offline traders and players are restored, so a recovery that fails stops the start;
+  `Shutdown` calls `LivingChronicle.atShutdown()` after `saveData()` and before `DatabaseFactory.close()`; a fault inside
+  the boundary is logged and takes no census, never stopping Mobius's database close and backup. In `truth` (and while
+  no `lc.profile` is set, until the profile check exists) each returns at once.
+- Invariant: in a profile that starts Living Chronicle, no character loads before recovery, and every census follows or
+  precedes exactly the Mobius steps §2.6 names.
+- Proof: `LivingChronicleBootTest` (truth starts nothing; an unknown profile refuses; dev counts, recovers and keeps the
+  boundary, a clan warehouse change in memory written there and conserved across the restart; a boundary whose write
+  fails takes no shutdown census, so the next start is a rebase; a fault in the boundary does not escape; uncertain
+  counters still write the clan warehouses, taking no census); `SeamsTest` reads the compiled order (the census right
+  after `DatabaseFactory.init`, recovery before the server-start listeners, the shutdown hook and the offline traders,
+  the boundary right after
+  `saveData` and before `DatabaseFactory.close`; 3/3 fail with CP-0027 reverted); every server-booting test boots
+  through the seams in truth.
+
+## CP-0028 The task pools can be waited for
+
+- Files: `java/org/l2jmobius/commons/threads/ThreadPool.java`
+- Reason: `ThreadPool.shutdown()` only calls `shutdownNow()` (ThreadPool.java:224), which interrupts and returns: a task
+  already running can still change a holding after the shutdown boundary's census (asset-service.md §2.6, Codex round
+  amd15).
+- Change: `awaitTermination(millis)` waits until every pool has terminated and says whether all did; `shutdown()` is
+  unchanged.
+- Invariant: the shutdown census is taken only once no task pool runs.
+- Proof: `SeamsTest.theBoundaryWaitsForTheTaskPoolsMobiusStopped` (the boundary follows `ThreadPool.shutdown` and calls
+  `awaitTermination`); `LivingChronicleBootTest.aBoundaryWhileMobiusTasksStillRunTakesNoShutdownCensus`.

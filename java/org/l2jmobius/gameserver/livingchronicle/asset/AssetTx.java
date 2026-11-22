@@ -309,6 +309,7 @@ public final class AssetTx implements AutoCloseable
 		{
 			final Custody target = execution.open(custody);
 			execution.notFrozen(target);
+			execution.allowsHolding(target); // INV05, as every operation that touches a custody checks it
 			final long charter = target.ownerRef(); // the posting's reference is the charter (§2.5), the custody's owner
 			for (RoutedDrop drop : auctioned)
 			{
@@ -427,15 +428,40 @@ public final class AssetTx implements AutoCloseable
 		return units;
 	}
 
-	/** Writes a service mail's attachment row for a created quantity (no object of it exists yet). */
+	/**
+	 * A created item's shadow mana and time limit, as a new {@code Item} gets them from its template (Item.java:230-231):
+	 * {mana_left, time}, -1 for none.
+	 */
+	static long[] lifetime(int itemId)
+	{
+		final ItemTemplate template = ItemData.getInstance().getTemplate(itemId);
+		if (template == null)
+		{
+			return new long[]
+			{
+				-1,
+				-1
+			};
+		}
+		return new long[]
+		{
+			template.getDuration(),
+			template.getTime() == -1 ? -1 : System.currentTimeMillis() + (template.getTime() * 60 * 1000)
+		};
+	}
+
+	/** Writes a service mail's attachment row for a created quantity (no object of it exists yet), with its lifetime. */
 	private void attachCreated(Connection connection, int message, Asset asset) throws SQLException
 	{
-		try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
+		final long[] lifetime = lifetime(asset.itemId());
+		try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, ?, ?)"))
 		{
 			attach.setInt(1, _service.ids().next());
 			attach.setInt(2, asset.itemId());
 			attach.setLong(3, asset.qty());
 			attach.setInt(4, message);
+			attach.setLong(5, lifetime[0]);
+			attach.setLong(6, lifetime[1]);
 			attach.executeUpdate();
 		}
 	}
@@ -2038,11 +2064,14 @@ public final class AssetTx implements AutoCloseable
 				// an amount of a non-stackable item is that many objects, never one row counting several
 				for (long i = 0; i < asset.qty(); i++)
 				{
-					try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, 1, 0, 'ESCROW', ?, NULL, 0, 0, -1, 0)"))
+					final long[] lifetime = lifetime(asset.itemId());
+					try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, 1, 0, 'ESCROW', ?, NULL, 0, 0, ?, ?)"))
 					{
 						insert.setInt(1, _service.ids().next());
 						insert.setInt(2, asset.itemId());
 						insert.setInt(3, custody);
+						insert.setLong(4, lifetime[0]);
+						insert.setLong(5, lifetime[1]);
 						insert.executeUpdate();
 					}
 				}
@@ -2059,12 +2088,15 @@ public final class AssetTx implements AutoCloseable
 				}
 				return;
 			}
-			try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'ESCROW', ?, NULL, 0, 0, -1, 0)"))
+			final long[] lifetime = lifetime(asset.itemId());
+			try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'ESCROW', ?, NULL, 0, 0, ?, ?)"))
 			{
 				insert.setInt(1, _service.ids().next());
 				insert.setInt(2, asset.itemId());
 				insert.setLong(3, asset.qty());
 				insert.setInt(4, custody);
+				insert.setLong(5, lifetime[0]);
+				insert.setLong(6, lifetime[1]);
 				insert.executeUpdate();
 			}
 		}

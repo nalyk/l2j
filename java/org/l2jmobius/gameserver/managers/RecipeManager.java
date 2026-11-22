@@ -217,6 +217,11 @@ public class RecipeManager
 				return Refusal.NOT_IN_BOOK;
 			}
 			
+			if (PlayerConfig.ALT_GAME_CREATION && _activeMakers.containsKey(crafter.getObjectId()))
+			{
+				return Refusal.BUSY; // requestMakeItem: one craft at a time while crafts take passes
+			}
+			
 			if (crafter.isAlikeDead())
 			{
 				return Refusal.DEAD;
@@ -316,25 +321,66 @@ public class RecipeManager
 			return new ItemHolder(recipe.getItemId(), recipe.getCount());
 		}
 		
-		/** @return what a stat use costs in one of {@code passes} creation passes */
+		/** @return what a stat use costs in one of {@code passes} creation passes (an int division, as retail's) */
 		static double cost(RecipeStatHolder statUse, int passes)
 		{
 			return statUse.getValue() / passes;
 		}
 		
-		/** Takes the HP and MP a craft costs, as retail takes them when it finishes (calculateStatUse, reducing). */
+		/** @return the creation passes of {@code total} materials grabbed {@code grab} at a time, at least one */
+		static int passes(int total, int grab)
+		{
+			if (grab <= 0)
+			{
+				return 1;
+			}
+			
+			return Math.max(1, (total / grab) + ((total % grab) != 0 ? 1 : 0));
+		}
+		
+		/**
+		 * @return the passes retail crafts in: one, or with {@code AltGameCreation} the materials grabbed the crafter's skill
+		 *         level times each {@code GIM} at a time (calculateAltStatChange)
+		 */
+		public static int creationPasses(Player crafter, RecipeList recipe)
+		{
+			if (!PlayerConfig.ALT_GAME_CREATION)
+			{
+				return 1;
+			}
+			
+			int grab = crafter.getSkillLevel(skillId(recipe));
+			for (RecipeStatHolder altStatChange : recipe.getAltStatChange())
+			{
+				if (altStatChange.getType() == StatType.GIM)
+				{
+					grab *= altStatChange.getValue();
+				}
+			}
+			
+			int total = 0;
+			for (ItemHolder material : materials(recipe))
+			{
+				total += (int) material.getCount();
+			}
+			
+			return passes(total, grab);
+		}
+		
+		/** Takes the HP and MP a craft costs, as retail takes them over its passes (calculateStatUse, reducing). */
 		public static void consumeStats(Player crafter, RecipeList recipe)
 		{
 			final Skill skill = crafter.getKnownSkill(skillId(recipe));
+			final int passes = creationPasses(crafter, recipe);
 			for (RecipeStatHolder statUse : recipe.getStatUse())
 			{
 				if (statUse.getType() == StatType.HP)
 				{
-					crafter.reduceCurrentHp(cost(statUse, 1), crafter, skill);
+					crafter.reduceCurrentHp(passes * cost(statUse, passes), crafter, skill);
 				}
 				else if (statUse.getType() == StatType.MP)
 				{
-					crafter.reduceCurrentMp(cost(statUse, 1));
+					crafter.reduceCurrentMp(passes * cost(statUse, passes));
 				}
 			}
 		}
@@ -704,11 +750,7 @@ public class RecipeManager
 			}
 			
 			// Determine number of creation passes needed.
-			_creationPasses = (_totalItems / _itemGrab) + ((_totalItems % _itemGrab) != 0 ? 1 : 0);
-			if (_creationPasses < 1)
-			{
-				_creationPasses = 1;
-			}
+			_creationPasses = Craft.passes(_totalItems, _itemGrab); // CP-0033: shared with the callable rules
 		}
 		
 		// StatUse

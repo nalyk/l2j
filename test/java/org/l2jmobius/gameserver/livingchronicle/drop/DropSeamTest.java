@@ -176,14 +176,58 @@ class DropSeamTest
 	}
 
 	@Test
-	void aRouterThatThrowsTakesNothing()
+	void aRouterThatThrowsWithholdsWhatItWasOffered()
 	{
-		final TreeMap<Integer, Long> retail = kill();
+		// a throw is no answer: the router may have committed before it threw, or its commit may be unresolved
+		final Recorder next = new Recorder();
 		DropSeam.install(7, List.of((kill, items) ->
 		{
-			throw new IllegalStateException("the operation aborted");
+			throw new IllegalStateException("committed, then failed");
+		}, next));
+		assertEquals(new TreeMap<>(), kill(), "nothing offered to it reaches the ground, where a committed copy would dupe it");
+		assertTrue(next.offered.isEmpty(), "nor the next router");
+	}
+
+	@Test
+	void aRouterThatReturnsNothingLeavesEverythingToRetail()
+	{
+		final TreeMap<Integer, Long> retail = kill();
+		DropSeam.install(7, List.of((kill, items) -> Set.of()));
+		assertEquals(retail, kill(), "a router that took nothing says so, and retail drops everything");
+	}
+
+	@Test
+	void aNullPositionIsIgnored()
+	{
+		final Set<Integer> takes = new HashSet<>();
+		takes.add(null);
+		takes.add(0);
+		final Recorder seen = new Recorder();
+		DropSeam.install(7, List.of((kill, items) ->
+		{
+			seen.offered.add(List.copyOf(items));
+			return takes;
 		}));
-		assertEquals(retail, kill(), "every item goes to retail");
+		final TreeMap<Integer, Long> ground = kill();
+		final ItemHolder taken = seen.offered.get(0).get(0);
+		final TreeMap<Integer, Long> expected = total(seen.offered.get(0));
+		expected.merge(taken.getId(), -taken.getCount(), Long::sum);
+		expected.values().removeIf(count -> count == 0);
+		assertEquals(expected, ground, "the rest of the kill still drops");
+	}
+
+	@Test
+	void reinstallingAnEpochKeepsCountingItsKills()
+	{
+		final Recorder first = new Recorder();
+		DropSeam.install(71, List.of(first));
+		kill();
+		DropSeam.uninstall();
+		final Recorder second = new Recorder();
+		DropSeam.install(71, List.of(second));
+		kill();
+		assertEquals("kill/71/1", first.kills.get(0).key());
+		assertEquals("kill/71/2", second.kills.get(0).key(), "a key is never given to two kills");
 	}
 
 	@Test
@@ -214,12 +258,12 @@ class DropSeamTest
 	void killsAreNumberedFromOne()
 	{
 		final Recorder watcher = new Recorder();
-		DropSeam.install(7, List.of(watcher));
+		DropSeam.install(70, List.of(watcher));
 		kill();
 		kill();
-		assertEquals("kill/7/1", watcher.kills.get(0).key());
-		assertEquals("kill/7/2", watcher.kills.get(1).key());
-		assertEquals((7L << 40) | 2, watcher.kills.get(1).ref(), "a posting's reference: epoch << 40 | seq");
+		assertEquals("kill/70/1", watcher.kills.get(0).key());
+		assertEquals("kill/70/2", watcher.kills.get(1).key());
+		assertEquals((70L << 40) | 2, watcher.kills.get(1).ref(), "a posting's reference: epoch << 40 | seq");
 		assertSame(_victim, watcher.kills.get(0).npc());
 		assertSame(_killer, watcher.kills.get(0).owner());
 		assertTrue(watcher.kills.get(0).seq() < watcher.kills.get(1).seq());

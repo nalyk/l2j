@@ -583,13 +583,16 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Change: in the branch whose drop owner is a player, the computed list goes through `DropSeam.route` before the loop.
   With no router installed (always in `truth`) it returns the very list after one volatile read; installed routers run
   in order on the dropping thread, each taking positions its own committed operation took, and retail drops the rest
-  unchanged. A router that throws takes nothing; a position outside its list is ignored. The fake-player branch and the
-  spoil list are not offered.
+  unchanged. Returning is a router's only answer: one that throws may have committed first, or left its commit
+  unresolved, so what it was offered is withheld from later routers and from retail (lost if it did not commit, as a
+  JVM death loses a kill's drops); a position outside its list, or null, is ignored. Reinstalling an epoch keeps
+  counting its kills, so no key is given twice. The fake-player branch and the spoil list are not offered.
 - Invariant: every item a kill rolls is dropped, auto-looted or taken by exactly one committed operation; with no router
   the kill is retail's.
-- Proof: `DropSeamTest` (6/7 red with the seam ignoring its routers: a router's positions dropped anyway, the second
-  router offered everything, kills unnumbered; the seventh, a router that throws, passes and guards that it takes
-  nothing); `DropLockTest`, `PausedWorldTest` and the other behaviour locks unchanged.
+- Proof: `DropSeamTest` (red with the seam ignoring its routers: a router's positions dropped anyway, the second router
+  offered everything, kills unnumbered; red as first written, Codex round amd26: a throwing router's items dropped, a
+  null position losing the rest of the kill, a reinstalled epoch reusing `kill/71/1`); `DropLockTest`,
+  `PausedWorldTest` and the other behaviour locks unchanged.
 
 ## CP-0033 The crafting boundary
 
@@ -600,11 +603,14 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   (blueprint 03 §4.3; asset-service.md §11.34).
 - Change: `RecipeManager.Craft` holds them as functions: `refusal` (what `requestMakeItem` and the maker's constructor
   refuse), `successRate`, `masterworkApplies`, `masterworkRatePpm` (min(100, ceil(rarity × CraftMasterworkChanceRate)) ×
-  10 000, the probability retail's draw has), `materials`, `product`, and `consumeStats` (what finishing a craft takes).
+  10 000, the probability retail's draw has), `materials`, `product`, `creationPasses` and `consumeStats` (what a craft's
+  passes take: with `AltGameCreation` its materials grabbed skill level × GIM at a time, each pass its integer share),
+  and `refusal` includes retail's one-craft-at-a-time guard with `AltGameCreation`.
   The maker takes its success rate, its masterwork rule and product, its materials and its stat cost from them; its two
   `Rnd` draws stay where they are, in the same order. `refusal` mirrors the maker's checks, which also send their
   packets and abort; its test pins it to them.
 - Invariant: a retail craft draws the same numbers in the same order and makes the same thing as upstream.
-- Proof: `CraftBoundaryTest.retailCraftIsUnchanged` (110 crafts recorded on upstream before the change, green before
-  and after); `theRatesAreRetails`, `materialsAndProductAreRetails`, `refusalMatchesWhatRetailRefuses`,
+- Proof: `CraftBoundaryTest.retailCraftIsUnchanged` (110 crafts recorded on upstream's RecipeManager, each with its
+  stream's next draw, so a draw added or removed shows: red with the zero-probability masterwork draw removed);
+  `withAltGameCreationTheCallableRulesAreRetailsToo` (red as first written: 174 MP for retail's 165, no busy guard); `theRatesAreRetails`, `materialsAndProductAreRetails`, `refusalMatchesWhatRetailRefuses`,
   `consumeStatsTakesWhatRetailTakes` (red without `Craft`: they do not compile).

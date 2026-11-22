@@ -2,6 +2,7 @@ package org.l2jmobius.gameserver.livingchronicle.asset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.l2jmobius.gameserver.livingchronicle.asset.AssetFixtures.ADENA;
 
 import java.util.List;
@@ -28,13 +29,15 @@ class RouteTest
 {
 	private static final int SHORT_SWORD = 1; // tradeable, not stackable
 	private static final int DARINS_LETTER = 687; // a quest item
+	private static final int SHADOW_SWORD = 8821; // a shadow item, duration 90
+	private static final int TIMED_HAT = 12781; // a time-limited item
 	private static AssetFixtures _f;
 
 	@BeforeAll
 	static void boot() throws Exception
 	{
 		final TestServer server = TestServer.boot();
-		_f = new AssetFixtures(server.database(), () -> IdManager.getInstance().getNextId(), Map.of("PACT", (connection, ref) -> true), id -> MailManager.getInstance().adopt(id));
+		_f = new AssetFixtures(server.database(), () -> IdManager.getInstance().getNextId(), Map.of("PACT", (connection, ref) -> true, "NOHOLD", (connection, ref) -> false), id -> MailManager.getInstance().adopt(id));
 		EconomyCounter.activate(Map.of());
 	}
 
@@ -129,6 +132,32 @@ class RouteTest
 		final AssetAbort abort = assertThrows(AssetAbort.class, () -> route(custody, "kill/7/4", new RoutedDrop(ADENA, 10, a.getObjectId())));
 		assertEquals(AssetAbort.Reason.ALREADY_SETTLED, abort.reason());
 		assertEquals(10, _f.number("SELECT SUM(i.count) FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.loc = 'MAIL' AND m.receiverId = " + a.getObjectId()), "routed once");
+	}
+
+	@Test
+	void anOwnerThatMayNotHoldRefusesTheRoute() throws Exception
+	{
+		final int custody = _f.open("NOHOLD");
+		try (AssetTx tx = _f.service.begin(_f.op("ROUTE"), "NOHOLD", "ROUTE", custody))
+		{
+			tx.route(custody, List.of(new RoutedDrop(SHORT_SWORD, 1, 0)), "Loot Charter", "Your share of the kill.");
+			assertEquals(AssetAbort.Reason.NOT_ALLOWED_TO_HOLD, assertThrows(AssetAbort.class, tx::commit).reason());
+		}
+		assertEquals(0, _f.held(custody, SHORT_SWORD), "INV05: its owner holds nothing it may not");
+	}
+
+	@Test
+	void aMailedShadowOrTimedItemKeepsItsLimits() throws Exception
+	{
+		final Player a = receiver();
+		final int custody = _f.open("PACT");
+		final long before = System.currentTimeMillis();
+		assertEquals(Outcome.COMMITTED, route(custody, "kill/7/8", new RoutedDrop(SHADOW_SWORD, 1, a.getObjectId()), new RoutedDrop(TIMED_HAT, 1, a.getObjectId())));
+		assertEquals(90, _f.number("SELECT i.mana_left FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.loc = 'MAIL' AND m.receiverId = " + a.getObjectId() + " AND i.item_id = " + SHADOW_SWORD), "a shadow item's mana, as a new item gets it");
+		final long minutes = org.l2jmobius.gameserver.data.xml.ItemData.getInstance().getTemplate(TIMED_HAT).getTime();
+		final long time = _f.number("SELECT i.time FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.loc = 'MAIL' AND m.receiverId = " + a.getObjectId() + " AND i.item_id = " + TIMED_HAT);
+		assertTrue((time >= (before + (minutes * 60_000))) && (time <= (System.currentTimeMillis() + (minutes * 60_000))), "a time-limited item's end, as a new item gets it: " + time);
+		assertEquals(-1, _f.number("SELECT i.time FROM items i JOIN messages m ON m.messageId = i.loc_data WHERE i.loc = 'MAIL' AND m.receiverId = " + a.getObjectId() + " AND i.item_id = " + SHADOW_SWORD), "no time limit: -1, as Mobius writes it");
 	}
 
 	@Test

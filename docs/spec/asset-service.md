@@ -808,8 +808,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     the very list it was given after one volatile read. Installed routers run in order on the dropping thread (the
     Loot Charter's `route`, then Aden Remembers' `relocate`): each is offered what is left, as positions of a list (an
     item id may appear twice, one per group that rolled it), and returns the positions whose operation committed, an
-    `UNCERTAIN` commit resolved on that thread first (§3.2); what no router took goes to retail unchanged. A router that
-    throws took nothing; a position outside its list is ignored. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
+    `UNCERTAIN` commit resolved on that thread first (§3.2), or none when it committed nothing; what no router took
+    goes to retail unchanged. A router that throws gave no answer (it may have committed first, or left its commit
+    unresolved), so what it was offered is withheld from later routers and from retail: lost if it did not commit,
+    never dropped twice. A position outside its list, or null, is ignored. Reinstalling an epoch keeps counting its
+    kills. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
     consumer derives its `OpId`; as a posting's reference the key is the number epoch × 2^40 + sequence. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
     are never offered. Stated limit, the consumers' own (pact.md §4.5): a JVM death between the kill and a commit loses
@@ -818,7 +821,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     and masterwork draws (:416, :679), the materials (:608-660) and the product (:669-686) cannot be used apart. Core
     patch (03 §4.3): `RecipeManager.Craft` holds them as functions (`refusal`, `successRate`, `masterworkRatePpm`,
     `materials`, `product`, `consumeStats`), the maker calls them, and its two `Rnd` draws stay where and as they are.
-    The masterwork rate in parts per million is `min(100, ceil(rarity × CraftMasterworkChanceRate)) × 10 000` when the
+    With `AltGameCreation` a craft takes passes (its materials grabbed skill level × GIM at a time) and each pass costs
+    its integer share of the stats; `creationPasses` and `consumeStats` charge exactly that, and `refusal` keeps retail's
+    one craft at a time. The masterwork rate in parts per million is `min(100, ceil(rarity × CraftMasterworkChanceRate)) × 10 000` when the
     recipe has a rare product that applies (its id is the product's, or `CraftMasterwork` is on), else 0: the
     probability retail's draw `Rnd.get(100) < rarity × rate` has. A recipe without a rare product has rare id 0 and
     rarity 0, so retail draws for it and never wins; the maker keeps that draw, part of its order of draws.
@@ -834,6 +839,16 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   rows of one, in a custody and in a mail alike.
   §2.5 says what number each new reference is: a charter by its custody's owner reference, a kill by epoch × 2^40 +
   sequence.
+  A row the service creates for an item (a mail attachment, a custody row) carries the shadow mana and time limit a new
+  item gets from its template (Item.java:230-231).
+- Amendment round 26 (Codex), NO SIGN-OFF: a router that committed and then threw had its items offered again, a
+  duplicate (1); a null position lost the rest of a kill's drops (2); `route` skipped the owner's holding predicate
+  (3); with `AltGameCreation` the callable craft rules missed the busy guard and charged the whole cost, not the passes'
+  (4); created attachments dropped shadow and time limits (5); reinstalling an epoch reused kill keys (6); the craft
+  characterization could not see a draw added or removed (7). Fixed (still revision 15): a throw withholds; null and
+  out-of-range positions are ignored inside the seam's guard; `route` checks INV05; `creationPasses`, `consumeStats`
+  and `refusal` follow `AltGameCreation`; created rows take the template's lifetime; an epoch keeps counting; the
+  characterization records each craft's next draw, recorded again on upstream.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

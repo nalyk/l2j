@@ -413,7 +413,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   mark is read before the commit, under the row lock Mobius's own deletion waits behind, and a committed statement is
   posted even when the connection fails afterwards (Codex amd14); a row write clears the mark only when what it wrote
   holds nothing counted, and a destruction during an object's first insert leaves it (`Item._inserting`, Codex
-  amd15-16), a failed insert too, since a lost acknowledgement may have left its row (Codex amd17); a commit whose
+  amd15-16), a failed insert too, and the object stays one whose row may exist until an insert of it succeeds, so a
+  later destruction leaves the mark as well, since a lost acknowledgement may have left its row (Codex amd17-18; the
+  orphan row upstream then never deletes is reported by the restart census); a commit whose
   outcome cannot be read makes the counters uncertain, so the boundary takes no census; any commit that ended hands
   the connection back in autocommit (Codex amd17). A
   restore racing a deletion of the same row (upstream's ghost race) is not settled: the restart census reports the ghost. An auction's row and its bids are
@@ -429,7 +431,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   destroyed and gone from the world before its row went not counted twice, a commit failing with its transaction open
   committing nothing: these three red on round 12's code; a resolved commit handing back an autocommit connection, red
   on round 16's code); `ExistenceCounterTest.aFailedInsertKeepsTheMarkItsRowMayNeed`
-  (red on round 16's code).
+  (red on round 16's code) and `aDestructionAfterAFailedInsertLeavesItsMark` (red on round 17's code).
 
 ## CP-0026 A clan-hall bid is refunded only once its row is gone
 

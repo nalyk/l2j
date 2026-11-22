@@ -203,8 +203,9 @@ it guarantees, and what it only watches, are stated separately.
    out (destroyed, dropped or sold, its row not yet written: Mobius counts and deletes in two steps) counts nothing
    more, read under the row's lock, which Mobius's own deletion of the row waits behind, and kept until a write of the
    row holds nothing counted (a save that began before and wrote the older quantity keeps it; a destruction while the
-   object's first row is being inserted leaves the mark too, and an insert that fails keeps it, since a lost
-   acknowledgement may have left the row). A commit that fails is rolled
+   object's first row is being inserted leaves the mark too; an insert that fails keeps it, and the object stays one
+   whose row may exist, so a later destruction leaves the mark as well, since a lost acknowledgement may have left the
+   row: Mobius, believing it has none, never deletes it, and the restart census reports that orphan). A commit that fails is rolled
    back before it is resolved, so no later cleanup commits it; one known to have committed is posted whatever happens to
    the connection afterwards; one whose outcome cannot be read at all (the database failing the resolution too) makes the
    counters uncertain, so no shutdown census follows and the next start is a rebase. A race this does not settle is upstream's own: Mobius restoring a container while a counted
@@ -808,6 +809,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   each is fixed with a test red before it. Its claim that a deletion of more than 65 535 rows fails on the parameter
   limit was tested and does not hold: a 70 000-row counted deletion succeeds, server-side prepares requested or not
   (Connector/J prepares it client-side).
+- Amendment round 18 (Codex), NO SIGN-OFF: after a failed insert the object no longer counted as one whose row may
+  exist, so a destruction afterwards left no mark, a double count (1). Fixed (still revision 13): a failed insert leaves
+  the object marked as possibly having a row until an insert of it succeeds; the orphan row a lost acknowledgement
+  leaves is upstream's, reported by the restart census.
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

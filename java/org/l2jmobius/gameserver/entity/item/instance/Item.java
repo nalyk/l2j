@@ -119,7 +119,7 @@ public class Item extends WorldObject
 	private long _posted;
 	/** Its row was deleted by a counted SQL statement while this copy stayed loaded (CP-0025): it never counts again. */
 	private boolean _forgotten;
-	/** Its first row is being inserted (CP-0025): from before the values it writes are read until Mobius knows the row. */
+	/** A row of it may exist that Mobius does not know (CP-0025): from before an INSERT's values are read until Mobius knows the row; after a failed INSERT for good, since a lost acknowledgement may have left the row. */
 	private volatile boolean _inserting;
 	/** In the saved ground list (SaveDroppedItem), a census holding (CP-0022), guarded by {@link EconomyCounter#lockFor}. */
 	private boolean _onSavedGround;
@@ -1990,7 +1990,7 @@ public class Item extends WorldObject
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Could not insert item " + this + " into DB: Reason: " + e.getMessage(), e);
-			_inserting = false; // a mark stays: a lost acknowledgement may have left its row (Codex amd17); Mobius's own deletion clears it (CP-0025)
+			// _inserting stays: a lost acknowledgement may have left its row, so a mark stays and a later destruction leaves one (Codex amd17-18, CP-0025)
 		}
 	}
 	

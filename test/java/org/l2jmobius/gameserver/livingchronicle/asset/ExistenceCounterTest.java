@@ -305,6 +305,28 @@ class ExistenceCounterTest
 	}
 
 	@Test
+	void aDestructionAfterAFailedInsertLeavesItsMark()
+	{
+		final Player player = player();
+		final Item saved = player.getInventory().addItem(ItemProcessType.NONE, SOULSHOT, 30, player, null);
+		saved.updateDatabase(true); // a row under this id: what an INSERT whose acknowledgement was lost leaves
+		final Item fresh = new Item(saved.getObjectId(), SOULSHOT);
+		fresh.setOwnerId(player.getObjectId());
+		fresh.setCount(30);
+		fresh.setItemLocation(ItemLocation.INVENTORY, 0, false);
+		try
+		{
+			fresh.updateDatabase(true); // the INSERT fails: Mobius still believes it has no row
+			fresh.setCount(0); // destroyed afterwards
+			assertTrue(EconomyCounter.isCountedOut(fresh.getObjectId()), "a row may hold it (Codex amd18): a counted deletion must not count it again");
+		}
+		finally
+		{
+			EconomyCounter.clearCountedOut(fresh.getObjectId());
+		}
+	}
+
+	@Test
 	void anInactiveCounterPostsNothing()
 	{
 		final Player player = player();

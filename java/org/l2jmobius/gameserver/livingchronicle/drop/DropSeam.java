@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.gameserver.entity.actor.Attackable;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.holders.ItemHolder;
@@ -18,8 +19,8 @@ import org.l2jmobius.gameserver.entity.item.holders.ItemHolder;
  * The drop seam (docs/spec/asset-service.md §11.33, core patch CP-0032): {@code Attackable.doItemDrop} hands it a kill's
  * death-drop list right after retail computed it. Installed routers run in order on the dropping thread, each offered
  * what earlier ones left and taking the positions its own committed operation took; the rest goes back to retail
- * unchanged. A router that throws is asked what it committed; one that cannot tell has what it was offered withheld,
- * never dropped twice. With none
+ * unchanged. A router that throws is asked what it committed; one that cannot tell yet has what it was offered held
+ * until it can, then the rest dropped at the kill's place, never twice. With none
  * installed (always in {@code truth}) the very list comes back after one volatile read.
  */
 public final class DropSeam
@@ -36,6 +37,90 @@ public final class DropSeam
 
 	private DropSeam()
 	{
+	}
+
+	/** A kill whose router's outcome could not be read: what it was offered and where the kill was. */
+	private record Pending(Kill kill, DropRouter router, List<ItemHolder> offered, int x, int y, int z)
+	{
+	}
+
+	/** How many kills may wait for their router's outcome at once (02 §6: no unbounded queue). */
+	static final int MAX_PENDING = 10_000;
+	private static final List<Pending> PENDING = new ArrayList<>();
+	private static boolean _resolving;
+
+	private static void hold(Pending pending, Throwable cause)
+	{
+		synchronized (PENDING)
+		{
+			if (PENDING.size() >= MAX_PENDING)
+			{
+				LOGGER.log(Level.SEVERE, "Drop seam: " + MAX_PENDING + " kills already wait for their router's outcome; " + pending.kill().key() + "'s " + pending.offered() + " withheld for good", cause);
+				return;
+			}
+			PENDING.add(pending);
+			LOGGER.log(Level.SEVERE, "Drop router " + pending.router() + " cannot tell what it committed of " + pending.kill().key() + "; " + pending.offered() + " held until it can", cause);
+			if (!_resolving)
+			{
+				_resolving = true;
+				ThreadPool.scheduleAtFixedRate(DropSeam::resolvePending, 10_000, 10_000);
+			}
+		}
+	}
+
+	/** @return how many kills wait for their router's outcome */
+	public static int pending()
+	{
+		synchronized (PENDING)
+		{
+			return PENDING.size();
+		}
+	}
+
+	/**
+	 * Asks each waiting router again what it committed; once it answers, what it did not commit drops at the kill's
+	 * place as retail drops it (Npc.dropItem), protected for the kill's owner. A JVM death first loses them, as it loses
+	 * a kill's drops before any commit (pact.md §4.5).
+	 */
+	public static void resolvePending()
+	{
+		final List<Pending> waiting;
+		synchronized (PENDING)
+		{
+			waiting = List.copyOf(PENDING);
+		}
+		for (Pending pending : waiting)
+		{
+			final Set<Integer> committed;
+			try
+			{
+				committed = pending.router().committed(pending.kill(), pending.offered());
+			}
+			catch (Throwable e)
+			{
+				continue; // still unknown
+			}
+			synchronized (PENDING)
+			{
+				if (!PENDING.remove(pending))
+				{
+					continue; // another pass resolved it
+				}
+			}
+			for (int i = 0; i < pending.offered().size(); i++)
+			{
+				if ((committed == null) || !committed.contains(i))
+				{
+					drop(pending, pending.offered().get(i));
+				}
+			}
+		}
+	}
+
+	/** Mobius's own drop (Npc.dropItemAt, CP-0032), at the kill's place rather than where the monster is now. */
+	private static void drop(Pending pending, ItemHolder holder)
+	{
+		pending.kill().npc().dropItemAt(pending.kill().owner(), holder.getId(), holder.getCount(), pending.x(), pending.y(), pending.z());
 	}
 
 	/**
@@ -98,7 +183,9 @@ public final class DropSeam
 				}
 				catch (Throwable unknown)
 				{
-					LOGGER.log(Level.SEVERE, "Drop router " + router + " cannot tell what it committed of " + kill.key() + "; withheld " + offered + ": " + unknown.getMessage(), unknown);
+					// Unknown until the store answers: held here, with the kill's place, and resolved later (resolvePending);
+					// what the router did not commit then drops there, once. Nothing goes on meanwhile.
+					hold(new Pending(kill, router, offered, npc.getX(), npc.getY(), npc.getZ()), unknown);
 					return new ArrayList<>(); // mutable: doItemDrop clears what it is given
 				}
 			}

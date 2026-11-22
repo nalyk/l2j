@@ -1923,6 +1923,22 @@ public class Npc extends Creature
 	 */
 	public Item dropItem(Creature creature, int itemId, long itemCount)
 	{
+		return dropItemAt(creature, itemId, itemCount, getX(), getY(), getZ());
+	}
+	
+	/**
+	 * Drops as {@link #dropItem(Creature, int, long)} does, around a given place rather than where this NPC is now (CP-0032:
+	 * the drop seam drops a kill's held drops at the kill's place once their router's outcome is known).
+	 * @param creature the drop's owner
+	 * @param itemId the item id
+	 * @param itemCount the count
+	 * @param x the place's x
+	 * @param y the place's y
+	 * @param z the place's z
+	 * @return the dropped item
+	 */
+	public Item dropItemAt(Creature creature, int itemId, long itemCount, int x, int y, int z)
+	{
 		Item item = null;
 		for (int i = 0; i < itemCount; i++)
 		{
@@ -1944,9 +1960,9 @@ public class Npc extends Creature
 			}
 			
 			// Randomize drop position.
-			final int newX = (getX() + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
-			final int newY = (getY() + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
-			final int newZ = getZ() + 20;
+			final int newX = (x + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
+			final int newY = (y + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
+			final int newZ = z + 20;
 			
 			item.dropMe(this, newX, newY, newZ);
 			

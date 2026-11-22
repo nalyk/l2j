@@ -220,12 +220,61 @@ class DropSeamTest
 	}
 
 	@Test
-	void aRouterWhoseOutcomeCannotBeReadWithholdsWhatItWasOffered()
+	void aRouterWhoseOutcomeCannotBeReadYetKeepsItsDropsUntilItCan()
 	{
+		final java.util.concurrent.atomic.AtomicBoolean readable = new java.util.concurrent.atomic.AtomicBoolean(false);
+		final Recorder seen = new Recorder();
 		final Recorder next = new Recorder();
-		DropSeam.install(7, List.of(throwing(Set.of(0), false), next));
-		assertEquals(new TreeMap<>(), kill(), "unknown even to the store: never dropped twice");
-		assertTrue(next.offered.isEmpty());
+		DropSeam.install(7, List.of(seen, new DropRouter()
+		{
+			@Override
+			public Set<Integer> route(Kill kill, List<ItemHolder> offered)
+			{
+				throw new IllegalStateException("committed position 0, then the connection failed");
+			}
+
+			@Override
+			public Set<Integer> committed(Kill kill, List<ItemHolder> offered)
+			{
+				if (!readable.get())
+				{
+					throw new IllegalStateException("the store cannot be read");
+				}
+				return Set.of(0);
+			}
+		}, next));
+		assertEquals(new TreeMap<>(), kill(), "unknown: nothing dropped yet, where a committed copy would be a duplicate");
+		assertTrue(next.offered.isEmpty(), "nor offered on");
+		assertEquals(1, DropSeam.pending(), "held, not lost");
+		assertEquals(new TreeMap<>(), resolve(), "still unreadable: still held");
+		readable.set(true);
+		final TreeMap<Integer, Long> expected = total(seen.offered.get(0));
+		final ItemHolder taken = seen.offered.get(0).get(0);
+		expected.merge(taken.getId(), -taken.getCount(), Long::sum);
+		expected.values().removeIf(count -> count == 0);
+		assertEquals(expected, resolve(), "once readable: what it did not commit reaches the ground, once");
+		assertEquals(0, DropSeam.pending());
+	}
+
+	/** Resolves the seam's pending kills. @return what that dropped, id → total count */
+	private static TreeMap<Integer, Long> resolve()
+	{
+		final Set<Integer> before = new HashSet<>();
+		for (WorldObject object : World.getVisibleObjects())
+		{
+			before.add(object.getObjectId());
+		}
+		DropSeam.resolvePending();
+		final TreeMap<Integer, Long> ground = new TreeMap<>();
+		for (WorldObject object : List.copyOf(World.getVisibleObjects()))
+		{
+			if ((object instanceof Item item) && !before.contains(item.getObjectId()) && item.isSpawned())
+			{
+				ground.merge(item.getId(), item.getCount(), Long::sum);
+				item.decayMe();
+			}
+		}
+		return ground;
 	}
 
 	@Test

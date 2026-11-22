@@ -811,9 +811,12 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     `UNCERTAIN` commit resolved on that thread first (§3.2), or none when it committed nothing; what no router took
     goes to retail unchanged. A router that throws may have committed first: the seam asks it what its operation for
     the kill committed, read from durable state (the operation whose id it derives from the kill key), and that stays
-    taken while the rest goes on. Only a router that cannot tell either, the store unreadable, has what it was offered
-    withheld from later routers and from retail: never dropped twice, and lost only in the case the Asset Service
-    itself cannot resolve (§3.2). A position outside its list, or null, is ignored. Every epoch keeps its own kill
+    taken while the rest goes on. A router that cannot tell yet, the store unreadable, has what it was offered held by
+    the seam with the kill's place, offered to no one, and asked again every ten seconds; once it answers, what it did
+    not commit drops at that place, once, through Mobius's own drop (`Npc.dropItemAt`, `dropItem`'s body at a given
+    place, which `dropItem` calls with the NPC's own: a classified site, retail's draws unchanged). At most
+    10 000 kills wait at a time (02 §6: no unbounded queue); a JVM death loses those waiting, the stated limit of a
+    kill's drops before its commit (pact.md §4.5). A position outside its list, or null, is ignored. Every epoch keeps its own kill
     counter for the server's life. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
     consumer derives its `OpId`; as a posting's reference the key is the number epoch × 2^40 + sequence. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
@@ -855,6 +858,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   committed (1); an epoch reinstalled after another restarted its kill count (2); `craft` skipped the owner's holding
   predicate (3). Fixed (still revision 15): the seam asks a throwing router what it committed, from durable state, and
   withholds only when that cannot be read either; every epoch keeps its own counter; `craft` checks INV05.
+- Amendment round 28 (Codex), NO SIGN-OFF: a router whose outcome could not be read had everything it was offered
+  withheld for good, its uncommitted drops lost (1). Fixed (still revision 15): the seam holds such a kill, bounded,
+  and asks the router again until it answers, then drops what it did not commit at the kill's place, through Mobius's
+  own drop made callable at a place (`Npc.dropItemAt`, the `npc_drop` row's member now).
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

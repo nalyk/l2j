@@ -36,7 +36,7 @@ class CraftTest
 	static void boot() throws Exception
 	{
 		final TestServer server = TestServer.boot();
-		_f = new AssetFixtures(server.database(), () -> IdManager.getInstance().getNextId(), Map.of("TEST", (connection, ref) -> true), id -> MailManager.getInstance().adopt(id));
+		_f = new AssetFixtures(server.database(), () -> IdManager.getInstance().getNextId(), Map.of("TEST", (connection, ref) -> true, "NOHOLD", (connection, ref) -> false), id -> MailManager.getInstance().adopt(id));
 		_f.execute("CREATE TABLE IF NOT EXISTS lc_test_outcome (attempt INT PRIMARY KEY, success BOOLEAN NOT NULL)");
 		EconomyCounter.activate(Map.of());
 	}
@@ -122,6 +122,20 @@ class CraftTest
 		assertEquals(AssetAbort.Reason.RECEIVER_GONE, assertThrows(AssetAbort.class, () -> craft(custody, 999_999_999, new ItemHolder(SHORT_SWORD, 1), 3)).reason());
 		assertEquals(10, _f.held(custody, STEEL), "nothing consumed");
 		assertEquals(0, _f.number("SELECT COUNT(*) FROM lc_test_outcome WHERE attempt = 3"), "the outcome row went with the operation");
+	}
+
+	@Test
+	void anOwnerThatMayNotHoldRefusesTheCraft() throws Exception
+	{
+		final Player crafter = receiver();
+		final int custody = _f.open("NOHOLD");
+		_f.seed(custody, STEEL, 10, false);
+		try (AssetTx tx = _f.service.begin(_f.op("CRAFT"), "NOHOLD", "CRAFT", custody))
+		{
+			tx.craft(custody, List.of(new Asset(STEEL, 10, null)), crafter.getObjectId(), new ItemHolder(SHORT_SWORD, 1), "Notarius of Giran", "Your contract's craft.");
+			assertEquals(AssetAbort.Reason.NOT_ALLOWED_TO_HOLD, assertThrows(AssetAbort.class, tx::commit).reason());
+		}
+		assertEquals(10, _f.held(custody, STEEL), "INV05: nothing consumed under an owner that may not hold it");
 	}
 
 	@Test

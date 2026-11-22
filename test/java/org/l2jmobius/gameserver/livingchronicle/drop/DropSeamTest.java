@@ -175,17 +175,57 @@ class DropSeamTest
 		assertEquals(first.kills.get(0), second.kills.get(0), "of the same kill");
 	}
 
-	@Test
-	void aRouterThatThrowsWithholdsWhatItWasOffered()
+	/** A router that throws from route, then says from durable state what it had committed. */
+	private static DropRouter throwing(Set<Integer> committed, boolean answers)
 	{
-		// a throw is no answer: the router may have committed before it threw, or its commit may be unresolved
-		final Recorder next = new Recorder();
-		DropSeam.install(7, List.of((kill, items) ->
+		return new DropRouter()
 		{
-			throw new IllegalStateException("committed, then failed");
-		}, next));
-		assertEquals(new TreeMap<>(), kill(), "nothing offered to it reaches the ground, where a committed copy would dupe it");
-		assertTrue(next.offered.isEmpty(), "nor the next router");
+			@Override
+			public Set<Integer> route(Kill kill, List<ItemHolder> offered)
+			{
+				throw new IllegalStateException("failed after committing " + committed);
+			}
+
+			@Override
+			public Set<Integer> committed(Kill kill, List<ItemHolder> offered)
+			{
+				if (!answers)
+				{
+					throw new IllegalStateException("the store cannot be read");
+				}
+				return committed;
+			}
+		};
+	}
+
+	@Test
+	void aRouterThatThrowsBeforeCommittingLeavesEverythingToRetail()
+	{
+		final TreeMap<Integer, Long> retail = kill();
+		DropSeam.install(7, List.of(throwing(Set.of(), true)));
+		assertEquals(retail, kill(), "it committed nothing, as its durable state says: nothing is lost");
+	}
+
+	@Test
+	void aRouterThatThrowsAfterCommittingKeepsWhatItCommittedAndRetailTheRest()
+	{
+		final Recorder seen = new Recorder();
+		DropSeam.install(7, List.of(seen, throwing(Set.of(0), true)));
+		final TreeMap<Integer, Long> ground = kill();
+		final ItemHolder taken = seen.offered.get(0).get(0);
+		final TreeMap<Integer, Long> expected = total(seen.offered.get(0));
+		expected.merge(taken.getId(), -taken.getCount(), Long::sum);
+		expected.values().removeIf(count -> count == 0);
+		assertEquals(expected, ground, "the committed position once, everything else on the ground");
+	}
+
+	@Test
+	void aRouterWhoseOutcomeCannotBeReadWithholdsWhatItWasOffered()
+	{
+		final Recorder next = new Recorder();
+		DropSeam.install(7, List.of(throwing(Set.of(0), false), next));
+		assertEquals(new TreeMap<>(), kill(), "unknown even to the store: never dropped twice");
+		assertTrue(next.offered.isEmpty());
 	}
 
 	@Test
@@ -228,6 +268,21 @@ class DropSeamTest
 		kill();
 		assertEquals("kill/71/1", first.kills.get(0).key());
 		assertEquals("kill/71/2", second.kills.get(0).key(), "a key is never given to two kills");
+	}
+
+	@Test
+	void anEarlierEpochReinstalledKeepsCountingToo()
+	{
+		final Recorder first = new Recorder();
+		DropSeam.install(73, List.of(first));
+		kill();
+		DropSeam.install(74, List.of(new Recorder()));
+		kill();
+		final Recorder again = new Recorder();
+		DropSeam.install(73, List.of(again));
+		kill();
+		assertEquals("kill/73/1", first.kills.get(0).key());
+		assertEquals("kill/73/2", again.kills.get(0).key(), "an epoch's counter survives another epoch's install");
 	}
 
 	@Test

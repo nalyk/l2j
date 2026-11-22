@@ -488,6 +488,7 @@ public final class AssetTx implements AutoCloseable
 		{
 			final Custody source = execution.open(custody);
 			execution.notFrozen(source);
+			execution.allowsHolding(source); // INV05, as every operation that touches a custody checks it
 			final long contract = source.ownerRef();
 			if ((product != null) && !execution.receiverAlive(receiverCharId))
 			{

@@ -583,15 +583,17 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Change: in the branch whose drop owner is a player, the computed list goes through `DropSeam.route` before the loop.
   With no router installed (always in `truth`) it returns the very list after one volatile read; installed routers run
   in order on the dropping thread, each taking positions its own committed operation took, and retail drops the rest
-  unchanged. Returning is a router's only answer: one that throws may have committed first, or left its commit
-  unresolved, so what it was offered is withheld from later routers and from retail (lost if it did not commit, as a
-  JVM death loses a kill's drops); a position outside its list, or null, is ignored. Reinstalling an epoch keeps
-  counting its kills, so no key is given twice. The fake-player branch and the spoil list are not offered.
+  unchanged. A router that throws may have committed first, so the seam asks it what its operation committed, read
+  from durable state (`DropRouter.committed`): that stays taken and the rest goes on to the next router and retail.
+  Only a router that cannot tell either (the store unreadable) has what it was offered withheld, never dropped twice.
+  A position outside its list, or null, is ignored. Every epoch keeps its own kill counter for the JVM's life, so no
+  key is given twice. The fake-player branch and the spoil list are not offered.
 - Invariant: every item a kill rolls is dropped, auto-looted or taken by exactly one committed operation; with no router
   the kill is retail's.
 - Proof: `DropSeamTest` (red with the seam ignoring its routers: a router's positions dropped anyway, the second router
-  offered everything, kills unnumbered; red as first written, Codex round amd26: a throwing router's items dropped, a
-  null position losing the rest of the kill, a reinstalled epoch reusing `kill/71/1`); `DropLockTest`,
+  offered everything, kills unnumbered; red as first written, Codex rounds amd26-27: a throwing router's items dropped,
+  then all withheld though it committed nothing or only part, a null position losing the rest of the kill, an epoch
+  reinstalled after another reusing `kill/73/1`); `DropLockTest`,
   `PausedWorldTest` and the other behaviour locks unchanged.
 
 ## CP-0033 The crafting boundary

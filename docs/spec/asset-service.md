@@ -809,10 +809,12 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     Loot Charter's `route`, then Aden Remembers' `relocate`): each is offered what is left, as positions of a list (an
     item id may appear twice, one per group that rolled it), and returns the positions whose operation committed, an
     `UNCERTAIN` commit resolved on that thread first (§3.2), or none when it committed nothing; what no router took
-    goes to retail unchanged. A router that throws gave no answer (it may have committed first, or left its commit
-    unresolved), so what it was offered is withheld from later routers and from retail: lost if it did not commit,
-    never dropped twice. A position outside its list, or null, is ignored. Reinstalling an epoch keeps counting its
-    kills. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
+    goes to retail unchanged. A router that throws may have committed first: the seam asks it what its operation for
+    the kill committed, read from durable state (the operation whose id it derives from the kill key), and that stays
+    taken while the rest goes on. Only a router that cannot tell either, the store unreadable, has what it was offered
+    withheld from later routers and from retail: never dropped twice, and lost only in the case the Asset Service
+    itself cannot resolve (§3.2). A position outside its list, or null, is ignored. Every epoch keeps its own kill
+    counter for the server's life. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
     consumer derives its `OpId`; as a posting's reference the key is the number epoch × 2^40 + sequence. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
     are never offered. Stated limit, the consumers' own (pact.md §4.5): a JVM death between the kill and a commit loses
@@ -849,6 +851,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   out-of-range positions are ignored inside the seam's guard; `route` checks INV05; `creationPasses`, `consumeStats`
   and `refusal` follow `AltGameCreation`; created rows take the template's lifetime; an epoch keeps counting; the
   characterization records each craft's next draw, recorded again on upstream.
+- Amendment round 27 (Codex), NO SIGN-OFF: withholding everything a throwing router was offered lost what it had not
+  committed (1); an epoch reinstalled after another restarted its kill count (2); `craft` skipped the owner's holding
+  predicate (3). Fixed (still revision 15): the seam asks a throwing router what it committed, from durable state, and
+  withholds only when that cannot be read either; every epoch keeps its own counter; `craft` checks INV05.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

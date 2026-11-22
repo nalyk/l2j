@@ -784,7 +784,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     when it cannot be read (a refund of a written row would pay twice; the restart decides); a confirmed sale is
     scheduled to end, and its task is cancelled when the sale is deleted, after which nothing ends, cancels or bids on it
     any more; a sale closes only once its bids' rows are deleted, so a failed deletion (§11.28) leaves it open, nothing
-    paid, a cancel to be asked again and an end retried; an auction without bids is deleted as a cancelled one is, its
+    paid, the seller told the cancel failed (upstream's Auctioneer said it succeeded) and an end retried; an auction without bids is deleted as a cancelled one is, its
     row before its listing, under the confirmations' lock.
 32. **A whole-stack destruction races an addition into the stack.** `transferItem` grows a target stack
     without its monitor (ItemContainer.java:339, 376), while `destroyItem` decides on the whole stack under the item's
@@ -825,6 +825,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   loaded for an owner who logged out (1); a sale closed before its bids, so a failed bid deletion stranded them with no
   way to retry (2). Fixed (still revision 14): every pet `World` keeps is swept; a cancel and an end delete the bids
   first and close the sale only then, a failure leaving it open and retried.
+- Amendment round 24 (Codex), NO SIGN-OFF: a cancel that left the sale open was still reported to the seller as done,
+  so the timer could sell the hall (1). Fixed (still revision 14): `cancelAuction` returns whether it cancelled and the
+  Auctioneer says so either way. With it, from the author's own review: `confirmAuction` returns what it did, so the
+  Auctioneer says not enough Adena only when the deposit could not be paid and tells a seller whose write could not be
+  resolved that the deposit is held; the event's deletion reads the messages it empties inside its own counted work.
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

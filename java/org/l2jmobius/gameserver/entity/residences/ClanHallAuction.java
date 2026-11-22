@@ -61,6 +61,21 @@ public class ClanHallAuction
 	private int _itemObjectId = 0;
 	private final long _itemQuantity = 0;
 	private String _itemType = "";
+	/** What confirming a sale did (CP-0029, CP-0031): only {@code UNRESOLVED} keeps a deposit for a sale not listed. */
+	public enum Confirmation
+	{
+		/** Listed, its row written, its deposit paid. */
+		CONFIRMED,
+		/** The clan warehouse could not pay the deposit; nothing taken. */
+		NOT_ENOUGH_ADENA,
+		/** The hall is listed, or its last sale's row is still there; nothing taken. */
+		ALREADY_FOR_SALE,
+		/** The row could not be written, or the clan is gone; nothing taken, a paid deposit given back. */
+		NOT_WRITTEN,
+		/** The row's write could not be resolved: not listed, the deposit held until a restart loads the row or finds none. */
+		UNRESOLVED
+	}
+	
 	/** Serialises every sale's confirmation (CP-0029). */
 	private static final Object CONFIRMATIONS = new Object();
 	/** Set once the sale is deleted, ended or cancelled (CP-0031). */
@@ -572,22 +587,28 @@ public class ClanHallAuction
 		loadBid();
 	}
 	
-	/** Cancel auction */
-	public synchronized void cancelAuction()
+	/**
+	 * Cancel auction
+	 * @return whether it is cancelled (CP-0031): while its bids' rows cannot be deleted, the sale stays open
+	 */
+	public synchronized boolean cancelAuction()
 	{
 		if (_over) // CP-0031
 		{
-			return;
+			return false;
 		}
 		
-		if (removeBids()) // CP-0031: the bids first, so a failed deletion leaves the sale open to be cancelled again
+		if (!removeBids()) // CP-0031: the bids first, so a failed deletion leaves the sale open to be cancelled again
 		{
-			deleteAuctionFromDB();
+			return false;
 		}
+		
+		deleteAuctionFromDB();
+		return true;
 	}
 	
 	/** Confirm an auction */
-	public boolean confirmAuction()
+	public Confirmation confirmAuction()
 	{
 		// CP-0029: the deposit, the hall's lease, is taken from the seller's clan warehouse when the hall is put up, as
 		// retail's sale page says (AgitSale1.htm); upstream never took it and paid it back at the end (endAuction). Each
@@ -596,16 +617,32 @@ public class ClanHallAuction
 		// only once its row is written (CP-0031).
 		synchronized (CONFIRMATIONS)
 		{
-			if ((ClanHallAuctionManager.getInstance().getAuction(_id) != null) || hasRow())
+			if (ClanHallAuctionManager.getInstance().getAuction(_id) != null)
 			{
-				return false;
+				return Confirmation.ALREADY_FOR_SALE;
+			}
+			
+			final Boolean stale = rowState();
+			if (stale == null)
+			{
+				return Confirmation.NOT_WRITTEN; // unreadable: nothing taken
+			}
+			
+			if (stale)
+			{
+				return Confirmation.ALREADY_FOR_SALE; // its row is still there
 			}
 			
 			final Clan seller = ClanTable.getInstance().getClanByName(_sellerClanName);
 			final long deposit = ClanHallTable.getInstance().getAuctionableHallById(_itemId).getLease();
-			if ((seller == null) || ((deposit > 0) && (seller.getWarehouse().destroyItemByItemId(ItemProcessType.FEE, ADENA_ID, deposit, null, null) == null)))
+			if (seller == null)
 			{
-				return false;
+				return Confirmation.NOT_WRITTEN;
+			}
+			
+			if ((deposit > 0) && (seller.getWarehouse().destroyItemByItemId(ItemProcessType.FEE, ADENA_ID, deposit, null, null) == null))
+			{
+				return Confirmation.NOT_ENOUGH_ADENA;
 			}
 			
 			if (!insertRow()) // a lost acknowledgement may have written it: the row decides, and only a row read
@@ -616,7 +653,7 @@ public class ClanHallAuction
 					// Unknown: not listed, and the deposit kept, since a refund of a written row would pay it twice; a
 					// restart loads the row with its deposit paid, or finds none and the deposit is lost, as logged here.
 					LOGGER.severe("Clan hall sale " + _id + " of clan " + _sellerClanName + ": its row could not be resolved; deposit " + deposit + " kept, sale not listed.");
-					return false;
+					return Confirmation.UNRESOLVED;
 				}
 				
 				if (!row)
@@ -626,7 +663,7 @@ public class ClanHallAuction
 						seller.getWarehouse().addItem(ItemProcessType.REFUND, ADENA_ID, deposit, null, null); // nothing was put up
 					}
 					
-					return false;
+					return Confirmation.NOT_WRITTEN;
 				}
 			}
 			
@@ -634,7 +671,7 @@ public class ClanHallAuction
 		}
 		
 		startAutoTask(); // CP-0031: upstream scheduled a sale's end only when it loaded the sale at startup
-		return true;
+		return Confirmation.CONFIRMED;
 	}
 	
 	/** @return whether the sale's row was written (CP-0031); upstream logged a failure and listed the sale anyway */
@@ -663,12 +700,6 @@ public class ClanHallAuction
 			LOGGER.log(Level.SEVERE, "Exception: Auction.load(): " + e.getMessage(), e);
 			return false;
 		}
-	}
-	
-	/** @return whether this hall's sale still has its row (CP-0031), read under the confirmation lock */
-	private boolean hasRow()
-	{
-		return rowState() != Boolean.FALSE;
 	}
 	
 	/** @return the row's state after a failed insert, read up to five times a second apart; null if never readable */

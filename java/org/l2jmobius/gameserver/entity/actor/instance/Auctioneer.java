@@ -146,15 +146,14 @@ public class Auctioneer extends Npc
 				try
 				{
 					final ClanHallAuction a = _pendingAuctions.get(clan.getHideoutId());
-					if (!a.confirmAuction()) // CP-0029: the hall is already for sale, or its deposit could not be paid
+					final ClanHallAuction.Confirmation confirmation = a.confirmAuction(); // CP-0029, CP-0031
+					if (confirmation != ClanHallAuction.Confirmation.CONFIRMED)
 					{
-						if (ClanHallAuctionManager.getInstance().getAuction(a.getId()) != null)
+						switch (confirmation)
 						{
-							player.sendMessage("Invalid auction");
-						}
-						else
-						{
-							player.sendPacket(SystemMessageId.THERE_IS_NOT_ENOUGH_ADENA_IN_THE_CLAN_HALL_WAREHOUSE);
+							case NOT_ENOUGH_ADENA -> player.sendPacket(SystemMessageId.THERE_IS_NOT_ENOUGH_ADENA_IN_THE_CLAN_HALL_WAREHOUSE);
+							case UNRESOLVED -> player.sendMessage("Your sale could not be confirmed; its deposit is held until the server checks it at its next start.");
+							default -> player.sendMessage("Invalid auction");
 						}
 						
 						return;
@@ -554,8 +553,14 @@ public class Auctioneer extends Npc
 			{
 				if (ClanHallAuctionManager.getInstance().getAuction(clan.getHideoutId()) != null)
 				{
-					ClanHallAuctionManager.getInstance().getAuction(clan.getHideoutId()).cancelAuction();
-					player.sendMessage("Your auction has been canceled");
+					if (ClanHallAuctionManager.getInstance().getAuction(clan.getHideoutId()).cancelAuction())
+					{
+						player.sendMessage("Your auction has been canceled");
+					}
+					else
+					{
+						player.sendMessage("Your auction could not be canceled; try again."); // CP-0031: the sale stays open
+					}
 				}
 				return;
 			}

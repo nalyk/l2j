@@ -490,8 +490,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   `endAuction` still paid the lease back (ClanHallAuction.java:473): every completed sale created the lease in Adena
   from nothing (asset-service.md §11.29).
 - Change: `confirmAuction` destroys the deposit from the seller's clan warehouse before it registers the sale, and
-  returns whether it did; the Auctioneer tells a clan that cannot pay with retail's own message ("Invalid auction" for a
-  hall already for sale) and keeps the pending sale. The destruction is retail's own (`destroyItemByItemId`, as the
+  returns what it did (`Confirmation`: confirmed, not enough Adena, already for sale, not written, unresolved); the
+  Auctioneer keeps the pending sale and says which: retail's not-enough-Adena message, "Invalid auction" when nothing was
+  taken, and for an unresolved write that the deposit is held until the next start checks the row. The destruction is retail's own (`destroyItemByItemId`, as the
   bids' `takeItem` pays): a clan holding exactly the lease pays its whole stack, which shares upstream's race of a
   whole-stack destruction with an addition into the stack (asset-service.md §11.32). Every auctioneer keeps its own
   pending sales (Auctioneer.java:57), so two members at two auctioneers can confirm two sales of one hall: one lock
@@ -522,7 +523,8 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   holds after upstream's destruction, is destroyed through its container, and a copy on the ground decays as the
   auto-destroy task decays it; a message left without attachments, by the sweep or by the deletion, has them removed
   (its row's `hasAttachments` set false whether or not the mail manager is loaded, a loaded message told through
-  `removeAttachments`); every pet `World` keeps is swept, through `World.getPets`. `MailMessage.getLoadedAttachments` reads a message's attachments without loading them, and
+  `removeAttachments`; the deletion reads which messages it empties inside its own counted work, under the rows'
+  locks when the counters run); every pet `World` keeps is swept, through `World.getPets`. `MailMessage.getLoadedAttachments` reads a message's attachments without loading them, and
   `MailManager.isLoaded` whether the mail manager exists without creating it: an event that ended while the server was
   down is swept during script loading (LongTimeEvent.java:128), before `MailManager` has its place in the boot order
   (GameServer.java:424), and a server with `AllowMail` off never loads it, so the sweep reads mail only once it is
@@ -556,8 +558,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   sale already over, so a timer that outlives a cancel neither pays the cancelled seller nor deletes the hall's next
   sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. A sale closes
   only once its bids are gone: a cancel and an end delete the bid rows first, and while that fails (CP-0026 refunds
-  nothing then) the sale stays open, nothing is paid and the hall changes no owner; a cancel may be asked again, an end
-  is retried a minute later. The branch without bids deletes the auction as a cancelled one is.
+  nothing then) the sale stays open, nothing is paid and the hall changes no owner; `cancelAuction` returns whether it
+  cancelled, and the Auctioneer tells the seller either way (upstream always said "Your auction has been canceled"), so
+  a cancel is asked again; an end is retried a minute later. The branch without bids deletes the auction as a cancelled one is.
 - Invariant: a sale ends on its date, once; a hall's sale is listed exactly when its row exists, but after a failed
   `DELETE`, which the next confirmation then refuses.
 - Proof: `ClanHallDepositTest`: `aConfirmedSaleEndsOnItsDate` (red on upstream: still listed after its end date),
@@ -568,4 +571,5 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   `aSaleWhoseRowCannotBeResolvedIsNotListedAndKeepsItsDeposit` (red when an unreadable row counted as written: listed),
   `aBidAfterTheSaleClosedTakesNothing` (red on upstream: 30 000 taken into a deleted auction, its bid row stranded),
   `aCancelWhoseBidsCannotBeDeletedCanBeRetried` and `anEndWhoseBidsCannotBeDeletedIsRetried` (red when the sale closed
-  before its bids: the bid stranded, the sale closed for good).
+  before its bids: the bid stranded, the sale closed for good), `theAuctioneerSaysWhenACancelFailed` (through the
+  Auctioneer's bypass, its messages recorded: red on upstream's message, the sale still open).

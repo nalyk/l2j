@@ -570,7 +570,7 @@ public class LongTimeEvent extends Script
 				destroyLoaded(itemId);
 				
 				// Update database.
-				final Set<Integer> mails = mailsHolding(itemId); // CP-0030
+				final Set<Integer> mails = new HashSet<>(); // CP-0030: the messages whose rows this deletes
 				try (Connection con = DatabaseFactory.getConnection();
 					PreparedStatement statement = con.prepareStatement("DELETE FROM items WHERE item_id=?"))
 				{
@@ -578,7 +578,11 @@ public class LongTimeEvent extends Script
 					Census.counting(con, Census.Holding.ITEMS, "item_id = ?", new Object[]
 					{
 						itemId
-					}, statement::executeUpdate); // counted before and after, posted on commit (CP-0025)
+					}, () ->
+					{
+						mails.addAll(mailsHolding(con, itemId)); // read with the rows it deletes, under their locks when counted
+						return statement.executeUpdate();
+					}); // counted before and after, posted on commit (CP-0025)
 				}
 				catch (SQLException e)
 				{
@@ -662,12 +666,11 @@ public class LongTimeEvent extends Script
 		}
 	}
 	
-	/** @return the messages whose attachment rows hold the item (CP-0030), read before the deletion */
-	private static Set<Integer> mailsHolding(int itemId)
+	/** @return the messages whose attachment rows hold the item (CP-0030), read on the deletion's own connection */
+	private static Set<Integer> mailsHolding(Connection con, int itemId) throws SQLException
 	{
 		final Set<Integer> mails = new HashSet<>();
-		try (Connection con = DatabaseFactory.getConnection();
-			PreparedStatement ps = con.prepareStatement("SELECT DISTINCT loc_data FROM items WHERE item_id = ? AND loc = 'MAIL'"))
+		try (PreparedStatement ps = con.prepareStatement("SELECT DISTINCT loc_data FROM items WHERE item_id = ? AND loc = 'MAIL'"))
 		{
 			ps.setInt(1, itemId);
 			try (ResultSet rs = ps.executeQuery())
@@ -677,10 +680,6 @@ public class LongTimeEvent extends Script
 					mails.add(rs.getInt(1));
 				}
 			}
-		}
-		catch (SQLException e)
-		{
-			LOGGER.warning(e.toString());
 		}
 		return mails;
 	}

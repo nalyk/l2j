@@ -120,14 +120,68 @@ class ClanHallDepositTest
 	}
 
 	@Test
-	void aClanHoldingExactlyTheDepositCannotPayIt()
+	void aClanHoldingExactlyTheDepositPaysIt()
 	{
-		// a whole-stack destruction races a deposit into the stack (ItemContainer.transferItem grows a target stack
-		// without its monitor), so the deposit is only ever a part of the clan's Adena
 		final Clan seller = clan(lease());
 		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
-		assertFalse(auction.confirmAuction(), "refused");
-		assertEquals(lease(), seller.getWarehouse().getAdena(), "nothing taken");
+		assertTrue(auction.confirmAuction(), "the sale page asks for the deposit, no more");
+		assertEquals(0, seller.getWarehouse().getAdena());
+	}
+
+	private static void waitPast(long millis) throws InterruptedException
+	{
+		Thread.sleep(millis);
+	}
+
+	@Test
+	void aCancelledSaleIsNotEndedByItsTimer() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		final Clan bidder = clan(1_000_000);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 500, 10_000, "Deposit Hall");
+		assertTrue(auction.confirmAuction());
+		auction.setBid(World.getPlayer(bidder.getLeaderId()), 30_000);
+		auction.cancelAuction();
+		final long afterCancel = seller.getWarehouse().getAdena();
+		waitPast(1_500);
+		assertEquals(afterCancel, seller.getWarehouse().getAdena(), "the timer paid a cancelled seller 90 % and the deposit");
+		assertEquals(1_000_000 - 3_000, bidder.getWarehouse().getAdena(), "the bidder was refunded once, 90 %");
+	}
+
+	@Test
+	void aCancelledSalesTimerLeavesTheNextSaleAlone() throws Exception
+	{
+		final Clan seller = clan(2_000_000);
+		final ClanHallAuction cancelled = new ClanHallAuction(HALL, seller, 500, 10_000, "Deposit Hall");
+		assertTrue(cancelled.confirmAuction());
+		cancelled.cancelAuction();
+		final ClanHallAuction next = new ClanHallAuction(HALL, seller, 3_600_000, 20_000, "Deposit Hall");
+		assertTrue(next.confirmAuction());
+		waitPast(1_500);
+		assertTrue(registered(), "the cancelled sale's timer ended the next one");
+		assertEquals(next.getEndDate(), rows("endDate"), "the next sale's row is there");
+	}
+
+	@Test
+	void aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		try (Connection con = DatabaseFactory.getConnection();
+			java.sql.Statement statement = con.createStatement())
+		{
+			statement.execute("CREATE TRIGGER lc_test_refuse_sale BEFORE INSERT ON auction FOR EACH ROW BEGIN IF NEW.id = " + HALL + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused'; END IF; END");
+			try
+			{
+				final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+				assertFalse(auction.confirmAuction(), "upstream listed a sale it could not store");
+				assertFalse(registered());
+				assertEquals(1_000_000, seller.getWarehouse().getAdena(), "the deposit came back");
+			}
+			finally
+			{
+				statement.execute("DROP TRIGGER lc_test_refuse_sale");
+			}
+		}
 	}
 
 	@Test

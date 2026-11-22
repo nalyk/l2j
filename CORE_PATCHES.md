@@ -491,10 +491,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   from nothing (asset-service.md §11.29).
 - Change: `confirmAuction` destroys the deposit from the seller's clan warehouse before it registers the sale, and
   returns whether it did; the Auctioneer tells a clan that cannot pay with retail's own message ("Invalid auction" for a
-  hall already for sale) and keeps the pending sale. The deposit is always a part of the clan's Adena, destroyed under
-  the stack's monitor: decreases of a stack take that monitor, but a deposit into it grows it without
-  (ItemContainer.java:376), so a whole-stack destruction could take that deposit too; a clan holding exactly
-  the lease is therefore refused, the one departure from the sale page, by one Adena. Every auctioneer keeps its own
+  hall already for sale) and keeps the pending sale. The destruction is retail's own (`destroyItemByItemId`, as the
+  bids' `takeItem` pays): a clan holding exactly the lease pays its whole stack, which shares upstream's race of a
+  whole-stack destruction with an addition into the stack (asset-service.md §11.32). Every auctioneer keeps its own
   pending sales (Auctioneer.java:57), so two members at two auctioneers can confirm two sales of one hall: one lock
   serialises every confirmation and every deletion of a sale (CP-0031), and a hall listed, or whose row still exists,
   is refused before anything is taken. `endAuction`, `cancelAuction` and the auction without bids already return the
@@ -503,7 +502,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 - Proof: `ClanHallDepositTest` (red on upstream: the deposit is not taken, a clan that cannot pay registers its sale, a
   completed sale leaves the seller 500 000 Adena richer than its 90 %, a cancel keeps nothing; red without the lock
   and checks: a second confirmation paid a second deposit and listed the hall twice, a hall whose row remained was put
-  up again, a clan holding exactly the lease paid it as a whole stack). An auction registered before this patch paid no
+  up again; `aClanHoldingExactlyTheDepositPaysIt` guards the page's rule). An auction registered before this patch paid no
   deposit and is still paid one at its end: that sale is a source, which the counters post exactly.
 
 ## CP-0030 An ended event's items go wherever they are loaded
@@ -546,10 +545,17 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   CONFIRMED", ClanHallAuction.java:460-467): its `auction` row stays, so the hall's next sale fails its `INSERT` on the
   primary key (logged, 545) and lives in memory only; at a restart the stale row comes back and ends again. With CP-0029
   that next sale has paid a deposit (asset-service.md §11.31).
-- Change: `confirmAuction` schedules the sale's end; the branch without bids deletes the auction as a cancelled one is
-  (`deleteAuctionFromDB`), which now deletes the row before the listing, under the confirmations' lock (CP-0029).
-- Invariant: a sale ends on its date; a confirmation never sees a hall listed without its row, or its row without the
-  listing, but after a failed `DELETE`, which it then refuses.
-- Proof: `ClanHallDepositTest.aConfirmedSaleEndsOnItsDate` (red on upstream: still listed after its end date) and
+- Change: `confirmAuction` writes the sale's row before it lists the sale, under the confirmations' lock; a row it could
+  not write (read again on a fresh connection, since a lost acknowledgement may have written it) refuses the sale and
+  gives the deposit back. It then schedules the sale's end, and keeps the task: deleting a sale (`deleteAuctionFromDB`,
+  which now deletes the row before the listing, under the same lock) marks it over and cancels its task, and
+  `endAuction` and `cancelAuction` run under the auction's monitor and do nothing for a sale already over, so a timer
+  that outlives a cancel neither pays the cancelled seller nor deletes the hall's next sale (both delete by hall). The
+  branch without bids deletes the auction as a cancelled one is.
+- Invariant: a sale ends on its date, once; a hall's sale is listed exactly when its row exists, but after a failed
+  `DELETE`, which the next confirmation then refuses.
+- Proof: `ClanHallDepositTest`: `aConfirmedSaleEndsOnItsDate` (red on upstream: still listed after its end date),
   `aSaleWithoutBidsKeepsItsDepositAndFreesTheHallForItsNextSale` (red on upstream: the row stayed and the next sale's
-  end date was never stored).
+  end date was never stored), `aCancelledSaleIsNotEndedByItsTimer` (red with the timer alone: the cancelled seller was
+  paid 527 000), `aCancelledSalesTimerLeavesTheNextSaleAlone` (red: the next sale's row was deleted),
+  `aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded` (red on upstream: listed, the deposit kept).

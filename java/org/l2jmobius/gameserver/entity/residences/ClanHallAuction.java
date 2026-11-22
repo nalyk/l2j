@@ -29,6 +29,7 @@ import java.sql.ResultSet;
 import java.util.Calendar;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,7 +41,6 @@ import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemProcessType;
-import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.entity.itemcontainer.ItemContainer;
 import org.l2jmobius.gameserver.livingchronicle.asset.Census;
 import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
@@ -63,6 +63,10 @@ public class ClanHallAuction
 	private String _itemType = "";
 	/** Serialises every sale's confirmation (CP-0029). */
 	private static final Object CONFIRMATIONS = new Object();
+	/** Set once the sale is deleted, ended or cancelled (CP-0031). */
+	private volatile boolean _over;
+	/** The sale's scheduled end (CP-0031), cancelled with it. */
+	private volatile ScheduledFuture<?> _endTask;
 	
 	private int _sellerId = 0;
 	private String _sellerClanName = "";
@@ -244,7 +248,7 @@ public class ClanHallAuction
 			taskDelay = _endDate - currentTime;
 		}
 		
-		ThreadPool.schedule(new AutoEndTask(), taskDelay);
+		_endTask = ThreadPool.schedule(new AutoEndTask(), taskDelay); // CP-0031: kept, so a deletion cancels it
 	}
 	
 	public static String getItemTypeName(AuctionItemType value)
@@ -455,6 +459,12 @@ public class ClanHallAuction
 	{
 		synchronized (CONFIRMATIONS) // CP-0031: the row, then the listing, so a confirmation never sees one without the other
 		{
+			_over = true;
+			if (_endTask != null)
+			{
+				_endTask.cancel(false);
+			}
+			
 			try (Connection con = DatabaseFactory.getConnection();
 				PreparedStatement ps = con.prepareStatement("DELETE FROM auction WHERE itemId=?"))
 			{
@@ -471,8 +481,13 @@ public class ClanHallAuction
 	}
 	
 	/** End of auction */
-	public void endAuction()
+	public synchronized void endAuction()
 	{
+		if (_over) // CP-0031: a deleted sale (ended or cancelled) is not ended again by a timer that outlived it
+		{
+			return;
+		}
+		
 		if (ClanHallTable.getInstance().loaded())
 		{
 			if ((_highestBidderId == 0) && (_sellerId == 0))
@@ -506,7 +521,7 @@ public class ClanHallAuction
 		else
 		{
 			/** Task waiting ClanHallManager is loaded every 3s */
-			ThreadPool.schedule(new AutoEndTask(), 3000);
+			_endTask = ThreadPool.schedule(new AutoEndTask(), 3000);
 		}
 	}
 	
@@ -539,8 +554,13 @@ public class ClanHallAuction
 	}
 	
 	/** Cancel auction */
-	public void cancelAuction()
+	public synchronized void cancelAuction()
 	{
+		if (_over) // CP-0031
+		{
+			return;
+		}
+		
 		deleteAuctionFromDB();
 		removeBids();
 	}
@@ -551,7 +571,8 @@ public class ClanHallAuction
 		// CP-0029: the deposit, the hall's lease, is taken from the seller's clan warehouse when the hall is put up, as
 		// retail's sale page says (AgitSale1.htm); upstream never took it and paid it back at the end (endAuction). Each
 		// auctioneer keeps its own pending sales, so two members can confirm two sales of one hall: one lock for every
-		// confirmation and every deletion, and a hall listed or still with a row is not put up again.
+		// confirmation and every deletion, a hall listed or still with a row is not put up again, and a sale is listed
+		// only once its row is written (CP-0031).
 		synchronized (CONFIRMATIONS)
 		{
 			if ((ClanHallAuctionManager.getInstance().getAuction(_id) != null) || hasRow())
@@ -561,14 +582,31 @@ public class ClanHallAuction
 			
 			final Clan seller = ClanTable.getInstance().getClanByName(_sellerClanName);
 			final long deposit = ClanHallTable.getInstance().getAuctionableHallById(_itemId).getLease();
-			if ((seller == null) || ((deposit > 0) && !payDeposit(seller.getWarehouse(), deposit)))
+			if ((seller == null) || ((deposit > 0) && (seller.getWarehouse().destroyItemByItemId(ItemProcessType.FEE, ADENA_ID, deposit, null, null) == null)))
 			{
+				return false;
+			}
+			
+			if (!insertRow() && !hasRow()) // a lost acknowledgement may have written it: the row decides
+			{
+				if (deposit > 0)
+				{
+					seller.getWarehouse().addItem(ItemProcessType.REFUND, ADENA_ID, deposit, null, null); // nothing was put up
+				}
+				
 				return false;
 			}
 			
 			ClanHallAuctionManager.getInstance().getAuctions().add(this);
 		}
 		
+		startAutoTask(); // CP-0031: upstream scheduled a sale's end only when it loaded the sale at startup
+		return true;
+	}
+	
+	/** @return whether the sale's row was written (CP-0031); upstream logged a failure and listed the sale anyway */
+	private boolean insertRow()
+	{
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("INSERT INTO auction (id, sellerId, sellerName, sellerClanName, itemType, itemId, itemObjectId, itemName, itemQuantity, startingBid, currentBid, endDate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"))
 		{
@@ -585,33 +623,12 @@ public class ClanHallAuction
 			ps.setLong(11, _currentBid);
 			ps.setLong(12, _endDate);
 			ps.execute();
-			ps.close();
+			return true;
 		}
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.load(): " + e.getMessage(), e);
-		}
-		
-		startAutoTask(); // CP-0031: upstream scheduled a sale's end only when it loaded the sale at startup
-		return true;
-	}
-	
-	/**
-	 * Destroys the deposit as part of the clan's Adena, never the whole stack (CP-0029): a deposit into the stack grows
-	 * it without the stack's monitor (ItemContainer.transferItem), so a whole-stack destruction could take that deposit
-	 * too; decreases take the monitor, so under it a part stays a part.
-	 */
-	private static boolean payDeposit(ItemContainer warehouse, long deposit)
-	{
-		final Item adena = warehouse.getItemByItemId(ADENA_ID);
-		if (adena == null)
-		{
 			return false;
-		}
-		
-		synchronized (adena)
-		{
-			return (warehouse.getItemByObjectId(adena.getObjectId()) == adena) && !adena.isRetired() && (adena.getCount() > deposit) && (warehouse.destroyItem(ItemProcessType.FEE, adena, deposit, null, null) != null);
 		}
 	}
 	

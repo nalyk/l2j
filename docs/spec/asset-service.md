@@ -758,11 +758,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     (`data/html/auction/AgitSale1.htm`) takes the deposit, the hall's lease, from the clan warehouse when the hall is put
     up, returns it only when the auction completes normally, and keeps it on a cancel or an auction without bids: upstream
     created the lease in Adena from nothing on every completed sale. Core patch: `confirmAuction` destroys the deposit
-    from the seller's clan warehouse before it registers the sale, always as a part of the clan's Adena under the stack's
-    monitor (a deposit into the stack grows it without that monitor, ItemContainer.java:376, so a whole-stack destruction
-    could take it too: a clan holding exactly the lease is refused, by one Adena the patch's only departure from the
-    page); it refuses a clan that cannot pay, and a hall listed or whose row remains, under one lock with every deletion
-    of a sale (each auctioneer keeps its own pending sales, so two members could confirm two sales of one hall, each
+    from the seller's clan warehouse before it registers the sale, by retail's own destruction (a whole stack when the
+    clan holds exactly the lease, with upstream's race of §11.32); it refuses a clan that cannot pay, and a hall listed
+    or whose row remains, under one lock with every deletion of a sale (each auctioneer keeps its own pending sales, so
+    two members could confirm two sales of one hall, each
     paying). An auction registered before the patch paid nothing and is still paid back: a source the counters post
     exactly.
 30. **An ended event's items outlive it in memory** (`destroyItemsOnEnd` destroys online inventories' copies,
@@ -777,10 +776,18 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     still outlives its row, which the counters count out from what it counted (§2.6).
 31. **A player's sale never ends before a restart, and one that ends without bids keeps its row.** `startAutoTask` runs
     only for a sale loaded at startup (ClanHallAuction.java:142-146; not for a new sale, 149, or at `confirmAuction`,
-    522), and the branch without bids drops the sale from memory only (460-467), so the hall's next sale fails its
-    `INSERT` (logged) and lives in memory only until a restart brings the stale row back. Core patch: a confirmed sale
-    is scheduled to end; an auction without bids is deleted as a cancelled one is, its row before its listing, under the
-    confirmations' lock.
+    522), the branch without bids drops the sale from memory only (460-467), and a row `confirmAuction` failed to write is
+    logged and the sale listed anyway (545), so the hall's next sale lives in memory only until a restart brings a stale
+    row back. Core patch: a sale is listed only once its row is written (read again after a failure: a lost
+    acknowledgement may have written it), else refused with its deposit given back; a confirmed sale is scheduled to
+    end, and its task is cancelled when the sale is deleted, which then ends or cancels nothing more; an auction without
+    bids is deleted as a cancelled one is, its row before its listing, under the confirmations' lock.
+32. **A whole-stack destruction races an addition into the stack.** `transferItem` grows a target stack
+    without its monitor (ItemContainer.java:339, 376), while `destroyItem` decides on the whole stack under the item's
+    monitor and then removes it (425-460): an addition between the two lands on the removed object and is destroyed with
+    it. Every exact-count destruction in retail has it (paying a clan-hall bid or deposit with exactly the stack, using a
+    last stack); the counters post what was destroyed, so conservation is not broken, but the addition is lost. Closing it
+    needs the target's monitor in every transfer, ordered across both stacks to stay free of deadlock; not done here.
 
 ## 12. Review record
 
@@ -799,6 +806,12 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   the clan's Adena, taken under the stack's monitor; confirmations refuse a hall listed or with a row, and deletions take
   the same lock, row first; a confirmed sale is scheduled; the buyback list is swept; an emptied message has its
   attachments removed, loaded or not; a stalled window restarts the alarm's count.
+- Amendment round 21 (Codex), NO SIGN-OFF: the end task CP-0031 schedules outlived a cancel, paying a cancelled seller
+  its bid share and deposit, or deleting the hall's next sale (1); a confirmation listed its sale before writing its
+  row, and an ordinary failure still reported success (2); refusing a clan holding exactly the lease departed from the
+  sale page (3). Fixed (still revision 14): the task is cancelled with the sale, and a sale over is ended or cancelled no
+  more; the row is written before the listing, under the lock, a failure refused and refunded unless the row is there;
+  the deposit is retail's own destruction again, its whole-stack race named as upstream's (§11.32).
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

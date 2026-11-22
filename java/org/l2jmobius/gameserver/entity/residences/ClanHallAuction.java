@@ -426,7 +426,7 @@ public class ClanHallAuction
 	}
 	
 	/** Remove bids */
-	private void removeBids()
+	private boolean removeBids()
 	{
 		try (Connection con = DatabaseFactory.getConnection();
 			PreparedStatement ps = con.prepareStatement("DELETE FROM auction_bid WHERE auctionId=?"))
@@ -440,7 +440,7 @@ public class ClanHallAuction
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Exception: Auction.deleteFromDB(): " + e.getMessage(), e);
-			return; // CP-0026: bids whose rows stay are not refunded, or a later removal would refund them again
+			return false; // CP-0026: bids whose rows stay are not refunded, or a later removal would refund them again
 		}
 		
 		for (Bidder b : _bidders.values())
@@ -458,6 +458,7 @@ public class ClanHallAuction
 		}
 		
 		_bidders.clear();
+		return true;
 	}
 	
 	/** Remove auctions */
@@ -511,6 +512,16 @@ public class ClanHallAuction
 				return;
 			}
 			
+			// CP-0031: the bids first; while their rows cannot be deleted nothing is paid and the sale stays open, retried.
+			final Bidder winner = _bidders.remove(_highestBidderId);
+			final Clan clan = ClanTable.getInstance().getClanByName(winner.getClanName());
+			if (!removeBids())
+			{
+				_bidders.put(_highestBidderId, winner);
+				_endTask = ThreadPool.schedule(new AutoEndTask(), 60000);
+				return;
+			}
+			
 			if (_sellerId > 0)
 			{
 				returnItem(_sellerClanName, _highestBidderMaxBid, true);
@@ -518,10 +529,7 @@ public class ClanHallAuction
 			}
 			
 			deleteAuctionFromDB();
-			final Clan clan = ClanTable.getInstance().getClanByName(_bidders.get(_highestBidderId).getClanName());
-			_bidders.remove(_highestBidderId);
 			clan.setAuctionBiddedAt(0, true);
-			removeBids();
 			ClanHallTable.getInstance().setOwner(_itemId, clan);
 		}
 		else
@@ -572,8 +580,10 @@ public class ClanHallAuction
 			return;
 		}
 		
-		deleteAuctionFromDB();
-		removeBids();
+		if (removeBids()) // CP-0031: the bids first, so a failed deletion leaves the sale open to be cancelled again
+		{
+			deleteAuctionFromDB();
+		}
 	}
 	
 	/** Confirm an auction */

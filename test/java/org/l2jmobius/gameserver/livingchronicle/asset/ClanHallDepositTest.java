@@ -215,6 +215,63 @@ class ClanHallDepositTest
 		}
 	}
 
+	private static void refusingBidDeletion(java.util.concurrent.Callable<Void> body) throws Exception
+	{
+		try (Connection con = DatabaseFactory.getConnection();
+			java.sql.Statement statement = con.createStatement())
+		{
+			statement.execute("CREATE TRIGGER lc_test_refuse_bids BEFORE DELETE ON auction_bid FOR EACH ROW BEGIN IF OLD.auctionId = " + HALL + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'refused'; END IF; END");
+			try
+			{
+				body.call();
+			}
+			finally
+			{
+				statement.execute("DROP TRIGGER lc_test_refuse_bids");
+			}
+		}
+	}
+
+	@Test
+	void aCancelWhoseBidsCannotBeDeletedCanBeRetried() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		final Clan bidder = clan(1_000_000);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+		assertTrue(auction.confirmAuction());
+		auction.setBid(World.getPlayer(bidder.getLeaderId()), 30_000);
+		refusingBidDeletion(() ->
+		{
+			auction.cancelAuction();
+			return null;
+		});
+		assertTrue(registered(), "still for sale: its bids are still there");
+		assertEquals(1_000_000 - 30_000, bidder.getWarehouse().getAdena(), "nothing refunded yet (CP-0026)");
+		auction.cancelAuction();
+		assertFalse(registered());
+		assertEquals(1_000_000 - 3_000, bidder.getWarehouse().getAdena(), "upstream had closed the sale and stranded the bid");
+	}
+
+	@Test
+	void anEndWhoseBidsCannotBeDeletedIsRetried() throws Exception
+	{
+		final Clan seller = clan(1_000_000);
+		final Clan bidder = clan(1_000_000);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+		assertTrue(auction.confirmAuction());
+		auction.setBid(World.getPlayer(bidder.getLeaderId()), 30_000);
+		refusingBidDeletion(() ->
+		{
+			auction.endAuction();
+			return null;
+		});
+		assertTrue(registered(), "not ended: its bids are still there");
+		assertEquals(1_000_000 - lease(), seller.getWarehouse().getAdena(), "the seller is paid only once the bids are gone");
+		auction.endAuction();
+		assertFalse(registered());
+		assertEquals(1_000_000 + 27_000, seller.getWarehouse().getAdena(), "90 % and the deposit back, once");
+	}
+
 	@Test
 	void aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded() throws Exception
 	{

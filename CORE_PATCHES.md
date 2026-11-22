@@ -507,11 +507,12 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 
 ## CP-0030 An ended event's items go wherever they are loaded
 
-- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/network/holders/MailMessage.java`, `java/org/l2jmobius/gameserver/managers/MailManager.java`
+- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/network/holders/MailMessage.java`, `java/org/l2jmobius/gameserver/managers/MailManager.java`, `java/org/l2jmobius/gameserver/entity/World.java`
 - Reason: `destroyItemsOnEnd` destroyed an ended event's items from online inventories (LongTimeEvent.java:551) and
   deleted every other row of the item id by SQL (557); a copy loaded elsewhere kept living in memory: a clan warehouse
-  (always loaded), an online player's warehouse, freight or buyback list, a summoned pet, a loaded mail attachment, the
-  ground. It stayed usable until the restart, and a claim, a withdrawal or a buyback carried it into an inventory
+  (always loaded), an online player's warehouse, freight or buyback list, a pet (summoned, or dead and kept loaded for an
+  owner who logged out, Pet.java:1157-1165, so a returning owner finds it, Player.java:7410), a loaded mail attachment,
+  the ground. It stayed usable until the restart, and a claim, a withdrawal or a buyback carried it into an inventory
   (asset-service.md §11.30). Online inventories were not swept whole either: of a non-stackable item the destruction
   asks for every copy, worn ones included (Player.java:3726), from the unequipped copies alone (PlayerInventory.java:657),
   so a copy worn beside another left both. And a message whose attachments the event emptied, loaded or by the SQL
@@ -521,7 +522,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   holds after upstream's destruction, is destroyed through its container, and a copy on the ground decays as the
   auto-destroy task decays it; a message left without attachments, by the sweep or by the deletion, has them removed
   (its row's `hasAttachments` set false whether or not the mail manager is loaded, a loaded message told through
-  `removeAttachments`). `MailMessage.getLoadedAttachments` reads a message's attachments without loading them, and
+  `removeAttachments`); every pet `World` keeps is swept, through `World.getPets`. `MailMessage.getLoadedAttachments` reads a message's attachments without loading them, and
   `MailManager.isLoaded` whether the mail manager exists without creating it: an event that ended while the server was
   down is swept during script loading (LongTimeEvent.java:128), before `MailManager` has its place in the boot order
   (GameServer.java:424), and a server with `AllowMail` off never loads it, so the sweep reads mail only once it is
@@ -530,7 +531,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   concurrently from a container not yet swept into one already swept; no message claims attachments it lost to it.
 - Proof: `EventEndTest` (red with the sweep's call removed: the clan warehouse, the player warehouse, a summoned pet and
   a loaded mail attachment kept their copies, an inventory kept both copies of a sword when one was worn, a medal on the
-  ground stayed; red without the buyback sweep and the mail emptying: the buyback list kept its copy, a loaded and an
+  ground stayed, a dead pet of a logged-out owner kept its copy; red without the buyback sweep and the mail emptying: the buyback list kept its copy, a loaded and an
   unloaded cash-on-delivery mail kept their attachment flag; two unworn copies and a mail keeping its other
   attachments pass on upstream and guard it), each moving the counters by the destroyed quantity once; truth's boot
   report is unchanged (`PausedWorldTest`: with the mail manager read through `getInstance`, its load line moved ahead
@@ -553,8 +554,10 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   (`deleteAuctionFromDB`, which now deletes the row before the listing, under the same lock) marks it over and cancels
   its task; `endAuction`, `cancelAuction`, `setBid` and `cancelBid` run under the auction's monitor and do nothing for a
   sale already over, so a timer that outlives a cancel neither pays the cancelled seller nor deletes the hall's next
-  sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. The branch
-  without bids deletes the auction as a cancelled one is.
+  sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. A sale closes
+  only once its bids are gone: a cancel and an end delete the bid rows first, and while that fails (CP-0026 refunds
+  nothing then) the sale stays open, nothing is paid and the hall changes no owner; a cancel may be asked again, an end
+  is retried a minute later. The branch without bids deletes the auction as a cancelled one is.
 - Invariant: a sale ends on its date, once; a hall's sale is listed exactly when its row exists, but after a failed
   `DELETE`, which the next confirmation then refuses.
 - Proof: `ClanHallDepositTest`: `aConfirmedSaleEndsOnItsDate` (red on upstream: still listed after its end date),
@@ -563,4 +566,6 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   paid 527 000), `aCancelledSalesTimerLeavesTheNextSaleAlone` (red: the next sale's row was deleted),
   `aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded` (red on upstream: listed, the deposit kept),
   `aSaleWhoseRowCannotBeResolvedIsNotListedAndKeepsItsDeposit` (red when an unreadable row counted as written: listed),
-  `aBidAfterTheSaleClosedTakesNothing` (red on upstream: 30 000 taken into a deleted auction, its bid row stranded).
+  `aBidAfterTheSaleClosedTakesNothing` (red on upstream: 30 000 taken into a deleted auction, its bid row stranded),
+  `aCancelWhoseBidsCannotBeDeletedCanBeRetried` and `anEndWhoseBidsCannotBeDeletedIsRetried` (red when the sale closed
+  before its bids: the bid stranded, the sale closed for good).

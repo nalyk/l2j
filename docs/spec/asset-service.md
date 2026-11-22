@@ -766,7 +766,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     exactly.
 30. **An ended event's items outlive it in memory** (`destroyItemsOnEnd` destroys online inventories' copies,
     LongTimeEvent.java:551, then deletes every row of the item id, 557): a copy loaded elsewhere (a clan warehouse, a loaded
-    mail attachment, an online player's warehouse, freight or buyback list, a summoned pet, the ground) stays usable
+    mail attachment, an online player's warehouse, freight or buyback list, a pet, summoned or dead and kept for an
+    owner who logged out, Pet.java:1157-1165, the ground) stays usable
     until the restart, and a claim, a withdrawal or a buyback carries it into an inventory; of a non-stackable item worn
     beside another copy, an online inventory keeps both (the destruction asks the unequipped copies for every copy,
     Player.java:3726, PlayerInventory.java:657); and a message the event emptied still says it has attachments, so the
@@ -782,8 +783,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     may have written it), refused with its deposit given back when the row is absent, and refused with the deposit kept
     when it cannot be read (a refund of a written row would pay twice; the restart decides); a confirmed sale is
     scheduled to end, and its task is cancelled when the sale is deleted, after which nothing ends, cancels or bids on it
-    any more; an auction without bids is deleted as a cancelled one is, its row before its listing, under the
-    confirmations' lock.
+    any more; a sale closes only once its bids' rows are deleted, so a failed deletion (§11.28) leaves it open, nothing
+    paid, a cancel to be asked again and an end retried; an auction without bids is deleted as a cancelled one is, its
+    row before its listing, under the confirmations' lock.
 32. **A whole-stack destruction races an addition into the stack.** `transferItem` grows a target stack
     without its monitor (ItemContainer.java:339, 376), while `destroyItem` decides on the whole stack under the item's
     monitor and then removes it (425-460): an addition between the two lands on the removed object and is destroyed with
@@ -819,6 +821,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   bidder's Adena into a deleted auction (2). Fixed (still revision 14): the resolution is present, absent or unknown,
   read up to five times, an unknown one refused with the deposit kept and logged; a bid or a bid's cancellation on a
   sale already over does nothing.
+- Amendment round 23 (Codex), NO SIGN-OFF: the sweep reached pets only through online owners, missing a dead pet kept
+  loaded for an owner who logged out (1); a sale closed before its bids, so a failed bid deletion stranded them with no
+  way to retry (2). Fixed (still revision 14): every pet `World` keeps is swept; a cancel and an end delete the bids
+  first and close the sale only then, a failure leaving it open and retried.
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

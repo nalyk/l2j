@@ -53,7 +53,7 @@ import org.l2jmobius.gameserver.entity.World;
 import org.l2jmobius.gameserver.entity.WorldObject;
 import org.l2jmobius.gameserver.entity.actor.Npc;
 import org.l2jmobius.gameserver.entity.actor.Player;
-import org.l2jmobius.gameserver.entity.actor.Summon;
+import org.l2jmobius.gameserver.entity.actor.instance.Pet;
 import org.l2jmobius.gameserver.entity.actor.holders.npc.EventDropHolder;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.enums.ItemLocation;
@@ -592,8 +592,8 @@ public class LongTimeEvent extends Script
 	
 	/**
 	 * Destroys every copy of an item still loaded after the online inventories' item-id destruction (CP-0030): clan
-	 * warehouses, loaded mail attachments, online players' inventories (copies that destruction left), warehouses and
-	 * freight, summoned pets and the ground. A copy moved concurrently from a container not yet swept into one already
+	 * warehouses, loaded mail attachments, online players' inventories (copies that destruction left), warehouses,
+	 * freight and buyback lists, every pet World keeps, and the ground. A copy moved concurrently from a container not yet swept into one already
 	 * swept is missed, and outlives the event as upstream's did.
 	 * @param itemId the item id
 	 */
@@ -635,12 +635,16 @@ public class LongTimeEvent extends Script
 			{
 				destroyAll(player.getRefund(), itemId);
 			}
-			final Summon summon = player.getSummon();
-			if ((summon != null) && summon.isPet())
+		}
+		
+		// Every pet World keeps: summoned, or dead and kept loaded for an owner who logged out (Pet.java:1157-1165).
+		for (Pet pet : World.getPets())
+		{
+			if (pet.getInventory() != null)
 			{
-				for (Item item : summon.getInventory().getAllItemsByItemId(itemId))
+				for (Item item : pet.getInventory().getAllItemsByItemId(itemId))
 				{
-					summon.asPet().destroyItem(ItemProcessType.DESTROY, item.getObjectId(), item.getCount(), null, false);
+					pet.destroyItem(ItemProcessType.DESTROY, item.getObjectId(), item.getCount(), null, false);
 				}
 			}
 		}

@@ -182,6 +182,30 @@ class EventEndTest
 	}
 
 	@Test
+	void aDeadPetWhoseOwnerLoggedOutLosesTheEventsItems() throws Exception
+	{
+		final Player owner = online();
+		final Item collar = owner.getInventory().addItem(ItemProcessType.NONE, WOLF_COLLAR, 1, owner, null);
+		final Pet wolf = Pet.spawnPet(NpcData.getInstance().getTemplate(WOLF), owner, collar);
+		assertTrue(wolf != null, "the test wolf is summoned");
+		wolf.getInventory().addItem(ItemProcessType.NONE, MEDAL, 4, owner, null);
+		// the owner logs out: a dead pet stays loaded in World's pets (Pet.unSummon, Pet.java:1157-1165) for its return
+		owner.setPet(null);
+		World.removeObject(owner);
+		try
+		{
+			final long before = counted(MEDAL);
+			endEvent(MEDAL);
+			assertEquals(0, held(wolf.getInventory(), MEDAL), "the returning owner would find it on the pet");
+			assertEquals(before - 4, counted(MEDAL));
+		}
+		finally
+		{
+			World.removePet(owner.getObjectId());
+		}
+	}
+
+	@Test
 	void anItemOnTheGroundDecays() throws Exception
 	{
 		final Player player = online();

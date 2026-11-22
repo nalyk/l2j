@@ -83,7 +83,7 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
   each committed); `DropSeam.install(int epoch, List<DropRouter> routers)`, `DropSeam.uninstall()`,
   `static Collection<ItemHolder> DropSeam.route(Attackable npc, Player owner, Collection<ItemHolder> drops)`.
 
-- [ ] **Step 1: Write the failing tests** in `DropSeamTest` (kill a level-1 monster with a bound `KeyedRandom` as
+- [x] **Step 1: Write the failing tests** in `DropSeamTest` (kill a level-1 monster with a bound `KeyedRandom` as
   `GearLockTest` does; compare ground items by id and count):
   - `withNoRouterTheKillDropsExactlyAsRetail`: same seed, same ground items as a run before install; and
     `DropSeam.route(npc, p, list) == list` (same instance).
@@ -93,13 +93,13 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
   - `aPositionOutOfRangeIsIgnoredAndTheValidOnesStayTaken`: `{0, 99}` → position 0 taken, logged SEVERE.
   - `oneItemIdTwiceIsTwoPositions`: list `[(57,10), (57,10)]`, router takes `{1}` → one Adena drop of 10 remains.
   - `killsAreNumberedFromOne`: two kills → keys `kill/7/1`, `kill/7/2` after `install(7, …)`.
-- [ ] **Step 2:** run `t4.sh DropSeamTest` → RED (classes missing).
-- [ ] **Step 3: Implement** `DropSeam` (a volatile immutable router list and an `AtomicLong`; `route` copies the
+- [x] **Step 2:** run `t4.sh DropSeamTest` → RED (classes missing).
+- [x] **Step 3: Implement** `DropSeam` (a volatile immutable router list and an `AtomicLong`; `route` copies the
   collection to a list only when routers are installed; a router's exception or a position outside the list it was
   offered is logged and ignored, positions are into the list that router was offered); the core patch is one line,
   `deathItems = DropSeam.route(this, player, deathItems); // CP-0032`, null-safe.
-- [ ] **Step 4:** `t4.sh DropSeamTest` GREEN; `PausedWorldTest` and `GearLockTest` GREEN (truth unchanged).
-- [ ] **Step 5:** CP-0032 in `CORE_PATCHES.md` (Files, Reason: 03 §4.2, pact.md §4.5, aden-remembers.md §4.3.1;
+- [x] **Step 4:** `t4.sh DropSeamTest` GREEN; `PausedWorldTest` and `GearLockTest` GREEN (truth unchanged).
+- [x] **Step 5:** CP-0032 in `CORE_PATCHES.md` (Files, Reason: 03 §4.2, pact.md §4.5, aden-remembers.md §4.3.1;
   Invariant: a kill's drop is dropped, auto-looted or taken by one committed operation, never two; Proof); commit
   `Core: CP-0032 the drop seam`.
 

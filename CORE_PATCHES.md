@@ -573,3 +573,20 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   `aCancelWhoseBidsCannotBeDeletedCanBeRetried` and `anEndWhoseBidsCannotBeDeletedIsRetried` (red when the sale closed
   before its bids: the bid stranded, the sale closed for good), `theAuctioneerSaysWhenACancelFailed` (through the
   Auctioneer's bypass, its messages recorded: red on upstream's message, the sale still open).
+
+## CP-0032 The drop seam
+
+- Files: `java/org/l2jmobius/gameserver/entity/actor/Attackable.java`
+- Reason: the Loot Charter's routing (pact.md §4.5) and Aden Remembers' relocation (aden-remembers.md §4.3.1) must take
+  a kill's rolled drops before retail drops or auto-loots them, but `doItemDrop` computes the death-drop list and hands
+  it out in one loop (Attackable.java:1176-1204), with nothing in between (blueprint 03 §4.2; asset-service.md §11.33).
+- Change: in the branch whose drop owner is a player, the computed list goes through `DropSeam.route` before the loop.
+  With no router installed (always in `truth`) it returns the very list after one volatile read; installed routers run
+  in order on the dropping thread, each taking positions its own committed operation took, and retail drops the rest
+  unchanged. A router that throws takes nothing; a position outside its list is ignored. The fake-player branch and the
+  spoil list are not offered.
+- Invariant: every item a kill rolls is dropped, auto-looted or taken by exactly one committed operation; with no router
+  the kill is retail's.
+- Proof: `DropSeamTest` (6/7 red with the seam ignoring its routers: a router's positions dropped anyway, the second
+  router offered everything, kills unnumbered; the seventh, a router that throws, passes and guards that it takes
+  nothing); `DropLockTest`, `PausedWorldTest` and the other behaviour locks unchanged.

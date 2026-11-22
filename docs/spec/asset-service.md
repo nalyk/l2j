@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 14, under review; revision 13 signed off by Codex in amendment round 19; record in §12)
+- Status: reviewed (revision 14; signed off by Codex in amendment round 25; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -795,7 +795,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
-- Revision 14 (amendment, under review): the two retail questions revision 13 left open are answered as core patches.
+- Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are
   destroyed wherever Mobius has them loaded (§11.30, CP-0030), so the census no longer reports a clan warehouse's copy
@@ -830,6 +830,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   Auctioneer says so either way. With it, from the author's own review: `confirmAuction` returns what it did, so the
   Auctioneer says not enough Adena only when the deposit could not be paid and tells a seller whose write could not be
   resolved that the deposit is held; the event's deletion reads the messages it empties inside its own counted work.
+- Amendment round 25 (Codex), SIGN-OFF: no findings; revision 14 signed off.
 - Revision 13 (amendment, under review): completing the site table (N4 part 5) against the scan found that the census
   counts holdings no item call changes (treasuries, open bids) and that INV06's existence counters had no stated
   mechanism. §2.6 now defines them: a quantity counts while its location is counted; restored state never counts; an SQL

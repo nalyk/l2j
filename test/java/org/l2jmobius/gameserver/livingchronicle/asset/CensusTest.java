@@ -284,6 +284,7 @@ class CensusTest
 					{
 						owner
 					}, work), "it committed: the statement's result stands");
+					assertTrue(connection.getAutoCommit(), "a resolved commit hands the connection back as it came (Codex amd17)");
 				}
 				else
 				{

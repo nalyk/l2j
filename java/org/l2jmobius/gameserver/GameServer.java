@@ -431,14 +431,14 @@ public class GameServer
 			CustomMailManager.getInstance();
 		}
 		
+		LivingChronicle.beforeLogin(); // recovery, once the managers are up and before any server-start listener or login (CP-0027)
+		
 		if (EventDispatcher.getInstance().hasListener(EventType.ON_SERVER_START))
 		{
 			EventDispatcher.getInstance().notifyEventAsync(new OnServerStart());
 		}
 		
 		PunishmentManager.getInstance();
-		
-		LivingChronicle.beforeLogin(); // recovery, once the managers are up and before any login (CP-0027)
 		
 		Runtime.getRuntime().addShutdownHook(Shutdown.getInstance());
 		LOGGER.info("IdManager: Free ObjectID's remaining: " + IdManager.getInstance().getAvailableIdCount());

@@ -150,6 +150,19 @@ public final class LivingChronicle
 		{
 			return;
 		}
+		try
+		{
+			boundary(quiet);
+		}
+		catch (RuntimeException e)
+		{
+			// Mobius closes and backs up the database after the boundary: a fault here must not stop that (no census follows)
+			LOGGER.log(java.util.logging.Level.SEVERE, "Living Chronicle: the shutdown boundary failed; no shutdown census, so the next start is a rebase", e);
+		}
+	}
+
+	private static void boundary(java.util.function.BooleanSupplier quiet)
+	{
 		if (!quiet.getAsBoolean())
 		{
 			LOGGER.severe("Living Chronicle: Mobius's task pools are still running at the shutdown boundary; no shutdown census, so the next start is a rebase");

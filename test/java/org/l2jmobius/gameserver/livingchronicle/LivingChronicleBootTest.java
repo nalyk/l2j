@@ -126,6 +126,46 @@ class LivingChronicleBootTest
 	}
 
 	@Test
+	void aBoundaryThatFailsUnexpectedlyLetsMobiusFinishItsShutdown() throws Exception
+	{
+		System.setProperty(LivingChronicle.PROFILE, "dev");
+		LivingChronicle.atDatabase();
+		final long shutdowns = censuses("SHUTDOWN");
+		LivingChronicle.atShutdown(() ->
+		{
+			throw new IllegalStateException("a fault in the boundary");
+		}); // must not escape: Mobius closes the database and backs it up after the boundary
+		assertEquals(shutdowns, censuses("SHUTDOWN"), "a boundary that failed certifies nothing");
+	}
+
+	@Test
+	void aBoundaryWithUncertainCountersStillWritesTheClanWarehouses() throws Exception
+	{
+		System.setProperty(LivingChronicle.PROFILE, "dev");
+		LivingChronicle.atDatabase();
+		final Player leader = TestPlayers.create(PlayerClass.FIGHTER, 40);
+		if (World.getPlayer(leader.getObjectId()) == null)
+		{
+			World.addObject(leader);
+		}
+		final Clan clan = ClanTable.getInstance().createClan(leader, "Boot" + NAMES.incrementAndGet());
+		final Item shots = clan.getWarehouse().addItem(ItemProcessType.NONE, SOULSHOT, 100, null, null);
+		shots.updateDatabase(true);
+		shots.changeCount(ItemProcessType.NONE, 5, null, null); // in memory only, as an offline leader's warehouse is never saved
+		final long shutdowns = censuses("SHUTDOWN");
+		EconomyCounter.uncertain(); // a counted commit this run could not be read
+		LivingChronicle.atShutdown(() -> true);
+		assertEquals(shutdowns, censuses("SHUTDOWN"), "uncertain counters certify no shutdown census");
+		try (Connection connection = DatabaseFactory.getConnection();
+			Statement statement = connection.createStatement();
+			ResultSet row = statement.executeQuery("SELECT count FROM items WHERE object_id = " + shots.getObjectId()))
+		{
+			assertTrue(row.next());
+			assertEquals(105, row.getLong(1), "the warehouse is written all the same: only the census depends on the counters");
+		}
+	}
+
+	@Test
 	void aBoundaryWhoseWritesFailTakesNoShutdownCensus() throws Exception
 	{
 		System.setProperty(LivingChronicle.PROFILE, "dev");

@@ -73,7 +73,12 @@
 5. **[2026-11-19] Instance calls can be rerouted in test JVMs only through `ActorDispatch`**
    Do instead: use `java.lang.classfile` to swap `invokevirtual X.m(args)R` for `invokestatic W.m(X,args)R` (same stack effect) at listed sites; `MethodRedirector` handles static calls only and never touches instructions.
 
-6. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
+6. **[2026-11-22] Test a reviewer's database-limit claim before fixing it**
+   A review said a counted deletion over 65,535 rows fails on the placeholder limit; a 70,000-row test passed with and
+   without `useServerPrepStmts=true` (Connector/J prepares client-side, falling back when the server refuses).
+   Do instead: write the failing test first; if it passes on the unfixed code, drop the fix and record the claim refuted.
+
+7. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
    MariaDB raises error 1442 on `FOR UPDATE` of the table that fired the trigger.
    Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
 

@@ -346,12 +346,12 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 
 ## CP-0022 Existence counters: the treasury, saved-ground and bid hooks
 
-- Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`, `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java`, `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Files: `java/org/l2jmobius/gameserver/mechanics/siege/Castle.java`, `java/org/l2jmobius/gameserver/managers/ItemsOnGroundManager.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuction.java`, `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
 - Reason: a castle treasury, the saved ground list and the open bids of both auctions are census holdings
   (asset-service.md §2.6) that no item call changes, so their changes need hooks of their own (§11.24).
 - Change: `Castle.addToTreasuryNoTax` posts the change it applied and records its clamp apart; `ItemsOnGroundManager.save`,
-  `removeObject` and `load` change the saved list and the item's membership together under the item's leaf lock, so the
-  item settles its counted quantity as for a location (CP-0021); the bids are counted where their rows are written:
+  `removeObject` and `load` change the saved list and the item's membership together under the item's leaf lock
+  (`Item.setOnSavedGround`, `restoreOnSavedGround`), so the item settles its counted quantity as for a location (CP-0021); the bids are counted where their rows are written:
   `ItemAuction.updatePlayerBidInternal` and `storeMe` (an auction's state says when its winning bid was paid) and
   `ClanHallAuction.updateInDB`, `cancelBid` and `removeBids` run their statements through `Census.counting`, so a write
   that fails counts nothing; `ClanHallAuction.returnItem` records the part of a credit past MAX_ADENA it clamps away.
@@ -394,7 +394,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 
 ## CP-0025 Existence counters: SQL sites counted in their own transaction
 
-- Files: `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/mechanics/olympiad/Hero.java`, `java/org/l2jmobius/gameserver/entity/actor/holders/player/CursedWeapon.java`, `java/org/l2jmobius/gameserver/managers/CursedWeaponsManager.java`, `java/org/l2jmobius/gameserver/managers/CastleManager.java`, `java/org/l2jmobius/gameserver/network/GameClient.java`, `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`, `java/org/l2jmobius/gameserver/managers/ItemAuctionManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuctionInstance.java`, `dist/game/data/scripts/handlers/chat/commands/admin/AdminRepairChar.java`
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`, `java/org/l2jmobius/gameserver/mechanics/script/LongTimeEvent.java`, `java/org/l2jmobius/gameserver/mechanics/olympiad/Hero.java`, `java/org/l2jmobius/gameserver/entity/actor/holders/player/CursedWeapon.java`, `java/org/l2jmobius/gameserver/managers/CursedWeaponsManager.java`, `java/org/l2jmobius/gameserver/managers/CastleManager.java`, `java/org/l2jmobius/gameserver/network/GameClient.java`, `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`, `java/org/l2jmobius/gameserver/managers/ItemAuctionManager.java`, `java/org/l2jmobius/gameserver/entity/item/auction/ItemAuctionInstance.java`, `dist/game/data/scripts/handlers/chat/commands/admin/AdminRepairChar.java`
 - Reason: these statements write census rows directly (an ended event's and a new hero period's items, an offline
   owner's cursed weapon and circlet, a deleted character's items, the startup cleanup, a deleted or expired item auction's
   bids, the admin repair), so no item hook sees them (asset-service.md §2.6, §11.24; Codex round amd10 found a count
@@ -406,14 +406,16 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   read under its lock on a fresh connection (Codex amd12: quantities could be changed meanwhile by another writer); the
   loaded copies of the rows it locks are held under their leaf locks from the locking read to the posting, a copy of a
   deleted row counting out what its copy counted, never the row's stale quantity, and then told to stop counting
-  (`Item.forgetCounted`, `countedQuantity`, in CP-0021's file); a deleted row whose object memory had counted out before
-  its row was written counts nothing more (`Item` marks it as it settles to nothing with a row, and clears it when its
-  row is written or deleted; Codex amd13: retail destruction counts out and leaves the world before deleting its row); a
+  (`Item.forgetCounted`, `countedQuantity`, `isForgotten`); a deleted row whose object memory had counted out before
+  its row was written counts nothing more (`Item.settleCounted` marks it as it settles to nothing with a row;
+  `updateInDb`, `insertIntoDb` and `removeFromDb` report what they wrote through `EconomyCounter.rowWritten`; Codex amd13: retail destruction counts out and leaves the world before deleting its row); a
   commit that fails is rolled back before it is resolved, never committed by a later autocommit reset; the counted-out
   mark is read before the commit, under the row lock Mobius's own deletion waits behind, and a committed statement is
   posted even when the connection fails afterwards (Codex amd14); a row write clears the mark only when what it wrote
   holds nothing counted, and a destruction during an object's first insert leaves it (`Item._inserting`, Codex
-  amd15-16); a commit whose outcome cannot be read makes the counters uncertain, so the boundary takes no census. A
+  amd15-16), a failed insert too, since a lost acknowledgement may have left its row (Codex amd17); a commit whose
+  outcome cannot be read makes the counters uncertain, so the boundary takes no census; any commit that ended hands
+  the connection back in autocommit (Codex amd17). A
   restore racing a deletion of the same row (upstream's ghost race) is not settled: the restart census reports the ghost. An auction's row and its bids are
   deleted in one counted transaction, as its winning bid stops being taken off when the auction's row goes. With the
   counters inactive each statement runs as upstream.
@@ -425,7 +427,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   its row's deletion runs waits and counts nothing; a copy that counted itself out before its row went is not counted
   twice; the last three red on the previous code; a partly consumed copy's row counted as memory holds it, an item
   destroyed and gone from the world before its row went not counted twice, a commit failing with its transaction open
-  committing nothing: these three red on round 12's code).
+  committing nothing: these three red on round 12's code; a resolved commit handing back an autocommit connection, red
+  on round 16's code); `ExistenceCounterTest.aFailedInsertKeepsTheMarkItsRowMayNeed`
+  (red on round 16's code).
 
 ## CP-0026 A clan-hall bid is refunded only once its row is gone
 
@@ -446,16 +450,20 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   (offline traders and players are restored before the login listener opens), and the shutdown boundary must follow
   Mobius's last save and precede the database closing.
 - Change: `GameServer` calls `LivingChronicle.atDatabase()` right after `DatabaseFactory.init()` (before
-  `ThreadPool.init`: it uses the database only) and `LivingChronicle.beforeLogin()` after `PunishmentManager`, before the
-  shutdown hook is registered and offline traders and players are restored, so a recovery that fails stops the start;
-  `Shutdown` calls `LivingChronicle.atShutdown()` after `saveData()` and before `DatabaseFactory.close()`. In `truth`
-  (and while no `lc.profile` is set, until the profile check exists) each returns at once.
+  `ThreadPool.init`: it uses the database only) and `LivingChronicle.beforeLogin()` once the mail managers are up and
+  before the `ON_SERVER_START` listeners are told (a datapack script could otherwise act before recovery), the shutdown
+  hook is registered and offline traders and players are restored, so a recovery that fails stops the start;
+  `Shutdown` calls `LivingChronicle.atShutdown()` after `saveData()` and before `DatabaseFactory.close()`; a fault inside
+  the boundary is logged and takes no census, never stopping Mobius's database close and backup. In `truth` (and while
+  no `lc.profile` is set, until the profile check exists) each returns at once.
 - Invariant: in a profile that starts Living Chronicle, no character loads before recovery, and every census follows or
   precedes exactly the Mobius steps §2.6 names.
 - Proof: `LivingChronicleBootTest` (truth starts nothing; an unknown profile refuses; dev counts, recovers and keeps the
   boundary, a clan warehouse change in memory written there and conserved across the restart; a boundary whose write
-  fails takes no shutdown census, so the next start is a rebase); `SeamsTest` reads the compiled order (the census right
-  after `DatabaseFactory.init`, recovery before the shutdown hook and the offline traders, the boundary right after
+  fails takes no shutdown census, so the next start is a rebase; a fault in the boundary does not escape; uncertain
+  counters still write the clan warehouses, taking no census); `SeamsTest` reads the compiled order (the census right
+  after `DatabaseFactory.init`, recovery before the server-start listeners, the shutdown hook and the offline traders,
+  the boundary right after
   `saveData` and before `DatabaseFactory.close`; 3/3 fail with CP-0027 reverted); every server-booting test boots
   through the seams in truth.
 

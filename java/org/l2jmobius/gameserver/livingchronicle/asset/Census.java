@@ -172,8 +172,7 @@ public final class Census
 		}
 		catch (SQLException | RuntimeException e)
 		{
-			connection.rollback();
-			connection.setAutoCommit(true);
+			abandon(connection, e);
 			throw e;
 		}
 		final List<Item> copies = new ArrayList<>();
@@ -232,9 +231,10 @@ public final class Census
 			deleted = holding == Holding.ITEMS ? gone(connection, rows.keySet()) : Set.of();
 			// Read under the rows' locks, which Mobius's own deletion of such a row waits behind, so it cannot clear the mark
 			// first (Codex amd14); a copy counted out later is a loaded one, its leaf lock held.
+			final Set<Integer> loadedIds = loadedIds(copies);
 			for (int objectId : deleted)
 			{
-				if (!loadedIds(copies).contains(objectId) && EconomyCounter.isCountedOut(objectId))
+				if (!loadedIds.contains(objectId) && EconomyCounter.isCountedOut(objectId))
 				{
 					countedOut.add(objectId);
 				}
@@ -249,29 +249,31 @@ public final class Census
 		}
 		catch (SQLException | RuntimeException e)
 		{
-			connection.rollback();
-			connection.setAutoCommit(true);
+			abandon(connection, e);
 			throw e;
 		}
-		boolean committedOk = true;
+		boolean ended = true; // no transaction of this statement is left open: autocommit can be restored
 		try
 		{
 			connection.commit();
 		}
 		catch (SQLException e)
 		{
-			committedOk = false;
 			try
 			{
 				connection.rollback(); // a transaction the failed commit left open ends here, never in a later cleanup
 			}
 			catch (SQLException gone)
 			{
-				// the connection is gone: the server ends the transaction itself
+				ended = false; // the connection is gone: the server ends the transaction itself
 			}
 			// The server may have committed and lost only the acknowledgement: the statement's own row decides.
 			final Boolean committed = committed(statement);
-			if (!Boolean.TRUE.equals(committed))
+			if (Boolean.TRUE.equals(committed))
+			{
+				ended = true; // it committed: nothing of it is left to commit (Codex amd17)
+			}
+			else
 			{
 				if (committed == null)
 				{
@@ -283,7 +285,7 @@ public final class Census
 		}
 		finally
 		{
-			if (committedOk)
+			if (ended)
 			{
 				try
 				{
@@ -291,7 +293,7 @@ public final class Census
 				}
 				catch (SQLException e)
 				{
-					// committed: the connection failing afterwards changes nothing the posting below accounts for
+					// ended: the connection failing afterwards changes nothing the posting below accounts for
 				}
 			}
 		}
@@ -373,10 +375,24 @@ public final class Census
 		return gone;
 	}
 
-	/** @return whether the statement whose commit failed did commit: its own row decides; null when it cannot be read */
 	/** Where a lost acknowledgement is resolved from: the database (a test replaces it to make the read fail). */
 	static Connections resolver = DatabaseFactory::getConnection;
 
+	/** Ends a statement's transaction after it failed, keeping {@code cause} the exception the caller sees. */
+	private static void abandon(Connection connection, Exception cause)
+	{
+		try
+		{
+			connection.rollback();
+			connection.setAutoCommit(true);
+		}
+		catch (SQLException e)
+		{
+			cause.addSuppressed(e); // the connection is gone: the server ends the transaction itself
+		}
+	}
+
+	/** @return whether the statement whose commit failed did commit: its own row decides; null when it cannot be read */
 	private static Boolean committed(byte[] statement)
 	{
 		try (Connection fresh = resolver.open())

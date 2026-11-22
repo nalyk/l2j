@@ -203,7 +203,8 @@ it guarantees, and what it only watches, are stated separately.
    out (destroyed, dropped or sold, its row not yet written: Mobius counts and deletes in two steps) counts nothing
    more, read under the row's lock, which Mobius's own deletion of the row waits behind, and kept until a write of the
    row holds nothing counted (a save that began before and wrote the older quantity keeps it; a destruction while the
-   object's first row is being inserted leaves the mark too). A commit that fails is rolled
+   object's first row is being inserted leaves the mark too, and an insert that fails keeps it, since a lost
+   acknowledgement may have left the row). A commit that fails is rolled
    back before it is resolved, so no later cleanup commits it; one known to have committed is posted whatever happens to
    the connection afterwards; one whose outcome cannot be read at all (the database failing the resolution too) makes the
    counters uncertain, so no shutdown census follows and the next start is a rebase. A race this does not settle is upstream's own: Mobius restoring a container while a counted
@@ -233,8 +234,9 @@ it guarantees, and what it only watches, are stated separately.
 boundary waits up to 30 seconds and, with a pool still running, takes no shutdown census, so the next start is a rebase),
 the service writes every authoritative container that Mobius does not (a clan warehouse whose
 leader is offline is skipped by `ItemContainer.updateDatabase`, ItemContainer.java:579: the service writes each clan
-warehouse's items itself), checks every write succeeded, and only then takes the `SHUTDOWN` census from the database and
-persists the counters. Ground items are a holding only when `SaveDroppedItem` is on (General.ini:217), counted from
+warehouse's items itself), checks every write succeeded, and only then, with the counters certain, takes the `SHUTDOWN` census from the database
+and persists the counters (uncertain counters still have the warehouses written; only the census depends on them). A
+fault inside the boundary is logged and takes no census; it never stops Mobius closing the database. Ground items are a holding only when `SaveDroppedItem` is on (General.ini:217), counted from
 `itemsonground`; with it off a drop leaves the counted holdings and a pickup enters them, so nothing on the ground is
 posted at the boundary. Refund lists are already
 destroyed at logout (Player.java:12131, PlayerRefund.java:85) through a classified sink site, so they are never counted.
@@ -242,7 +244,7 @@ destroyed at logout (Player.java:12131, PlayerRefund.java:85) through a classifi
 **At startup**, right after the database opens and before any other startup step (Mobius's own cleanup,
 DatabaseIdManager.java:161-171, is a counted site), the database is counted again (`STARTUP`), compared with the persisted
 counters, and the counters start from it; this needs only the database. Recovery (§3.2, §7), which needs Mobius's mail
-manager for INV12, runs later, once Mobius's managers are up and before any login. A
+manager for INV12, runs later, once Mobius's managers are up and before any server-start listener or login. A
 difference is a conservation failure somewhere in Mobius or here (for instance a background task changing a player's
 container after its final save, which Mobius's shutdown order allows, Shutdown.java:380-403; the census reports such a
 loss, it does not hide it): `Asset.ConservationBroken` with the per-item
@@ -798,6 +800,14 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   a double count (1); a commit whose resolution read failed was an unnamed limit (2). Fixed (still revision 13): the
   object marks itself inserting before reading the values it writes, and a destruction then leaves its mark; an
   unreadable outcome makes the counters uncertain and the boundary takes no census.
+- Amendment round 17 (Codex), NO SIGN-OFF: an insert that failed cleared the mark although a lost acknowledgement may
+  have left its row (1); a commit resolved as done handed the connection back outside autocommit (2). Fixed (still
+  revision 13): a failed insert keeps the mark, which Mobius's own deletion of the row clears; any ended commit restores
+  autocommit. An independent code review in the same round found a fault in the boundary able to stop Mobius's database close, server-start
+  listeners running before recovery, a difference of 0 reported, and uncertain counters skipping the warehouse writes;
+  each is fixed with a test red before it. Its claim that a deletion of more than 65 535 rows fails on the parameter
+  limit was tested and does not hold: a 70 000-row counted deletion succeeds, server-side prepares requested or not
+  (Connector/J prepares it client-side).
 - Revision 11 (amendment, under review): implementing `correct` showed that moves cannot repair an INV11 disagreement
   (they change rows and postings alike); §4.5 adds the reconcile choice (`NONE`, `RECOGNIZE_ROWS`) and states what
   `unfreeze` checks and does; §2.6 states that per-class accounting is the telemetry's, not the monitor's (Citizens

@@ -82,7 +82,7 @@ public final class EconomyMonitor
 					final long counted = counters.getOrDefault(itemId, 0L);
 					if ((now != then) || (now != counted))
 					{
-						differences.put(itemId, now - counted);
+						differences.put(itemId, now != counted ? now - counted : now - then); // never a difference of 0
 						items.add(item("item", itemId, "shutdown", then, "counters", counted, "startup", now));
 					}
 				}
@@ -166,11 +166,6 @@ public final class EconomyMonitor
 	 */
 	public static boolean atBoundary(Iterable<? extends ItemContainer> containers) throws SQLException
 	{
-		if (EconomyCounter.isUncertain())
-		{
-			LOGGER.severe("Living Chronicle: a counted statement's commit could not be read this run; no shutdown census, so the next start is a rebase");
-			return false;
-		}
 		boolean written = true;
 		for (ItemContainer container : containers)
 		{
@@ -198,6 +193,12 @@ public final class EconomyMonitor
 		}
 		if (!written)
 		{
+			return false;
+		}
+		if (EconomyCounter.isUncertain())
+		{
+			// The warehouses are written all the same: only the census depends on the counters.
+			LOGGER.severe("Living Chronicle: a counted statement's commit could not be read this run; no shutdown census, so the next start is a rebase");
 			return false;
 		}
 		try (Connection connection = DatabaseFactory.getConnection())

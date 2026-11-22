@@ -94,6 +94,19 @@ class EconomyMonitorTest
 	}
 
 	@Test
+	void aShutdownCensusTheCountersDisagreedWithIsReportedByItsOwnDifference() throws Exception
+	{
+		final int custody = _f.open("TEST");
+		_f.seed(custody, SOULSHOT, 10, false);
+		startup();
+		shutdown();
+		final long shutdownCensus = _f.number("SELECT MAX(census_id) FROM lc_economy_census");
+		_f.execute("UPDATE lc_economy_census SET qty = qty + 4 WHERE census_id = " + shutdownCensus + " AND item_id = " + SOULSHOT + " AND holding <> 'CENSUS' LIMIT 1");
+		final EconomyMonitor.Startup restart = startup(); // the database and the counters agree; the shutdown census held 4 more
+		assertEquals(Map.of(SOULSHOT, -4L), restart.differences(), "a difference is never reported as 0");
+	}
+
+	@Test
 	void aChangeLostAfterItsLastSaveIsReported() throws Exception
 	{
 		startup(); // counting before the item exists, as on a server

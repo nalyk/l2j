@@ -1,5 +1,6 @@
 package org.l2jmobius.gameserver.livingchronicle;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.classfile.ClassFile;
@@ -77,7 +78,8 @@ class SeamsTest
 	void recoveryComesBeforeAnyCharacterLoads() throws Exception
 	{
 		final List<String> calls = callsAround("org/l2jmobius/gameserver/GameServer", "LivingChronicle.beforeLogin");
-		inOrder(calls, "MailManager.getInstance", "PunishmentManager.getInstance", "LivingChronicle.beforeLogin", "Runtime.addShutdownHook", "OfflineTraderTable.getInstance");
+		inOrder(calls, "MailManager.getInstance", "LivingChronicle.beforeLogin", "EventDispatcher.notifyEventAsync", "Runtime.addShutdownHook", "OfflineTraderTable.getInstance");
+		assertFalse(calls.subList(0, calls.indexOf("LivingChronicle.beforeLogin")).contains("EventDispatcher.notifyEventAsync"), "no server-start listener runs before recovery");
 	}
 
 	@Test

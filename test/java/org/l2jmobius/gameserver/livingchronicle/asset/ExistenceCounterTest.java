@@ -283,6 +283,28 @@ class ExistenceCounterTest
 	}
 
 	@Test
+	void aFailedInsertKeepsTheMarkItsRowMayNeed()
+	{
+		final Player player = player();
+		final Item saved = player.getInventory().addItem(ItemProcessType.NONE, SOULSHOT, 30, player, null);
+		saved.updateDatabase(true); // a row under this id: what an INSERT whose acknowledgement was lost leaves
+		final Item fresh = new Item(saved.getObjectId(), SOULSHOT);
+		fresh.setOwnerId(player.getObjectId());
+		fresh.setCount(30);
+		fresh.setItemLocation(ItemLocation.INVENTORY, 0, false);
+		try
+		{
+			EconomyCounter.countedOut(fresh.getObjectId()); // destroyed while its INSERT ran
+			fresh.updateDatabase(true); // the INSERT fails: whether its row was written is unknown
+			assertTrue(EconomyCounter.isCountedOut(fresh.getObjectId()), "a row may hold it: a failed INSERT proves nothing was written");
+		}
+		finally
+		{
+			EconomyCounter.clearCountedOut(fresh.getObjectId());
+		}
+	}
+
+	@Test
 	void anInactiveCounterPostsNothing()
 	{
 		final Player player = player();

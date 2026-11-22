@@ -1990,11 +1990,7 @@ public class Item extends WorldObject
 		catch (Exception e)
 		{
 			LOGGER.log(Level.SEVERE, "Could not insert item " + this + " into DB: Reason: " + e.getMessage(), e);
-			if (_inserting && !_existsInDb)
-			{
-				EconomyCounter.rowWritten(getObjectId(), 0); // no row was written (CP-0025)
-			}
-			_inserting = false;
+			_inserting = false; // a mark stays: a lost acknowledgement may have left its row (Codex amd17); Mobius's own deletion clears it (CP-0025)
 		}
 	}
 	

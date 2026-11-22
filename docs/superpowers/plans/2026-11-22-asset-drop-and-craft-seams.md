@@ -173,12 +173,12 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
   (`product` null on failure); `void AssetTx.ownerRow(String table, Map<String, Object> columns)` (refused unless
   `table` starts with `lc_` + the operation's module in lower case + `_`).
 
-- [ ] **Step 1: Write the failing tests:** `aSuccessfulCraftSinksTheMaterialsAndMailsTheProduct` (custody rows gone,
+- [x] **Step 1: Write the failing tests:** `aSuccessfulCraftSinksTheMaterialsAndMailsTheProduct` (custody rows gone,
   `CRAFT_INPUT` SINK and `CRAFT_OUTPUT` SOURCE legs, one service mail, fact `Asset.Crafted`, counters move by the
   product less the materials); `aFailedCraftOnlySinksTheMaterials`; `theOutcomeRowIsWrittenInTheOperation` (an
   `lc_pact_craft_outcome` row via `ownerRow`, absent after an abort); `anotherModulesTableIsRefused` (`ownerRow("lc_asset_op", …)`
   from module `PACT` → `IllegalArgumentException`).
-- [ ] **Step 2:** RED. **Step 3:** implement (`craft` = the custody sink `sink` writes, with `CRAFT_INPUT`, then the
+- [x] **Step 2:** RED. **Step 3:** implement (`craft` = the custody sink `sink` writes, with `CRAFT_INPUT`, then the
   `route` mail path with `CRAFT_OUTPUT`; `ownerRow` queues an INSERT executed in the commit with the other statements).
   **Step 4:** GREEN; full gate `./build.sh` GREEN. **Step 5:** commit `Asset: craft and owner rows`.
 

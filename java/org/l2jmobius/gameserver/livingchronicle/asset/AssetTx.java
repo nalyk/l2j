@@ -29,6 +29,7 @@ import org.l2jmobius.gameserver.mechanics.siege.Castle;
 import org.l2jmobius.gameserver.mechanics.variables.ItemVariables;
 import org.l2jmobius.gameserver.data.xml.ItemData;
 import org.l2jmobius.gameserver.entity.item.ItemTemplate;
+import org.l2jmobius.gameserver.entity.item.holders.ItemHolder;
 
 /**
  * One asset operation (docs/spec/asset-service.md §3.2, §4.1, §4.2). The caller declares what the operation does; nothing
@@ -332,16 +333,9 @@ public final class AssetTx implements AutoCloseable
 				final int message = insertServiceMail(connection, entry.getKey(), subject, content);
 				for (RoutedDrop drop : entry.getValue())
 				{
-					for (Asset asset : units(drop))
+					for (Asset asset : units(drop.itemId(), drop.count()))
 					{
-						try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
-						{
-							attach.setInt(1, _service.ids().next());
-							attach.setInt(2, asset.itemId());
-							attach.setLong(3, asset.qty());
-							attach.setInt(4, message);
-							attach.executeUpdate();
-						}
+						attachCreated(connection, message, asset);
 						execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
 						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
 						execution.existence(asset.itemId(), asset.qty());
@@ -417,20 +411,133 @@ public final class AssetTx implements AutoCloseable
 		}, custodies.stream().mapToInt(Integer::intValue).toArray());
 	}
 
-	/** A drop as the rows it becomes: one of its count if its item stacks, else rows of one. */
-	private static List<Asset> units(RoutedDrop drop)
+	/** What a created quantity becomes as rows: one of its count if its item stacks, else rows of one. */
+	private static List<Asset> units(int itemId, long count)
 	{
-		final ItemTemplate template = ItemData.getInstance().getTemplate(drop.itemId());
+		final ItemTemplate template = ItemData.getInstance().getTemplate(itemId);
 		if ((template == null) || template.isStackable())
 		{
-			return List.of(new Asset(drop.itemId(), drop.count(), null));
+			return List.of(new Asset(itemId, count, null));
 		}
 		final List<Asset> units = new ArrayList<>();
-		for (long i = 0; i < drop.count(); i++)
+		for (long i = 0; i < count; i++)
 		{
-			units.add(new Asset(drop.itemId(), 1, null));
+			units.add(new Asset(itemId, 1, null));
 		}
 		return units;
+	}
+
+	/** Writes a service mail's attachment row for a created quantity (no object of it exists yet). */
+	private void attachCreated(Connection connection, int message, Asset asset) throws SQLException
+	{
+		try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, -1, 0)"))
+		{
+			attach.setInt(1, _service.ids().next());
+			attach.setInt(2, asset.itemId());
+			attach.setLong(3, asset.qty());
+			attach.setInt(4, message);
+			attach.executeUpdate();
+		}
+	}
+
+	/**
+	 * A contractual craft (§4.3 {@code craft}, §2.5 {@code CRAFT_INPUT}, {@code CRAFT_OUTPUT}; pact.md §4.3): the materials
+	 * leave the contract's custody to the {@code CRAFT_INPUT} sink; the product, if the craft succeeded, enters from the
+	 * {@code CRAFT_OUTPUT} source straight to the receiver by service mail, never into a custody. Both are referenced by
+	 * the contract (the custody's owner). The owner writes its outcome row in the same operation ({@link #ownerRow}).
+	 * @param product what the craft made, or null when it failed
+	 */
+	public void craft(int custody, List<Asset> materials, int receiverCharId, ItemHolder product, String subject, String content)
+	{
+		if ((product != null) && ((subject == null) || subject.isBlank() || (content == null)))
+		{
+			throw new IllegalArgumentException("a service mail names its institution and says why");
+		}
+		final List<Asset> used = List.copyOf(materials);
+		if (product != null)
+		{
+			_characters.add(receiverCharId);
+		}
+		step(execution ->
+		{
+			final Custody source = execution.open(custody);
+			execution.notFrozen(source);
+			final long contract = source.ownerRef();
+			if ((product != null) && !execution.receiverAlive(receiverCharId))
+			{
+				throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + receiverCharId + " is gone or marked for deletion");
+			}
+			final List<Map<String, Object>> inputs = new ArrayList<>();
+			for (Asset asset : used)
+			{
+				execution.take(custody, asset, true);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, contract, SinkCode.CRAFT_INPUT.name(), asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), -asset.qty());
+				inputs.add(legOf(asset));
+			}
+			final List<Map<String, Object>> outputs = new ArrayList<>();
+			Integer mail = null;
+			if (product != null)
+			{
+				final Connection connection = execution.connection();
+				mail = insertServiceMail(connection, receiverCharId, subject, content);
+				for (Asset asset : units(product.getId(), product.getCount()))
+				{
+					attachCreated(connection, mail, asset);
+					execution.legs().add(new Leg(Leg.AccountKind.SOURCE, contract, "CRAFT_OUTPUT", asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.MAIL, mail, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+					execution.existence(asset.itemId(), asset.qty());
+					outputs.add(legOf(asset));
+				}
+				execution.mailed(mail, receiverCharId, MailReason.PAYOUT);
+			}
+			execution.touched(custody);
+			execution.facts().add(AssetFact.of("Crafted", custody, "operation", _op.hex(), "custody", custody, "contract", contract, "materials", inputs, "product", outputs, "mail", mail));
+		}, custody);
+	}
+
+	/**
+	 * A row of the owner module's own state, written in the operation's transaction (§4.2 rule 10): a table of the
+	 * operation's module ({@code lc_<module>_...}), never another module's or Mobius's.
+	 */
+	public void ownerRow(String table, Map<String, Object> columns)
+	{
+		final String prefix = "lc_" + _module.toLowerCase(java.util.Locale.ROOT) + "_";
+		if (!IDENTIFIER.matcher(table).matches() || !table.startsWith(prefix))
+		{
+			throw new IllegalArgumentException("module " + _module + " writes only its own tables (" + prefix + "...), not " + table);
+		}
+		if (columns.isEmpty())
+		{
+			throw new IllegalArgumentException("a row has columns");
+		}
+		for (String column : columns.keySet())
+		{
+			if (!IDENTIFIER.matcher(column).matches())
+			{
+				throw new IllegalArgumentException("not a column: " + column);
+			}
+		}
+		final List<Map.Entry<String, Object>> row = List.copyOf(new LinkedHashMap<>(columns).entrySet());
+		step(execution ->
+		{
+			final StringBuilder names = new StringBuilder();
+			final StringBuilder marks = new StringBuilder();
+			for (Map.Entry<String, Object> column : row)
+			{
+				names.append(names.length() > 0 ? ", " : "").append(column.getKey());
+				marks.append(marks.length() > 0 ? ", " : "").append('?');
+			}
+			try (PreparedStatement insert = execution.connection().prepareStatement("INSERT INTO " + table + " (" + names + ") VALUES (" + marks + ")"))
+			{
+				for (int i = 0; i < row.size(); i++)
+				{
+					insert.setObject(i + 1, row.get(i).getValue());
+				}
+				insert.executeUpdate();
+			}
+		});
 	}
 
 	/**

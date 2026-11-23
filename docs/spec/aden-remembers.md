@@ -445,7 +445,8 @@ and pack animals are new NPC templates on existing client models (`displayId`), 
   proportion to their presence, the remainder (all of it if nobody qualifies) refunded to the pool. PACT settles the
   contract with these shares (pact.md §4.2's Caravan Escort: "delivery + participation").
 - **Raid**: killing the Caravan Master is the `RAIDED` transition (§3.4): `raid` drops `RaidSharePermille` (default 300) of
-  the manifest once, after commit, at the Master's position (a ground drop, asset-service.md §2.5 and ASSET-R25), the rest lost to
+  the manifest (per stackable item id, its quantity × permille / 1000 rounded down; per non-stackable item id, that
+  share of its objects rounded down, the lowest object ids first) once, after commit, at the Master's position (a ground drop, asset-service.md §2.5 and ASSET-R25), the rest lost to
   the road (`ROAD_LOSS`). Killing NPCs gives no karma in Mobius; raiders who kill escorts or bystanders get karma and flags
   by the normal rules, and the raid becomes history, `outlaw` pressure and rumors. No Writ is posted on raiders: the
   Ledger takes external money only for cursed weapons (black-ledger.md §4.3), and a raid names no one.
@@ -670,6 +671,8 @@ asset-service.md revision 10, pact.md revision 6 and black-ledger.md revision 7 
 
 ## 12. Review record
 
+- With revision 7, from asset-service.md revision 16 (its review round 40): §4.6's raid share is stated per item id,
+  rounded down, non-stackable objects lowest ids first, so Asset's `raid` receives exact share and rest lists.
 - Revision 7 (amendment, under review): §11.1 said upstream has no owner-change event; it has one,
   `ON_CASTLE_SIEGE_OWNER_CHANGE`, dispatched only at a castle siege's mid-victory (Siege.java:469), so the claim now names
   it and the gaps the capture seams fill (Chronicle review round 5, finding 36). No rule changed. Also: the store atoms'

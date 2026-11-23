@@ -338,6 +338,24 @@ class DropSeamTest
 	}
 
 	@Test
+	void aDropThatCannotEnterItsInstanceIsNotPublished()
+	{
+		// whenever the instance went (before the seam's check, or between it and the item's assignment), the item's own
+		// instance after assignment decides: one that did not enter it is never put in the world outside
+		final Set<Integer> before = new HashSet<>();
+		for (WorldObject object : World.getVisibleObjects())
+		{
+			before.add(object.getObjectId());
+		}
+		final Item item = _victim.dropItemAt(_killer, 57, 10, _victim.getX(), _victim.getY(), _victim.getZ(), 777_777);
+		assertEquals(null, item, "no drop");
+		for (WorldObject object : List.copyOf(World.getVisibleObjects()))
+		{
+			assertTrue(!(object instanceof Item dropped) || before.contains(dropped.getObjectId()) || !dropped.isSpawned(), "nothing spawned in instance 0");
+		}
+	}
+
+	@Test
 	void aHeldKillDropsWhereItDiedEvenIfItsMonsterMoved()
 	{
 		final java.util.concurrent.atomic.AtomicBoolean readable = new java.util.concurrent.atomic.AtomicBoolean(false);

@@ -1895,6 +1895,10 @@ public class Item extends WorldObject
 		if (dropper != null)
 		{
 			setInstanceId(instanceId); // Inherit instancezone when dropped in visible world.
+			if (getInstanceId() != instanceId)
+			{
+				return; // CP-0032: its instance is gone (the setter ignores one that does not exist): never the world outside
+			}
 		}
 		else
 		{

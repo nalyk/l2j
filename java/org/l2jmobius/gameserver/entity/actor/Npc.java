@@ -1966,6 +1966,11 @@ public class Npc extends Creature
 			final int newZ = z + 20;
 			
 			item.dropMeFrom(this, x, y, z, instanceId, newX, newY, newZ); // from the place, as dropMe from where this NPC is
+			if (!item.isSpawned())
+			{
+				ItemManager.destroyItem(ItemProcessType.LOOT, item, creature != null ? creature.asPlayer() : null, this); // its instance is gone
+				return null;
+			}
 			
 			// Add drop to auto destroy item task.
 			if (!GeneralConfig.LIST_PROTECTED_ITEMS.contains(itemId) && (((GeneralConfig.AUTODESTROY_ITEM_AFTER > 0) && !item.getTemplate().hasExImmediateEffect()) || ((GeneralConfig.HERB_AUTO_DESTROY_TIME > 0) && item.getTemplate().hasExImmediateEffect())))

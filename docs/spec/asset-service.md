@@ -818,7 +818,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     `dropMe` call them with their own: a classified site, retail's draws unchanged). A kill takes one of 10 000 slots
     before any router runs and keeps it while held (02 §6: no unbounded queue), so an unknown outcome always has room;
     with no slot free no router runs and retail drops the kill. A held kill whose instance is gone when it resolves
-    drops nothing, as retail destroys an instance's ground items with it. A JVM death loses the kills held, the stated
+    drops nothing, as retail destroys an instance's ground items with it; whenever the instance went, an item that did
+    not enter it once assigned is not published and is destroyed at once. A JVM death loses the kills held, the stated
     limit of a kill's drops before its commit (pact.md §4.5). A position outside its list, or null, is ignored. Every epoch keeps its own kill
     counter for the server's life. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
@@ -875,6 +876,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   ground items with it; `route` takes the kill's number and the NPC's object id and `craft` the attempt, and the facts
   carry what §5 names (the kill by its key's number, unique across restarts, where §5 had said an incarnation Mobius
   does not keep).
+- Amendment round 31 (Codex), NO SIGN-OFF: the instance's existence was checked before the item's instance was set, so
+  an instance destroyed in between still let the item fall into instance 0 (1). Fixed (still revision 15): the item's
+  own instance after assignment decides; one that did not enter it is not published and is destroyed.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

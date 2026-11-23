@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: reviewed (revision 15; signed off by Codex in amendment round 33; record in §12)
+- Status: draft (revision 16, under review; revision 15 signed off by Codex in amendment round 33; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -87,10 +87,9 @@ lc_mail_delivery(message_id INT PK, op_id BINARY(16) → lc_asset_op, receiver_c
                  claimed_at TIMESTAMP(3) NULL)
 lc_asset_pending(char_id INT, op_id BINARY(16), since TIMESTAMP(3), PRIMARY KEY(char_id, op_id))
 lc_settlement_key(scope VARCHAR(16), skey VARCHAR(96), op_id BINARY(16) → lc_asset_op, PRIMARY KEY(scope, skey))
-lc_item_lifecycle(lifecycle_id BIGINT PK auto, object_id INT, item_id INT, parent_lifecycle_id BIGINT NULL, began_op BINARY(16) NULL,
-                  began_kind {OPERATION|TRACKED},
-                  began_at TIMESTAMP(3), ended_at TIMESTAMP(3) NULL, end_reason {DESTROYED|MERGED|SPLIT_REMAINDER_GONE} NULL,
-                  merged_into BIGINT NULL, UNIQUE(object_id while ended_at IS NULL))
+lc_item_lifecycle(lifecycle_id BIGINT PK auto, object_id INT, item_id INT, began_op BINARY(16) NULL,
+                  began_at TIMESTAMP(3), ended_at TIMESTAMP(3) NULL, end_reason {DESTROYED|VANISHED} NULL,
+                  ended_op BINARY(16) NULL, UNIQUE(object_id while ended_at IS NULL))   -- V019 (§11.35)
 lc_economy_bucket(window_start TIMESTAMP, item_id INT, site VARCHAR(48), class {SOURCE|SINK|MOVE_OUT|MOVE_IN},
                   qty BIGINT UNSIGNED, events INT UNSIGNED, PRIMARY KEY(window_start, item_id, site, class))
 lc_economy_census(census_id BIGINT, taken_at TIMESTAMP(3), kind {SHUTDOWN|STARTUP|REBASE}, item_id INT, holding VARCHAR(16),
@@ -113,9 +112,12 @@ lc_module_state(module VARCHAR(16) PK, state {RUNNING|FROZEN}, reason VARCHAR(64
   `lc_asset_op` row, its deliveries and the resolution of its own uncertain commit work as for any operation.
 - `lc_settlement_key` is the single settlement-uniqueness mechanism for every module; PACT's `pact_settlement` and Black
   Ledger's payouts reference it.
-- `lc_item_lifecycle` gives an item a provenance id from its first asset operation on, because Mobius reuses object ids
-  after destruction (IdManager.java:158-177). It ends when the object leaves existence or merges into another stack
-  (both are classified sites, §2.7); a split of a tracked stack starts a child lifecycle (`parent_lifecycle_id`).
+- `lc_item_lifecycle` gives a **non-stackable** item a provenance id from its first asset operation (or `track`) on,
+  because Mobius reuses object ids after destruction (IdManager.java:158-177); `began_op` is that operation, null for
+  `track`. A stackable item has none: retail keeps no stack's object through its own moves (§11.35), so a stack's
+  lifecycle would end at its first transfer. A lifecycle ends `DESTROYED` before its object's id is released, or when a
+  sink takes its custody row (`ended_op` that operation), and `VANISHED` when a start finds its object in no row
+  (§11.35).
 - `lc_economy_*` hold the monitor's state (§2.6): buckets are telemetry, never per-event rows (04 §1.1).
 - `lc_module_state` is the freeze switch every Living Chronicle module honours (04 §8); the Asset Service is its first user.
 
@@ -442,12 +444,12 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `move(from, to, assets)` | custody → custody, of the same or of two owner modules (a warehouse → a caravan manifest and back, a manifest → a destination warehouse, aden-remembers.md §3.4; a Guild pool → a PACT contract's funding custody, pact.md §4.1a), under the caller's settlement key; both owners' holding predicates are checked and it is refused if either owner module is frozen (§4.2 rules 5, 7) | `Asset.CustodyMoved` |
 | `exchange(character, gives, into, pays, from)` | one operation: the character's `gives` (items or Adena, debited in memory, §3.3) → custody `into`; custody `from`'s `pays` → service mail to the character; refused whole if either side cannot be met (the Guild's buying and selling, aden-remembers.md §4.6) | `Asset.Exchanged` |
 | `relocate(drops)` | `RELOCATED_DROP` source → for each selected item its own destination warehouse custody (a kill's families may go to different towns), exactly the kill's selected items; one operation per kill, whole or nothing, under the kill key, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
-| `recycle(pool, amount, day)` | `SINK_RECYCLE` source → the pool, once per (pool, day), refused above the recorded share | `Asset.SinkRecycled` |
-| `track(objectId)` | no legs: if the live object has no live lifecycle, one is begun (`began_op` null, `began_kind` `TRACKED`), under the object's stack lock like any operation that reads it (§3.3); idempotent; ended by the existing end sites (chronicle.md §4.6, under review) | `Asset.LifecycleTracked` |
-| `raid(manifest, share, rest)` | manifest → `RAID_SHARE` sink (dropped after commit, at most once, as a ground drop, §2.5) and → `ROAD_LOSS` sink | `Asset.ManifestRaided` |
+| `recycle(pool, territory, day, amount)` | `SINK_RECYCLE` source → the pool (a `POOL` custody), Adena only, for a `day` already over; the service reads the teleport-fee Adena recorded as destroyed in `territory` that day from the installed recorded-sink reader and refuses an amount above `recorded × 250 / 1000` (integer division; 250 is `RecyclePermille`'s ceiling, aden-remembers.md §4.6, so the module's own permille can only lower it) and refuses when no reader is installed or nothing is recorded; once per (territory, day), by the operation's own settlement key `recycle`/`<territory>/<day>` | `Asset.SinkRecycled` |
+| `track(item)` | no legs: a non-stackable item with no live lifecycle gets one (`began_op` null); under the item's monitor (§3.3) it must be in a live container or on the ground, not retired, its count not 0; idempotent (an item that has one returns it, nothing written); refused for a stackable item; not for a hot path: a caller runs it off the game thread (chronicle.md §4.6) | `Asset.LifecycleTracked` |
+| `raid(manifest, share, rest, master)` | the manifest's `share` rows → `RAID_SHARE` sink and its `rest` → `ROAD_LOSS` sink, together exactly the manifest's contents; the share's objects are rebuilt from their rows in the transaction (identity, enchant and variables kept, a lifecycle carried on) and, only once the commit is known (`UNCERTAIN` resolved on the calling thread), dropped at the Master's place and instance as taken at the call, never repeated; a `rest` lifecycle ends | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
-| `issue(character, item, code)` | a representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`) source → system mail | `Asset.ParchmentIssued` or `Asset.SealIssued` |
+| `issue(character, itemId, code, reference)` | one representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`, `reference` its contract) source → system mail, with a lifecycle begun; refused unless the operation carries a settlement key (one item per key) and the template is a representation: non-stackable, not tradable, droppable, sellable or depositable, reference price 0 | `Asset.ParchmentIssued` or `Asset.SealIssued` |
 | `close(custody)` | `OPEN` → `CLOSED`, empty only | `Asset.CustodyClosed` |
 | `correct(...)`, `unfreeze(module)` | admin (§4.5) | `Asset.AdminCorrection` |
 | `recover()` | startup, before any login (§7) | `Asset.RecoveryCompleted` |
@@ -507,11 +509,11 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | `Asset.Crafted` | contract, attempt, input legs, output legs (none on failure) |
 | `Asset.LootRouted` | charter, kill (its key's number, §11.33, which is unique across restarts, and the NPC's object id), source legs, receivers and their mails |
 | `Asset.ParchmentIssued`, `Asset.SealIssued` | contract, character, mail, lifecycle id |
-| `Asset.ManifestRaided` | custody, code, reference, legs |
+| `Asset.ManifestRaided` | custody, caravan, share legs, rest legs, the place and instance the share drops at |
 | `Asset.CustodyMoved` | operation, settlement key, from custody, to custody, legs (item id, lifecycle id, qty) |
 | `Asset.Exchanged` | operation, character, custody in, legs given, custody out, legs paid, the service mail |
 | `Asset.DropRelocated` | kill key, source legs, each leg's destination custody |
-| `Asset.SinkRecycled` | pool custody, day, amount, the recorded sink it was bounded by |
+| `Asset.SinkRecycled` | pool custody, territory, day, amount, the recorded sink it was bounded by |
 | `Asset.LifecycleTracked` | lifecycle id, object id, item id, the holder it was in |
 | `Asset.Refunded` | aborted op, receiver and mail, legs (written by the refund transaction) |
 | `Asset.CustodyClosed`, `Asset.CustodyFrozen` | custody, reason |
@@ -532,7 +534,7 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | ASSET-INV05 | every custody that holds a row is allowed to hold by its owner module (`allowsHolding(owner_ref)`) | per operation; full pass at every census |
 | ASSET-INV06 | across a clean restart, the startup census equals the shutdown census and the persisted counters per item id (§2.6) | at startup |
 | ASSET-INV07 | no in-memory `Item` exists for an `ESCROW` row, and no retired `Item` is in any container | per operation; at every census |
-| ASSET-INV08 | at most one live lifecycle per object id; a live lifecycle's object is in exactly one holding | by the unique key; at every census |
+| ASSET-INV08 | at most one live lifecycle per object id, only for a non-stackable item; a live lifecycle's object id, wherever a row or a loaded item holds it, is of the lifecycle's item id; an id is never released while it carries a live lifecycle | by the unique key; by the core patch (§11.35) on every release; at every census (an object in no row and not loaded is not a violation: a decayed ground item, ended at the next start) |
 | ASSET-INV09 | `LazyItemsUpdate = False` (GeneralConfig.java:80, General.ini:193) | at startup; the module refuses to start otherwise |
 | ASSET-INV10 | an object id is never released while a row with that id exists | by the core patch (§11.6) on every destroy; at every census |
 | ASSET-INV11 | per custody and item id: Σ CREDIT − Σ DEBIT of the custody's postings = Σ `count` of its `ESCROW` rows | per operation for the custodies it touches; full pass at every census and at startup, including after a crash |
@@ -596,7 +598,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R04 | An operation whose expected owner version differs MUST abort without moving anything. | AT-ASSET-04 |
 | ASSET-R05 | An operation MUST take only the locks of §4.2, in Mobius's own order; no path, asset or Mobius, may deadlock against it. | AT-ASSET-05 |
 | ASSET-R06 | An operation MUST write a Mobius item's row only under the item's write lock, from memory with the debit applied, so that no Mobius write before or after can lose or repeat it. | AT-ASSET-06 |
-| ASSET-R07 | A non-stackable escrowed item MUST keep its object id, enchant, augmentation, elementals and variables (including changes not yet saved) through fund and release; a part of a stack MUST keep its item id and get a child lifecycle. | AT-ASSET-07 |
+| ASSET-R07 | A non-stackable escrowed item MUST keep its object id, enchant, augmentation, elementals and variables (including changes not yet saved) through fund and release; a part of a stack MUST keep its item id; a non-stackable item MUST keep its lifecycle through every operation, and each of its legs MUST name it. | AT-ASSET-07 |
 | ASSET-R08 | No inventory, warehouse, pet, mail or freight restore MUST load an `ESCROW` row; startup cleanup and every classified SQL site MUST leave it. | AT-ASSET-00, AT-ASSET-08, AT-ASSET-26 |
 | ASSET-R09 | An escrowed item's object id MUST stay reserved while its row exists, at runtime and across restarts. | AT-ASSET-00, AT-ASSET-09 |
 | ASSET-R10 | Every credit to a character MUST be system mail written in the operation's transaction; no asset MUST be credited to a live Mobius container. | AT-ASSET-10 |
@@ -618,6 +620,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | ASSET-R26 | A character's login MUST wait while an operation that took its items is pending. | AT-ASSET-28 |
 | ASSET-R27 | A character MUST NOT be marked for deletion, or deleted at once, while it has unclaimed service mail or a pending mark; neither service mail nor a pending mark MUST be written for a character that is gone or marked; all are serialised on the character's row. | AT-ASSET-29 |
 | ASSET-R28 | An attempt that was refunded MUST NOT run again under its id. | AT-ASSET-02 |
+| ASSET-R29 | `track`, `issue` and `recycle` MUST refuse what §4.3 refuses, and a lifecycle MUST end before its object's id can be handed out again. | AT-ASSET-31 |
 
 | Test | Kind | What it does |
 |---|---|---|
@@ -628,7 +631,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-04 | integration | stale owner version: aborts, refunded, nothing else moved |
 | AT-ASSET-05 | integration | random concurrent operations over several items, interleaved with `Player.store`, autosave, logout (both paths), login, `transferItem` in both directions between the same stacks, trade, private stores, mail, warehouses, castle tax, pet actions, enchanting and items with template skills, under a lock-order witness: no inversion, no deadlock |
 | AT-ASSET-06 | integration, restart | operations racing every Mobius writer of the same items (including one emptying or merging the debited stack, and retail additions to it after the debit), then a JVM kill at each point and a clean logout: rows hold no asset twice, lose none, and later additions are saved |
-| AT-ASSET-07 | integration | an enchanted, augmented, elemental item with variables changed but not yet saved, and a variables write racing the fund, round-trips through escrow and mail; a stack part gets a child lifecycle |
+| AT-ASSET-07 | integration | an enchanted, augmented, elemental item with variables changed but not yet saved, and a variables write racing the fund, round-trips through escrow and mail with one lifecycle, begun by the fund and named by every leg, still live after the claim and ended `DESTROYED` when the item is destroyed, before its id is reused; a stack part gets none |
 | AT-ASSET-08 | restart | escrow and service mail rows survive cleanup and every classified SQL site; no container loads an escrow row |
 | AT-ASSET-09 | integration, restart | the allocator never hands out an escrowed or mailed object id, at runtime and after restart; a failed row delete keeps the id reserved |
 | AT-ASSET-10 | integration | releases, refunds and corrections arrive only as system mail; the live containers are untouched |
@@ -650,6 +653,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-28 | integration | logout and re-login racing a whole-object fund, both outcomes: no second live `Item`, the row restored is the committed one |
 | AT-ASSET-29 | integration | both deletion paths (marking, and immediate with `DeleteDays = 0`): refused with unclaimed service mail or a pending mark, allowed after; a payout, and a debit that aborts and must be refunded, racing a deletion: either the operation and its refund complete first and the deletion is refused, or the deletion wins and the operation aborts with `RECEIVER_GONE` before taking anything |
 | AT-ASSET-30 | sim | capacity benchmark: commit p99 within budget |
+| AT-ASSET-31 | integration, restart | `track` idempotent and refused for a stackable, retired or destroyed item; `issue` refused without a settlement key or for a template that is not a representation, its lifecycle in its fact; `recycle` refused with no reader, nothing recorded, above the share, for a day not over, and a second time for one territory and day; a raid's share keeps its objects and lifecycles on the ground; a destroyed item's lifecycle ends before its id is reused; a live lifecycle whose object a start finds in no row ends `VANISHED` before any id is handed out |
 
 ## 11. Upstream constraints (for N3 design and N4 implementation)
 
@@ -838,9 +842,40 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     recipe has a rare product that applies (its id is the product's, or `CraftMasterwork` is on), else 0: the
     probability retail's draw `Rnd.get(100) < rarity × rate` has. A recipe without a rare product has rare id 0 and
     rarity 0, so retail draws for it and never wins; the maker keeps that draw, part of its order of draws.
+35. **Mobius reuses an object id as soon as it releases it, and keeps no stack's identity.** Since CP-0011 an item's id
+    is released only after its row is deleted (`Item.removeFromDb`), or at once when it has none
+    (`releaseObjectIdWhenRowDeleted`); `IdManager.getNextId` may then give it to the next item created
+    (IdManager.java:158-177, `ItemManager.createItem` :89). Retail keeps a non-stackable item's object through a transfer
+    (ItemContainer.java:356-359), a drop and a pickup, but no stack's: a whole stack's transfer destroys the source
+    (ItemContainer.java:371) and grows the target's stack (:376) or creates one (:380, :283), a merge destroys the incoming
+    object (:229-235), a partial drop creates a new one (Inventory.java:853). Some ids leave existence without a release
+    and are free only at the next start, when the id set is rebuilt from rows: a ground item that decays
+    (ItemsAutoDestroyTaskManager.java:79), and every row deleted by SQL with no object (a character's deletion,
+    GameClient.java:451; the hero, cursed-weapon, circlet and event purges; DatabaseIdManager.java:68's orphan mail rows).
+    Core patch CP-0034: an `Item` carries the id of its live lifecycle (0 for none), set after the commit of the
+    operation or `track` that begins it, and by `restoreFromDb` (beside CP-0021's mark) from the live lifecycles, which
+    the Asset Service loads at startup and keeps in memory with every begin and end (one entry per live lifecycle, never a
+    queue); before an id carrying a lifecycle is released (both CP-0011 places) the lifecycle is ended `DESTROYED` in its
+    own statement, and if that fails the id is kept, so the next start ends it; at startup, after DatabaseIdManager's
+    cleanup and before an id is handed out, every live lifecycle whose object id is in no `items` and no `itemsonground`
+    row is ended `VANISHED` (an id freed without a release, a decayed ground item, a raid share a crash kept from
+    dropping). `truth` has no lifecycle, so the statement changes nothing there and nothing is loaded. A whole-object
+    leg of a non-stackable item without one begins one (`began_op` the operation), and every leg of such an item names it;
+    a non-stackable item a source creates (`route`, `relocate`, `craft`, `issue`, a correction) begins one in the
+    operation; a sink taking a custody row ends its lifecycle `DESTROYED` with `ended_op` (that id stays reserved until
+    the next start, as today).
 
 ## 12. Review record
 
+- Revision 16 (amendment, under review): N4 part 7, the last four operations and the lifecycles they rest on.
+  Implementing them found that no lifecycle was ever written, that §2.2 named a column (`began_kind`) the DDL does not
+  have, and that a stackable's lifecycle cannot outlive its first retail move (§11.35), so its merges and splits would
+  have had to track every Adena stack. Lifecycles are for non-stackable items only (§2.2, INV08, ASSET-R07): V019 drops
+  `parent_lifecycle_id`, `merged_into` and the merge and split end reasons, and adds `VANISHED` and `ended_op`; CP-0034
+  ends a lifecycle before its id can be reused and at the start that frees ids released without one. §4.3 states each
+  of `recycle` (bounded by a recorded-sink reader that N5's telemetry installs; refused until then), `track`, `raid`
+  (the share keeps its objects, dropped once after a known commit) and `issue` (a representation template only, one per
+  settlement key); ASSET-R29 and AT-ASSET-31 follow.
 - Revision 15 (amendment, signed off in round 33): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates

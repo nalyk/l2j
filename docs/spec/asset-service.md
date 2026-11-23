@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 15, under review; revision 14 signed off by Codex in amendment round 25; record in §12)
+- Status: reviewed (revision 15; signed off by Codex in amendment round 33; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -841,7 +841,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
-- Revision 15 (amendment, under review): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
+- Revision 15 (amendment, signed off in round 33): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates
   straight into a custody to the checks that need no holder; §4.2 rule 10 lets an owner module write its own state rows
@@ -888,6 +888,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   With it, a gate found that the clan-hall listing, an `ArrayList` read without a lock, threw
   `ConcurrentModificationException` while a timer closed a sale (CP-0031's timers made that routine): it is a
   copy-on-write list now.
+- Amendment round 33 (Codex), SIGN-OFF: no findings; revision 15 signed off.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

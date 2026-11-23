@@ -445,11 +445,11 @@ the same id, so a retry after an uncertain commit can never apply twice.
 | `exchange(character, gives, into, pays, from)` | one operation: the character's `gives` (items or Adena, debited in memory, §3.3) → custody `into`; custody `from`'s `pays` → service mail to the character; refused whole if either side cannot be met (the Guild's buying and selling, aden-remembers.md §4.6) | `Asset.Exchanged` |
 | `relocate(drops)` | `RELOCATED_DROP` source → for each selected item its own destination warehouse custody (a kill's families may go to different towns), exactly the kill's selected items; one operation per kill, whole or nothing, under the kill key, run on the dropping thread like `route` (aden-remembers.md §4.3.1) | `Asset.DropRelocated` |
 | `recycle(pool, territory, day, amount)` | `SINK_RECYCLE` source → the pool (a `POOL` custody), Adena only, for a `day` already over; the service reads the teleport-fee Adena recorded as destroyed in `territory` that day from the installed recorded-sink reader and refuses an amount above `recorded × 250 / 1000` (integer division; 250 is `RecyclePermille`'s ceiling, aden-remembers.md §4.6, so the module's own permille can only lower it) and refuses when no reader is installed or nothing is recorded; once per (territory, day), by the operation's own settlement key `recycle`/`<territory>/<day>` | `Asset.SinkRecycled` |
-| `track(item)` | no legs: a non-stackable item with no live lifecycle gets one (`began_op` null); under the item's monitor (§3.3) it must be in a live container or on the ground, not retired, its count not 0; idempotent (an item that has one returns it, nothing written); refused for a stackable item; not for a hot path: a caller runs it off the game thread (chronicle.md §4.6) | `Asset.LifecycleTracked` |
-| `raid(manifest, share, rest, master)` | the manifest's `share` rows → `RAID_SHARE` sink and its `rest` → `ROAD_LOSS` sink, together exactly the manifest's contents; the share's objects are rebuilt from their rows in the transaction (identity, enchant and variables kept, a lifecycle carried on) and, only once the commit is known (`UNCERTAIN` resolved on the calling thread), dropped at the Master's place and instance as taken at the call, never repeated; a `rest` lifecycle ends | `Asset.ManifestRaided` |
+| `track(item)` | no legs; on the calling thread only an O(1) capture (02 §6): a non-stackable item with no lifecycle and not retired is marked **reserved** and handed, with its holder and the time, to the lifecycle writer's bounded queue (§11.35); refused, changing nothing, for a stackable, retired or already tracked item or a full queue (the item's next entry tries again). The writer, in queue order, begins the lifecycle (`began_op` null, `began_at` the capture's time) in an operation of its own, whatever the item has met since: a reserved item's id is never released before its begin and end are written | `Asset.LifecycleTracked` |
+| `raid(manifest, share, rest, master)` | the manifest's `share` rows → `RAID_SHARE` sink and its `rest` → `ROAD_LOSS` sink, together exactly the manifest's contents; in the transaction each share row's state (the row, its attributes, elementals and variables) is read into a snapshot and the rows are deleted; no `Item` exists for them meanwhile (INV07). Only once the commit is known (`UNCERTAIN` resolved on the calling thread) is each snapshot rebuilt as a **new, unsaved, uncounted** object of its id (no row: `_existsInDb` false; not marked counted; location `VOID`; its variables, attributes and elementals unsaved, written with its first save; its lifecycle mark carried) and dropped at the Master's place and instance as taken at the call, never repeated. The `RAID_SHARE` leg is the one counter change the share's quantity gets here; the ground and its pickup count it as any drop (§2.6). A rollback builds nothing. `RAID_SHARE` keeps the share's lifecycles live; `ROAD_LOSS` ends the rest's | `Asset.ManifestRaided` |
 | `craft(custody, materials, receiver, product)` | materials: custody → `CRAFT_INPUT` sink; product, if any: `CRAFT_OUTPUT` source → system mail to the receiver, never into a custody; one operation with the craft's outcome row (pact.md §4.3) | `Asset.Crafted` |
 | `route(custody, drops)` | `LOOT_DROP` source → system mail to each reserved or rotated drop's receiver, and → the charter's custody for auctioned drops, which must be custody-eligible (§4.4; pact.md §4.5); one operation per kill | `Asset.LootRouted` |
-| `issue(character, itemId, code, reference)` | one representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`, `reference` its contract) source → system mail, with a lifecycle begun; refused unless the operation carries a settlement key (one item per key) and the template is a representation: non-stackable, not tradable, droppable, sellable or depositable, reference price 0 | `Asset.ParchmentIssued` or `Asset.SealIssued` |
+| `issue(character, itemId, code, reference, recipientKey)` | one representation item (`PACT_PARCHMENT` or `LEDGER_SEAL`, `reference` its contract) source → system mail, with a lifecycle begun; the operation writes the settlement key `issue`/`<code>/<reference>/<recipientKey>` (a parchment's recipient key is the character, pact.md §4.8; a seal's the hunter, black-ledger.md §4.9), so one operation may issue to every party and an item is never issued twice for one key; refused unless the template is a representation: non-stackable, not tradable, droppable, sellable or depositable, reference price 0 | `Asset.ParchmentIssued` or `Asset.SealIssued` |
 | `close(custody)` | `OPEN` → `CLOSED`, empty only | `Asset.CustodyClosed` |
 | `correct(...)`, `unfreeze(module)` | admin (§4.5) | `Asset.AdminCorrection` |
 | `recover()` | startup, before any login (§7) | `Asset.RecoveryCompleted` |
@@ -514,7 +514,8 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | `Asset.Exchanged` | operation, character, custody in, legs given, custody out, legs paid, the service mail |
 | `Asset.DropRelocated` | kill key, source legs, each leg's destination custody |
 | `Asset.SinkRecycled` | pool custody, territory, day, amount, the recorded sink it was bounded by |
-| `Asset.LifecycleTracked` | lifecycle id, object id, item id, the holder it was in |
+| `Asset.LifecycleTracked` | lifecycle id, object id, item id, the holder it was in, the capture's time |
+| `Asset.LifecycleEnded` | lifecycle id, object id, item id, reason (`DESTROYED` or `VANISHED`), the operation that ended it if any; written in the end's own transaction, wherever a lifecycle ends (§11.35) |
 | `Asset.Refunded` | aborted op, receiver and mail, legs (written by the refund transaction) |
 | `Asset.CustodyClosed`, `Asset.CustodyFrozen` | custody, reason |
 | `Asset.AdminCorrection` | admin, violation fact, reason, before, after |
@@ -579,6 +580,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | `UncertainCommitLookupMillis` | 100–60000 | 5000 | 5000 everywhere | AT-ASSET-21 |
 | `MoveToleranceQty` | 0–10^9 | 0 | 0 everywhere | AT-ASSET-12 |
 | `BucketWindowMinutes` | 1–1440 | 60 | 60 / 5 / 5 / 60 / 60 | AT-ASSET-12 |
+| `LifecycleQueueCapacity` | 64–65536 | 4096 | 4096 everywhere | AT-ASSET-31 | integration, restart | `track` refused for a stackable, retired or tracked item and on a full queue, changing nothing; an item tracked and at once destroyed (and one at once escrowed) gets its begin and its end, in that order, its id released only after both; `issue` of two parchments in one operation, refused a second time for one key and for a template that is not a representation, its lifecycle in its fact; `recycle` refused with no reader, nothing recorded, above the share, for a day not over, and a second time for one territory and day; a raid's share keeps its objects and lifecycles on the ground, is saved by its pickup as a new row and counted once (census equals counters), and a rollback or an unresolved commit drops nothing; a destroyed item's lifecycle ends, with its fact, before its id is reused; a saved drop restored by a restart, picked up and destroyed ends its lifecycle before its id is reused; a live lifecycle whose object a start finds in no row ends `VANISHED` with its fact before any id is handed out |
 
 `LazyItemsUpdate = False` is asserted, not configured (INV09).
 
@@ -852,18 +854,28 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     and are free only at the next start, when the id set is rebuilt from rows: a ground item that decays
     (ItemsAutoDestroyTaskManager.java:79), and every row deleted by SQL with no object (a character's deletion,
     GameClient.java:451; the hero, cursed-weapon, circlet and event purges; DatabaseIdManager.java:68's orphan mail rows).
-    Core patch CP-0034: an `Item` carries the id of its live lifecycle (0 for none), set after the commit of the
-    operation or `track` that begins it, and by `restoreFromDb` (beside CP-0021's mark) from the live lifecycles, which
-    the Asset Service loads at startup and keeps in memory with every begin and end (one entry per live lifecycle, never a
-    queue); before an id carrying a lifecycle is released (both CP-0011 places) the lifecycle is ended `DESTROYED` in its
-    own statement, and if that fails the id is kept, so the next start ends it; at startup, after DatabaseIdManager's
-    cleanup and before an id is handed out, every live lifecycle whose object id is in no `items` and no `itemsonground`
-    row is ended `VANISHED` (an id freed without a release, a decayed ground item, a raid share a crash kept from
-    dropping). `truth` has no lifecycle, so the statement changes nothing there and nothing is loaded. A whole-object
-    leg of a non-stackable item without one begins one (`began_op` the operation), and every leg of such an item names it;
-    a non-stackable item a source creates (`route`, `relocate`, `craft`, `issue`, a correction) begins one in the
-    operation; a sink taking a custody row ends its lifecycle `DESTROYED` with `ended_op` (that id stays reserved until
-    the next start, as today).
+    Hot paths reach both item entry and destruction (packet handlers: pickup, trade, crystallize), so neither may do
+    I/O (02 §6). Core patch CP-0034 and the lifecycle writer:
+    - an `Item` carries its lifecycle mark: 0 (none), reserved (`track` captured it), or its live lifecycle's id; set
+      after the commit of the operation that begins it, by the writer once a tracked begin is written, by `restoreFromDb`
+      (beside CP-0021's mark) and by the saved ground's restore (`ItemsOnGroundManager.load`, which builds its items with
+      `new Item(objectId, itemId)`, ItemsOnGroundManager.java:106), both from the live lifecycles, which the Asset Service
+      loads in the startup pass below and keeps in memory with every begin and end (one entry per live lifecycle);
+    - the **lifecycle writer** is one thread draining one bounded queue (`LifecycleQueueCapacity`) in order: a tracked
+      begin, or an end; each is a transaction of its own (an operation with no legs) that writes the row and its fact;
+    - where either CP-0011 place would release the id of an item whose mark is not 0, the id is **not** released: an end
+      (`DESTROYED`) is queued instead, and the writer releases the id only after that end is committed (for a reserved
+      item, after its begin and its end); a full queue, or a failed end, keeps the id unreleased until the next start;
+      an item whose mark is 0 releases as upstream does, one field read added;
+    - the **startup pass** (in `DatabaseIdManager`, after its cleanup queries and before the id set is built, so before
+      any id is handed out) ends `VANISHED`, with its fact, every live lifecycle whose object id is in no `items` and no
+      `itemsonground` row (an id freed without a release, a decayed ground item, a raid share a crash kept from dropping,
+      an end the queue or a crash lost), then loads the live lifecycles; in `truth` there is none, so it writes nothing.
+    A whole-object leg of a non-stackable item without a lifecycle (or reserved: the writer's later begin then finds one
+    and writes nothing) begins one (`began_op` the operation), and every leg of such an item names it; a non-stackable
+    item a source creates (`route`, `relocate`, `craft`, `issue`, a correction) begins one in the operation; a sink taking
+    a custody row ends its lifecycle `DESTROYED` with `ended_op` and its fact in the operation, except `RAID_SHARE`
+    (§4.3); that id stays reserved by no row until the next start, as today.
 
 ## 12. Review record
 
@@ -876,6 +888,15 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   of `recycle` (bounded by a recorded-sink reader that N5's telemetry installs; refused until then), `track`, `raid`
   (the share keeps its objects, dropped once after a known commit) and `issue` (a representation template only, one per
   settlement key); ASSET-R29 and AT-ASSET-31 follow.
+- Amendment round 34 (Codex, spec only), NO SIGN-OFF: the saved ground restores items without `restoreFromDb`, so a
+  restored drop lost its mark and its id could be released live (1); the raid's rebuild contradicted INV07 and the sink
+  rule and named no row or counter state (2); one item per settlement key forbade PACT's signing, which issues every
+  party's parchment in one operation (3); an off-thread `track` could miss an item destroyed or escrowed right after its
+  entry (4); nothing told Chronicle a lifecycle ended (5). Fixed (still revision 16): the saved ground's restore sets the
+  mark; the raid snapshots and deletes the share's rows and rebuilds new, unsaved, uncounted objects after a known
+  commit; `issue` writes a key per recipient; `track` is an O(1) capture into the lifecycle writer's bounded queue, and a
+  tracked id is released only by the writer, after its begin and end are written (which also takes the end's I/O off the
+  hot path, 02 §6); `Asset.LifecycleEnded` is written wherever a lifecycle ends, the startup pass included.
 - Revision 15 (amendment, signed off in round 33): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates

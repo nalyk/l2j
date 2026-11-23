@@ -248,7 +248,8 @@ letter is published after the tactical delay from submission, signed with its au
 ### 4.6 Item sagas
 
 - **Eligible**: non-stackable equipment of grade S and above (`entity/item/ItemTemplate.java:390`, `getCrystalType`) and
-  the items in `data/lc/saga_items.csv` (legendary drops). Common items never become sagas.
+  the non-stackable items in `data/lc/saga_items.csv` (legendary drops; a stackable entry refuses the start, since a stack
+  keeps no object through retail's moves and so has no lifecycle, asset-service.md §11.35). Common items never become sagas.
 - **Begin**: when an eligible item without a saga **enters a player's inventory or warehouse** (the container seam below),
   Chronicle calls the Asset Service's `track` (an amendment, §11) to begin a lifecycle for that object id, because Mobius
   reuses object ids; the beginning is the process of that entry (crafted, looted, bought, rewarded, exchanged).
@@ -446,6 +447,8 @@ was missed, idempotent).
 
 ## 12. Review record
 
+- With revision 7, from asset-service.md revision 16 (its review round 41): §4.6's saga list admits non-stackable
+  items only, validated at the start, since `track` refuses a stackable (asset-service.md §4.3, §11.35).
 - Round 5 (Codex), NO SIGN-OFF: 28 earlier findings fixed; open: private letters could not be replayed (no fact carries a
   submission; findings 16, 27, 28, 31, 33); §5's receipt wording exceeded the schema (issues and name references have no
   application id; 34); no reversed-order test of the delay trigger (35); the claim of no owner-change event was too broad

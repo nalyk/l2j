@@ -9,8 +9,7 @@ reused, and the four operations still unbuilt: `track`, `issue`, `raid`, `recycl
 at CP-0011's call in `ItemManager.destroyItem`), so no id a lifecycle names is ever reused; each destruction and each
 `track` capture is offered, without a lock but the queue's, to one bounded queue drained in order by the lifecycle
 writer (`LifecycleWriter`, new, `livingchronicle.asset`), which keeps the run's destroyed ids, checks a capture in
-memory with no row lock held, and decides in a transaction that locks the item's and the lifecycle's rows in the global
-order. A startup pass in `DatabaseIdManager` ends `VANISHED` every live lifecycle whose object is in no row, writes the
+memory with no row lock held, and decides in a transaction that locks the object's lifecycle rows. A startup pass in `DatabaseIdManager` ends `VANISHED` every live lifecycle whose object is in no row, writes the
 run's `lc_asset_run` row and reserves the live lifecycles' ids. `AssetTx` names a lifecycle on every non-stackable
 whole-object leg, begins one where an item has none or is created, ends one where a sink takes a custody row, and gains
 `issue`, `raid` and `recycle`. `RecordedSinks` and a permille supplier bound `recycle`; N5 and N11e install them.
@@ -32,21 +31,20 @@ client patch adds them; tests pick an existing template that passes the represen
   unchanged.
 - Lifecycles only for non-stackable items; a stackable leg names none; a stackable id is released as upstream.
 - No hot path does I/O or takes a lock but the queue's: a destruction and a capture are field checks and one offer.
-- The writer never holds a row lock while taking an item's monitor; rows in the global order (`items`, then the object's
-  `lc_item_lifecycle` rows).
+- The writer never holds a row lock while taking an item's monitor; it locks only the object's `lc_item_lifecycle` rows.
 - A raid's share drops only after a known commit, once, never by recovery.
 - `recycle` refuses with no reader or supplier, nothing recorded, permille 0 or above 250, above the active share, for a
   day not over, twice per (territory, day).
 
 ## Review Focus
 
-1. A capture queued, then the item destroyed before the writer reaches it, its row not yet deleted: begun and then
+1. A capture queued, then the item destroyed before the writer reaches it, its row deleted or not: begun and then
    ended `DESTROYED`, never left live. Task 2.
 2. A capture checked live, then `fund` and a corrective sink before the writer's transaction: nothing written. Task 2.
 3. A retail transfer writing the item's row under its monitor while the writer works on it: no deadlock (the writer
    holds no row lock when it takes the monitor). Task 2.
 4. A used-id scan failing at a start: no id a live lifecycle names is handed out. Task 2.
-5. A raid whose commit is `UNCERTAIN` and resolved as not committed: nothing dropped, the manifest whole. Task 5.
+5. A raid whose commit is `UNCERTAIN` and resolved as not committed: nothing dropped, the manifest whole. Task 4.
 
 ---
 
@@ -75,8 +73,9 @@ to reserve; throws on failure); `LifecycleWriter.isRunning()`.
 
 - [ ] Tests, each red first: a destroyed non-stackable keeps its id (a stackable's is released); a tracked item
   destroyed ends `DESTROYED` with its fact; a capture after its object's destruction writes nothing; a capture before it
-  is begun and then ended; a capture checked live then funded and sunk writes nothing; a fund racing the writer binds;
-  a new unsaved item, a dropped item, an unloaded item are begun; the startup pass ends `VANISHED` (previous run) and
+  is begun and then ended, its row deleted or not; a capture checked live then funded and sunk writes nothing; a fund
+  racing the writer binds; a new unsaved item, a dropped item, an unloaded item are begun; an SQL-purged one is begun and
+  ended `VANISHED` at the next start; the startup pass ends `VANISHED` (previous run) and
   reserves live ids even with the used-id scan failing; `truth` releases every id and the pass does nothing.
 - [ ] Implement; revert proofs; ledger CP-0034; commit.
 
@@ -96,9 +95,10 @@ custody rows, after-commit marks); Test `FundWholeObjectTest` (AT-ASSET-07) or a
 
 **Files:** Modify `AssetTx.java`; Test `RaidTest.java` (AT-ASSET-27).
 
-- [ ] Tests: share and rest exactly the contents, else refused; 100 coal in two rows and two non-stackables at 300‰: one
-  new object of 30 coal and the chosen non-stackable (id, enchant, lifecycle kept) at the Master's place after commit, 70
-  coal and the other sunk (its lifecycle ended), all four rows deleted; pickup saves a new row, census equals counters;
+- [ ] Tests: share and rest exactly the contents, else refused; at 300‰, 100 coal in two rows, four swords of one item id
+  and one of another: one new object of 30 coal and the lowest-id sword of the four (id, enchant, lifecycle kept) at the
+  Master's place after commit, 70 coal, three swords and the single one (rounded to 0) sunk, lifecycles ended, every row
+  deleted; pickup saves a new row, census equals counters;
   `UNCERTAIN` resolved as not committed drops nothing; a crash after commit before the drop: nothing dropped, the
   lifecycle `VANISHED` at the next start.
 - [ ] Implement; commit.

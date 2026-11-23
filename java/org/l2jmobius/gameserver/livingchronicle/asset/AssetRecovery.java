@@ -130,7 +130,7 @@ public final class AssetRecovery
 					}
 				}
 			}
-			violations.addAll(lifecycles(connection, stager));
+			violations.addAll(lifecycles(connection, stager, AssetRecovery::loadedItemId, true));
 			connection.setAutoCommit(false);
 			try
 			{
@@ -148,13 +148,25 @@ public final class AssetRecovery
 
 	/**
 	 * INV08 at the census (docs/spec/asset-service.md §6, §11.35): a live lifecycle names a non-stackable item, and the
-	 * object a row holds by its id is of the lifecycle's item id. An object in no row is not a violation (a decayed ground
-	 * item, ended at the next start). Each violation is recorded and freezes the Asset Service (no custody owns a
-	 * lifecycle).
+	 * object a row or a loaded item holds by its id is of the lifecycle's item id. An object in no row and not loaded is
+	 * not a violation (a decayed ground item, ended at the next start). With {@code record}, each violation is recorded
+	 * and freezes the Asset Service (no custody owns a lifecycle); without, the caller only learns them (an unfreeze).
 	 */
-	static List<String> lifecycles(Connection connection, OutboxStager stager) throws SQLException
+	public static List<String> lifecycles(Connection connection, OutboxStager stager, java.util.function.IntFunction<Integer> loaded, boolean record) throws SQLException
 	{
 		final List<String> found = new ArrayList<>();
+		try (PreparedStatement read = connection.prepareStatement("SELECT lifecycle_id, object_id, item_id FROM lc_item_lifecycle WHERE ended_at IS NULL");
+			ResultSet result = read.executeQuery())
+		{
+			while (result.next())
+			{
+				final Integer held = loaded.apply(result.getInt(2));
+				if ((held != null) && (held != result.getInt(3)))
+				{
+					found.add("INV08: live lifecycle " + result.getLong(1) + " of item " + result.getInt(3) + " names loaded object " + result.getInt(2) + ", which is item " + held);
+				}
+			}
+		}
 		try (PreparedStatement read = connection.prepareStatement("SELECT l.lifecycle_id, l.object_id, l.item_id, i.item_id FROM lc_item_lifecycle l JOIN items i ON i.object_id = l.object_id WHERE l.ended_at IS NULL AND i.item_id <> l.item_id UNION ALL SELECT l.lifecycle_id, l.object_id, l.item_id, g.item_id FROM lc_item_lifecycle l JOIN itemsonground g ON g.object_id = l.object_id WHERE l.ended_at IS NULL AND g.item_id <> l.item_id");
 			ResultSet result = read.executeQuery())
 		{
@@ -175,12 +187,21 @@ public final class AssetRecovery
 				}
 			}
 		}
-		for (String violation : found)
+		if (record)
 		{
-			Violations.record(connection, stager, 0, "INV08", violation);
-			connection.setAutoCommit(true);
+			for (String violation : found)
+			{
+				Violations.record(connection, stager, 0, "INV08", violation);
+				connection.setAutoCommit(true);
+			}
 		}
 		return found;
+	}
+
+	/** The item id of the loaded object the world knows by an object id, or null (INV08's "a loaded item holds it"). */
+	public static Integer loadedItemId(int objectId)
+	{
+		return org.l2jmobius.gameserver.entity.World.findObject(objectId) instanceof org.l2jmobius.gameserver.entity.item.instance.Item item ? item.getId() : null;
 	}
 
 	private static Map<String, Object> fields(int custodies, EconomyMonitor.Kind census, int marks, int claims, int adopted, int violations)

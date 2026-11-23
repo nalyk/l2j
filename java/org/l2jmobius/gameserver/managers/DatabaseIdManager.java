@@ -189,8 +189,6 @@ public class DatabaseIdManager
 				LOGGER.warning("DatabaseIdManager: Could not execute update query: " + query + " - " + e);
 			}
 		}
-		
-		LivingChronicle.lifecyclesAtStartup(); // CP-0034: before any id is handed out; a failure stops the start
 	}
 	
 	/**
@@ -241,6 +239,7 @@ public class DatabaseIdManager
 	 */
 	public static Set<Integer> getUsedIds()
 	{
+		LivingChronicle.lifecyclesAtStartup(); // CP-0034: after the cleanup (whether or not it ran), before the id set; a failure stops the start
 		final Set<Integer> usedIds = ConcurrentHashMap.newKeySet();
 		
 		final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());

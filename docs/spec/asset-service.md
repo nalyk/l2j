@@ -905,8 +905,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     - a **ground item that leaves the world without a destruction** (decay, ItemsAutoDestroyTaskManager.java:79; an
       instance's ground items when it closes) reaches no release, as upstream, which keeps its id until the next start;
       its lifecycle ends there, `VANISHED`;
-    - the **startup pass** (in `DatabaseIdManager`, after its cleanup queries and before the id set is built, so before
-      any id is handed out) ends `VANISHED`, with its fact, every live lifecycle whose object id is in no `items` and no
+    - the **startup pass** (in `DatabaseIdManager`, at the start of the used-id scan: after its cleanup, whether or not
+      `DatabaseCleanUp` runs it, and before the id set is built, so before any id is handed out) ends `VANISHED`, with its fact, every live lifecycle whose object id is in no `items` and no
       `itemsonground` row (a destroyed item whose end was lost, a decayed ground item, a raid share a crash kept from
       dropping, a character's rows deleted by SQL), its `ended_run` the previous run, the last its object was known in
       (null before the first), since the new run may hand that id to a new object; then writes this run's
@@ -931,6 +931,14 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
+- Amendment round 43 (Codex, the code), NO SIGN-OFF: the startup pass sat behind the optional `DatabaseCleanUp` (1);
+  INV08 ran at startup only and ignored loaded items (2); an unfreeze did not recheck it (3); the raid took rows and
+  lifecycles in the caller's order (4) and dropped a stack share named twice as two objects (5); `recycle`'s bound
+  overflowed (6); a full queue's losses were silent (7); tests the plan ticked were missing (8). Fixed: the pass runs at
+  the used-id scan's start; INV08 checks rows and loaded items at the startup and the shutdown census and before an
+  `ASSET` unfreeze; the raid locks each row then its lifecycle in object-id order first, `wholes` orders objects by id,
+  a stack share is one object per item id; the bound is computed without overflow; the writer logs its losses; tests for
+  every clause, a lost and a repeated commit, a retry, a restart, the counters, the overflow, loaded items, the freeze.
 - With revision 16, from its implementation (N4 part 7): the raid's rebuild is core patch CP-0035 (§11.36); a rebuilt
   share's variables stay in memory, since Mobius writes variables per change, never with an item's save, and deletes a
   dropped item's variable rows (Item.java:1763): the spec's "written with its first save" held for attributes and

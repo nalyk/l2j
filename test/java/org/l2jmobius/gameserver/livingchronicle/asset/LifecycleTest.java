@@ -312,18 +312,21 @@ class LifecycleTest
 	}
 
 	@Test
-	void theStartupCleanupRunsThePassWhileLivingChronicleRunsAndNothingInTruth() throws Exception
+	void theUsedIdScanRunsThePassWhileLivingChronicleRunsWhateverTheCleanupAndNothingInTruth() throws Exception
 	{
-		DatabaseIdManager.cleanDatabase();
+		DatabaseIdManager.getUsedIds();
 		assertFalse(LifecycleWriter.isRunning(), "truth: no writer, every id released as upstream");
 		System.setProperty(LivingChronicle.PROFILE, "dev");
+		final boolean cleanup = IdManagerConfig.DATABASE_CLEAN_UP;
+		IdManagerConfig.DATABASE_CLEAN_UP = false; // the optional cleanup off: the pass must not depend on it
 		try
 		{
-			DatabaseIdManager.cleanDatabase();
+			DatabaseIdManager.getUsedIds();
 			assertTrue(LifecycleWriter.isRunning(), "the pass ran before the id set, and this run's writer started");
 		}
 		finally
 		{
+			IdManagerConfig.DATABASE_CLEAN_UP = cleanup;
 			System.clearProperty(LivingChronicle.PROFILE);
 		}
 	}

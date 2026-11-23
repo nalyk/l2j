@@ -20,10 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.function.Predicate;
@@ -38,9 +36,11 @@ import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.actor.enums.player.PlayerClass;
 import org.l2jmobius.gameserver.entity.item.EtcItem;
 import org.l2jmobius.gameserver.entity.item.ItemTemplate;
+import org.l2jmobius.gameserver.entity.item.holders.ExtractableProduct;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.managers.MailManager;
+import org.l2jmobius.gameserver.util.StatSet;
 import org.l2jmobius.testing.TestPlayers;
 import org.l2jmobius.testing.TestServer;
 
@@ -92,12 +92,6 @@ class IssueAndRecycleTest
 		return null;
 	}
 
-	private static boolean passesBut(ItemTemplate template, String clause)
-	{
-		final String refusal = Eligibility.representationRefusal(template);
-		return clause.equals(refusal);
-	}
-
 	private static ItemTemplate representation()
 	{
 		return first(t -> Eligibility.representationRefusal(t) == null);
@@ -136,36 +130,66 @@ class IssueAndRecycleTest
 		assertEquals(AssetAbort.Reason.ALREADY_SETTLED, again.reason(), "never twice for one key");
 	}
 
+	/** A synthetic template: every flag of a representation, then one key changed, so each clause is tested alone. */
+	private static EtcItem template(String key, Object value)
+	{
+		final StatSet set = new StatSet();
+		set.set("item_id", 99_901);
+		set.set("name", "Synthetic Parchment");
+		set.set("is_stackable", false);
+		set.set("is_tradable", false);
+		set.set("is_dropable", false);
+		set.set("is_sellable", false);
+		set.set("is_depositable", false);
+		set.set("price", 0);
+		if (key != null)
+		{
+			set.set(key, value);
+		}
+		return new EtcItem(set);
+	}
+
 	@Test
 	void aTemplateThatIsNotARepresentationIsRefusedClauseByClause() throws Exception
 	{
+		assertNull(Eligibility.representationRefusal(template(null, null)), "every flag of a representation");
+		assertNull(Eligibility.representationRefusal(template("handler", "Bypass")), "Bypass alone opens a page");
+		assertEquals("stackable", Eligibility.representationRefusal(template("is_stackable", true)));
+		assertEquals("tradable, droppable, sellable or depositable", Eligibility.representationRefusal(template("is_tradable", true)));
+		assertEquals("tradable, droppable, sellable or depositable", Eligibility.representationRefusal(template("is_dropable", true)));
+		assertEquals("tradable, droppable, sellable or depositable", Eligibility.representationRefusal(template("is_sellable", true)));
+		assertEquals("tradable, droppable, sellable or depositable", Eligibility.representationRefusal(template("is_depositable", true)));
+		assertEquals("crystallizable", Eligibility.representationRefusal(crystallizable()));
+		assertEquals("priced", Eligibility.representationRefusal(template("price", 1)));
+		assertEquals("with item skills", Eligibility.representationRefusal(template("item_skill", "3080-1")));
+		final EtcItem extractable = template(null, null);
+		extractable.addCapsuledItem(new ExtractableProduct(57, 1, 1, 100, 0, 0));
+		assertEquals("extractable", Eligibility.representationRefusal(extractable));
+		assertEquals("a handler other than Bypass", Eligibility.representationRefusal(template("handler", "ExtractableItems")));
+		// and issue refuses through it, nothing written
 		final Player player = inWorld();
-		assertEquals("stackable", Eligibility.representationRefusal(ItemData.getInstance().getTemplate(ADENA)));
-		assertEquals("tradable, droppable, sellable or depositable", Eligibility.representationRefusal(ItemData.getInstance().getTemplate(SHORT_SWORD)));
-		final Map<String, Predicate<ItemTemplate>> clauses = new LinkedHashMap<>();
-		clauses.put("crystallizable", t -> passesBut(t, "crystallizable"));
-		clauses.put("priced", t -> passesBut(t, "priced"));
-		clauses.put("with item skills", t -> passesBut(t, "with item skills"));
-		clauses.put("extractable", t -> passesBut(t, "extractable"));
-		clauses.put("a handler other than Bypass", t -> passesBut(t, "a handler other than Bypass"));
-		int found = 0;
-		for (Map.Entry<String, Predicate<ItemTemplate>> clause : clauses.entrySet())
+		for (int itemId : new int[] { ADENA, SHORT_SWORD })
 		{
-			final ItemTemplate template = first(clause.getValue());
-			if (template == null)
-			{
-				continue; // the datapack has no template failing this clause alone; the clause's own order is checked below
-			}
-			found++;
-			final AssetAbort refused = assertThrows(AssetAbort.class, () -> issue(player.getObjectId(), template.getId(), AssetTx.Representation.LEDGER_SEAL, 9_000 + template.getId(), "hunter"), clause.getKey());
-			assertEquals(AssetAbort.Reason.INELIGIBLE, refused.reason(), clause.getKey());
+			final AssetAbort refused = assertThrows(AssetAbort.class, () -> issue(player.getObjectId(), itemId, AssetTx.Representation.LEDGER_SEAL, 9_000 + itemId, "hunter"));
+			assertEquals(AssetAbort.Reason.INELIGIBLE, refused.reason());
+			assertEquals(0, _f.number("SELECT COUNT(*) FROM lc_ledger_posting WHERE code = 'LEDGER_SEAL' AND account_id = " + (9_000 + itemId)));
 		}
-		assertTrue(found > 0, "the datapack exercises at least one refusal beyond stackable and tradable");
-		final ItemTemplate handled = first(t -> (t instanceof EtcItem etc) && "Bypass".equals(etc.getHandlerName()) && (Eligibility.representationRefusal(t) == null));
-		if (handled != null)
-		{
-			assertNull(Eligibility.representationRefusal(handled), "Bypass alone is allowed: it opens a page");
-		}
+	}
+
+	private static EtcItem crystallizable()
+	{
+		final StatSet set = new StatSet();
+		set.set("item_id", 99_902);
+		set.set("name", "Synthetic Crystallizable");
+		set.set("is_stackable", false);
+		set.set("is_tradable", false);
+		set.set("is_dropable", false);
+		set.set("is_sellable", false);
+		set.set("is_depositable", false);
+		set.set("price", 0);
+		set.set("crystal_type", "D");
+		set.set("crystal_count", 10);
+		return new EtcItem(set);
 	}
 
 	@Test
@@ -196,6 +220,20 @@ class IssueAndRecycleTest
 		assertEquals(1, _f.facts("SinkRecycled", pool));
 		assertEquals(AssetAbort.Reason.ALREADY_SETTLED, refusal(pool, 5, yesterday, 1), "once per territory and day");
 		assertEquals(AssetAbort.Reason.ALREADY_SETTLED, refusal(other, 5, yesterday, 1), "by another pool of the territory too");
+	}
+
+	@Test
+	void aHugeRecordedSinkBoundsWithoutOverflow() throws Exception
+	{
+		final int pool = _f.service.open(_f.op("POOL"), Custody.Kind.POOL, "TEST", 33);
+		final LocalDate yesterday = GameClock.localDateTime().toLocalDate().minusDays(1);
+		RecycleBound.install((territory, day) -> OptionalLong.of(100_000_000_000_000_000L));
+		RecycleBound.installPermille(() -> 100);
+		try (AssetTx tx = _f.service.begin(_f.op("RECYCLE"), "TEST", "RECYCLE", pool))
+		{
+			tx.recycle(pool, 8, yesterday, 1);
+			assertEquals(Outcome.COMMITTED, tx.commit(), "a bound of 10^16 is representable: no overflow on the way to it");
+		}
 	}
 
 	private static AssetAbort.Reason refusal(int pool, int territory, LocalDate day, long amount)

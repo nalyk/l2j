@@ -169,6 +169,11 @@ public final class AssetService
 							throw new IllegalStateException(module + " stays frozen: " + result.getLong(1) + " ESCROW rows under no custody (INV03)");
 						}
 					}
+					final java.util.List<String> lifecycles = AssetRecovery.lifecycles(connection, null, AssetRecovery::loadedItemId, false);
+					if (!lifecycles.isEmpty())
+					{
+						throw new IllegalStateException(module + " stays frozen: " + lifecycles);
+					}
 				}
 				ModuleState.unfreeze(connection, module);
 				if (!facts.isEmpty())

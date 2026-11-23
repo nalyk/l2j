@@ -188,6 +188,14 @@ public final class LivingChronicle
 		{
 			warehouses.add(clan.getWarehouse());
 		}
+		try (Connection connection = DatabaseFactory.getConnection())
+		{
+			AssetRecovery.lifecycles(connection, stager(), AssetRecovery::loadedItemId, true); // INV08 at every census (asset-service.md §6)
+		}
+		catch (SQLException e)
+		{
+			LOGGER.severe("Living Chronicle: INV08 could not be checked at the shutdown census (" + e.getMessage() + ")");
+		}
 		try
 		{
 			if (!EconomyMonitor.atBoundary(warehouses))

@@ -377,8 +377,22 @@ public final class LifecycleWriter
 			}
 			finally
 			{
+				reportLost();
 				_handled.incrementAndGet();
 			}
+		}
+	}
+
+	private long _reportedLost; // writer thread only
+
+	/** Logs, on the writer's thread, the offers lost since the last report (a full queue, a failed transaction, §11.35). */
+	private void reportLost()
+	{
+		final long lost = _lost.get();
+		if (lost != _reportedLost)
+		{
+			LOGGER.warning("Living Chronicle: " + (lost - _reportedLost) + " lifecycle offers lost (" + lost + " in this run); the next start repairs them");
+			_reportedLost = lost;
 		}
 	}
 

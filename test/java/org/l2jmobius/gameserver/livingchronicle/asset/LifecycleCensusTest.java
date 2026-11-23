@@ -17,12 +17,15 @@
 package org.l2jmobius.gameserver.livingchronicle.asset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -69,10 +72,38 @@ class LifecycleCensusTest
 
 	private static List<String> census() throws Exception
 	{
+		return census(id -> null);
+	}
+
+	private static List<String> census(IntFunction<Integer> loaded) throws Exception
+	{
 		try (Connection connection = _server.database().connect())
 		{
-			return AssetRecovery.lifecycles(connection, new OutboxStager(Clock.systemUTC(), () -> 0L, () -> 1));
+			return AssetRecovery.lifecycles(connection, new OutboxStager(Clock.systemUTC(), () -> 0L, () -> 1), loaded, true);
 		}
+	}
+
+	@Test
+	void aLifecycleWhoseObjectIdALoadedItemHoldsAsAnotherItemIsAViolation() throws Exception
+	{
+		final int object = IdManager.getInstance().getNextId();
+		lifecycle(object, SHORT_SWORD);
+		final List<String> violations = census(id -> id == object ? ADENA : null);
+		assertEquals(1, violations.size(), violations.toString());
+		assertTrue(violations.get(0).contains("loaded"), violations.get(0));
+	}
+
+	@Test
+	void theFreezeStaysUntilTheLifecycleIsRepaired() throws Exception
+	{
+		lifecycle(IdManager.getInstance().getNextId(), ADENA);
+		assertEquals(1, census().size());
+		assertTrue(_f.frozen("ASSET"));
+		assertThrows(IllegalStateException.class, () -> _f.service.unfreeze("ASSET", 1, "test: not repaired"), "INV08 still fails");
+		assertTrue(_f.frozen("ASSET"));
+		_f.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'VANISHED' WHERE ended_at IS NULL AND object_id IN (" + _inserted + ")");
+		_f.service.unfreeze("ASSET", 1, "test: repaired");
+		assertFalse(_f.frozen("ASSET"));
 	}
 
 	@Test

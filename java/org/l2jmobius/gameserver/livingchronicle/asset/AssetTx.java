@@ -314,30 +314,43 @@ public final class AssetTx implements AutoCloseable
 			drops.clear(); // a retried attempt starts again
 			final Custody custody = execution.open(manifest);
 			execution.notFrozen(custody);
-			execution.exactlyTheContents(manifest, shared, lost);
+			execution.exactlyTheContents(manifest, shared, lost); // locks every row and its lifecycle, in object-id order
 			final long caravan = custody.ownerRef();
 			final List<Map<String, Object>> shareLegs = new ArrayList<>();
+			final Map<Integer, Long> stackShare = new TreeMap<>(); // one new object per stackable item id, whatever entries named it
+			final List<Asset> wholeShare = new ArrayList<>();
 			for (Asset asset : shared)
 			{
 				if (asset.objectId() != null)
 				{
-					final RaidShare.Snapshot snapshot = execution.snapshot(asset.objectId());
-					final Long lifecycle = execution.lifecycleOf(asset.objectId(), asset.itemId());
-					execution.take(manifest, asset, true, false); // RAID_SHARE keeps its lifecycle: the object falls on the ground
-					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
-					execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.RAID_SHARE.name(), asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
-					shareLegs.add(legOf(asset, lifecycle));
-					drops.add(snapshot);
+					wholeShare.add(asset);
 				}
 				else
 				{
-					execution.take(manifest, asset, true);
-					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
-					execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.RAID_SHARE.name(), asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
-					shareLegs.add(legOf(asset));
-					drops.add(RaidShare.Snapshot.amount(_service.ids().next(), asset.itemId(), asset.qty()));
+					stackShare.merge(asset.itemId(), asset.qty(), Long::sum);
 				}
+			}
+			wholeShare.sort(Comparator.comparingInt(Asset::objectId));
+			for (Asset asset : wholeShare)
+			{
+				final RaidShare.Snapshot snapshot = execution.snapshot(asset.objectId());
+				final Long lifecycle = execution.lifecycleOf(asset.objectId(), asset.itemId());
+				execution.take(manifest, asset, true, false); // RAID_SHARE keeps its lifecycle: the object falls on the ground
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.RAID_SHARE.name(), asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
 				execution.existence(asset.itemId(), -asset.qty());
+				shareLegs.add(legOf(asset, lifecycle));
+				drops.add(snapshot);
+			}
+			for (Map.Entry<Integer, Long> stack : stackShare.entrySet())
+			{
+				final Asset asset = new Asset(stack.getKey(), stack.getValue(), null);
+				execution.take(manifest, asset, true);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.RAID_SHARE.name(), asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), -asset.qty());
+				shareLegs.add(legOf(asset));
+				drops.add(RaidShare.Snapshot.amount(_service.ids().next(), asset.itemId(), asset.qty()));
 			}
 			final List<Map<String, Object>> restLegs = new ArrayList<>();
 			for (Asset asset : execution.wholes(manifest, lost))
@@ -448,7 +461,8 @@ public final class AssetTx implements AutoCloseable
 			{
 				throw new AssetAbort(AssetAbort.Reason.ABOVE_SHARE, "RecyclePermille " + permille + " is outside 1-" + RecycleBound.CEILING_PERMILLE);
 			}
-			final long share = Math.multiplyExact(recorded.getAsLong(), (long) permille) / 1000;
+			final long sunk = recorded.getAsLong();
+			final long share = ((sunk / 1000) * permille) + (((sunk % 1000) * permille) / 1000); // floor(sunk × permille / 1000), never overflowing
 			if (amount > share)
 			{
 				throw new AssetAbort(AssetAbort.Reason.ABOVE_SHARE, amount + " is above the share " + share + " (" + permille + " per mille of " + recorded.getAsLong() + ")");
@@ -2489,7 +2503,7 @@ public final class AssetTx implements AutoCloseable
 		{
 			final Map<Integer, Long> stacks = new TreeMap<>();
 			final Map<Integer, Integer> objects = new TreeMap<>();
-			try (PreparedStatement rows = _connection.prepareStatement("SELECT object_id, item_id, count FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ?"))
+			try (PreparedStatement rows = _connection.prepareStatement("SELECT object_id, item_id, count FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? ORDER BY object_id"))
 			{
 				rows.setInt(1, custody);
 				try (ResultSet result = rows.executeQuery())
@@ -2534,6 +2548,33 @@ public final class AssetTx implements AutoCloseable
 			if (!stacks.equals(claimedStacks) || !objects.equals(claimedObjects))
 			{
 				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "share and rest are not exactly custody " + custody + "'s contents");
+			}
+			// the global row-lock order (fact-journal.md §3.1): each row, then its object's lifecycle rows, by object id
+			final List<Integer> ids = new ArrayList<>();
+			try (PreparedStatement rows = _connection.prepareStatement("SELECT object_id, item_id FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? ORDER BY object_id"))
+			{
+				rows.setInt(1, custody);
+				try (ResultSet result = rows.executeQuery())
+				{
+					while (result.next())
+					{
+						ids.add(result.getInt(1));
+					}
+				}
+			}
+			for (int objectId : ids)
+			{
+				try (PreparedStatement lock = _connection.prepareStatement("SELECT item_id FROM items WHERE object_id = ? FOR UPDATE"))
+				{
+					lock.setInt(1, objectId);
+					try (ResultSet result = lock.executeQuery())
+					{
+						if (result.next())
+						{
+							lifecycleOf(objectId, result.getInt(1));
+						}
+					}
+				}
 			}
 		}
 
@@ -2654,6 +2695,8 @@ public final class AssetTx implements AutoCloseable
 					wholes.add(new Asset(asset.itemId(), 1, objectId));
 				}
 			}
+			// whole objects in object-id order, as their rows and lifecycles are locked (fact-journal.md §3.1), then amounts
+			wholes.sort(Comparator.comparing((Asset a) -> a.objectId() == null).thenComparing(a -> a.objectId() == null ? 0 : a.objectId()).thenComparingInt(Asset::itemId));
 			return wholes;
 		}
 

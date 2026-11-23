@@ -654,8 +654,8 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   after count 0 and the removal from the world (its only caller, CP-0011), asks `LifecycleWriter.keepsDestroyed` first:
   while Living Chronicle runs, a non-stackable's id is kept until the next start (neither released nor left for
   `removeFromDb`) and its destruction offered to the lifecycle writer's bounded queue, with no lookup and no lock but the
-  queue's. `DatabaseIdManager.cleanDatabase` ends with `LivingChronicle.lifecyclesAtStartup` (in `truth` it returns at
-  once): the startup pass ends `VANISHED`, in the previous run, every live lifecycle whose object is in no row, writes the
+  queue's. `DatabaseIdManager.getUsedIds` begins with `LivingChronicle.lifecyclesAtStartup` (after the cleanup,
+  whether or not `DatabaseCleanUp` let it run, and before the id set is built; in `truth` it returns at once): the startup pass ends `VANISHED`, in the previous run, every live lifecycle whose object is in no row, writes the
   run's `lc_asset_run` row and starts the run's writer; a failure stops the start. `getUsedIds` adds the live
   lifecycles' ids the pass found, so none is handed out whatever the row scan found.
 - Invariant: while Living Chronicle runs, no id a live lifecycle names is ever handed out; a stackable's id, and every
@@ -664,8 +664,8 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   `aTrackedItemThatIsDestroyedEndsDestroyedWithItsFact`, `aCaptureOfferedBeforeItsObjectsDestructionIsBegunThenEndedRowOrNoRow`,
   `aCaptureIsRefusedForAStackableARetiredOrADestroyedItemAndOnAFullQueue` (red with the `Item` hook off: the id
   released, no end, five tests); `theUsedIdsHoldEveryIdALiveLifecycleNamesWhateverTheRowScanFound` and
-  `theStartupCleanupRunsThePassWhileLivingChronicleRunsAndNothingInTruth` (red with the two `DatabaseIdManager` lines
-  off); with the `truth` gate off the shared `truth` boot stops ("the server must not start"); `IdReleaseTest`
+  `theUsedIdScanRunsThePassWhileLivingChronicleRunsWhateverTheCleanupAndNothingInTruth` (red with the two
+  `DatabaseIdManager` lines off; Codex round 43 found the pass at the cleanup's end skipped with `DatabaseCleanUp` off); with the `truth` gate off the shared `truth` boot stops ("the server must not start"); `IdReleaseTest`
   (CP-0011's `truth` behaviour) and `PausedWorldTest` unchanged.
 
 ## CP-0035 A raided share's object rebuilt from its row

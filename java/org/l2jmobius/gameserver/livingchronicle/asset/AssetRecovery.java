@@ -130,6 +130,7 @@ public final class AssetRecovery
 					}
 				}
 			}
+			violations.addAll(lifecycles(connection, stager));
 			connection.setAutoCommit(false);
 			try
 			{
@@ -143,6 +144,43 @@ public final class AssetRecovery
 			}
 		}
 		return new Report(custodies.custodiesChecked(), List.copyOf(violations), marks, claims, adopted);
+	}
+
+	/**
+	 * INV08 at the census (docs/spec/asset-service.md §6, §11.35): a live lifecycle names a non-stackable item, and the
+	 * object a row holds by its id is of the lifecycle's item id. An object in no row is not a violation (a decayed ground
+	 * item, ended at the next start). Each violation is recorded and freezes the Asset Service (no custody owns a
+	 * lifecycle).
+	 */
+	static List<String> lifecycles(Connection connection, OutboxStager stager) throws SQLException
+	{
+		final List<String> found = new ArrayList<>();
+		try (PreparedStatement read = connection.prepareStatement("SELECT l.lifecycle_id, l.object_id, l.item_id, i.item_id FROM lc_item_lifecycle l JOIN items i ON i.object_id = l.object_id WHERE l.ended_at IS NULL AND i.item_id <> l.item_id UNION ALL SELECT l.lifecycle_id, l.object_id, l.item_id, g.item_id FROM lc_item_lifecycle l JOIN itemsonground g ON g.object_id = l.object_id WHERE l.ended_at IS NULL AND g.item_id <> l.item_id");
+			ResultSet result = read.executeQuery())
+		{
+			while (result.next())
+			{
+				found.add("INV08: live lifecycle " + result.getLong(1) + " of item " + result.getInt(3) + " names object " + result.getInt(2) + ", which is item " + result.getInt(4));
+			}
+		}
+		try (PreparedStatement read = connection.prepareStatement("SELECT item_id, COUNT(*) FROM lc_item_lifecycle WHERE ended_at IS NULL GROUP BY item_id");
+			ResultSet result = read.executeQuery())
+		{
+			while (result.next())
+			{
+				final org.l2jmobius.gameserver.entity.item.ItemTemplate template = org.l2jmobius.gameserver.data.xml.ItemData.getInstance().getTemplate(result.getInt(1));
+				if ((template != null) && template.isStackable())
+				{
+					found.add("INV08: " + result.getLong(2) + " live lifecycles of stackable item " + result.getInt(1));
+				}
+			}
+		}
+		for (String violation : found)
+		{
+			Violations.record(connection, stager, 0, "INV08", violation);
+			connection.setAutoCommit(true);
+		}
+		return found;
 	}
 
 	private static Map<String, Object> fields(int custodies, EconomyMonitor.Kind census, int marks, int claims, int adopted, int violations)

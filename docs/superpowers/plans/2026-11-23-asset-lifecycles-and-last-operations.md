@@ -127,8 +127,10 @@ Test `RecycleTest.java`.
 
 ### Task 7: INV08 at the census, ledger, traceability, gate
 
-- [ ] Track wired: `AssetTx`/`AssetService.track` is the capture (Task 2); Fund/release/route/craft legs name lifecycles
+- [x] Track wired: `AssetTx`/`AssetService.track` is the capture (Task 2); Fund/release/route/craft legs name lifecycles
   (Task 3).
-- [ ] Census: a live lifecycle whose object id is held (row or loaded) by another item id is a violation; a stackable's
+- [x] Census: a live lifecycle whose object id is held (row or loaded) by another item id is a violation; a stackable's
   live lifecycle is a violation. Test red first.
-- [ ] `CORE_PATCHES.md`, sites table, traceability, AT names; full gate; Codex review rounds to sign-off.
+- [x] `CORE_PATCHES.md`, sites table, traceability, AT names; full gate; Codex review rounds to sign-off.
+  Done: `AssetRecovery.lifecycles` (INV08 at the startup census), `LifecycleCensusTest` (3); ledger CP-0034, CP-0035;
+  site row `item_rebuilt`; traceability regenerated. Codex reviews the code next.

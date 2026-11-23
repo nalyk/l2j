@@ -89,7 +89,8 @@ lc_asset_pending(char_id INT, op_id BINARY(16), since TIMESTAMP(3), PRIMARY KEY(
 lc_settlement_key(scope VARCHAR(16), skey VARCHAR(96), op_id BINARY(16) → lc_asset_op, PRIMARY KEY(scope, skey))
 lc_item_lifecycle(lifecycle_id BIGINT PK auto, object_id INT, item_id INT, began_op BINARY(16) NULL,
                   began_at TIMESTAMP(3), ended_at TIMESTAMP(3) NULL, end_reason {DESTROYED|VANISHED} NULL,
-                  ended_op BINARY(16) NULL, UNIQUE(object_id while ended_at IS NULL))   -- V019 (§11.35)
+                  ended_op BINARY(16) NULL, ended_run INT NULL, UNIQUE(object_id while ended_at IS NULL))   -- V019 (§11.35)
+lc_asset_run(run_id INT PK auto, started_at TIMESTAMP(3))   -- V019: one row per start while Living Chronicle runs (§11.35)
 lc_economy_bucket(window_start TIMESTAMP, item_id INT, site VARCHAR(48), class {SOURCE|SINK|MOVE_OUT|MOVE_IN},
                   qty BIGINT UNSIGNED, events INT UNSIGNED, PRIMARY KEY(window_start, item_id, site, class))
 lc_economy_census(census_id BIGINT, taken_at TIMESTAMP(3), kind {SHUTDOWN|STARTUP|REBASE}, item_id INT, holding VARCHAR(16),
@@ -655,7 +656,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-28 | integration | logout and re-login racing a whole-object fund, both outcomes: no second live `Item`, the row restored is the committed one |
 | AT-ASSET-29 | integration | both deletion paths (marking, and immediate with `DeleteDays = 0`): refused with unclaimed service mail or a pending mark, allowed after; a payout, and a debit that aborts and must be refunded, racing a deletion: either the operation and its refund complete first and the deletion is refused, or the deletion wins and the operation aborts with `RECEIVER_GONE` before taking anything |
 | AT-ASSET-30 | sim | capacity benchmark: commit p99 within budget |
-| AT-ASSET-31 | integration, restart | `track` refused, changing nothing, for a stackable, retired or destroyed (count 0 or `VOID`) item and on a full queue; `track` of an item `craft` gave a lifecycle binds to it, a second `track` binds again; a capture of a new item not yet saved begins its lifecycle; a capture whose object was destroyed (its row not yet deleted), unloaded and replaced by a login, or funded and taken by a corrective sink before the writer reached it writes nothing, or, if the destruction comes between the writer's commit and its second look or after it, ends what it began `DESTROYED` once; a non-stackable item destroyed (tracked or not, before or after the writer's begin) keeps its id unreleased and, if tracked, its lifecycle ends `DESTROYED` with its fact; a stackable item's id is released as upstream; with the writer stopped and its queue full, a destroyed tracked item's lifecycle is ended `VANISHED` with its fact by the next start before any id is handed out, and the kept ids are free after it; with the used-id scan failing at a start, no id a live lifecycle names is handed out, and a failing startup pass stops the start; `issue` of two parchments in one operation, refused a second time for one key and for a template that is not a representation (one test per clause: stackable, tradable, droppable, sellable, depositable, priced, crystallizable, extractable, with skills, a handler other than `Bypass`), its lifecycle in its fact; `recycle` refused with no reader or no supplier, nothing recorded, a permille of 0 or above 250, above the active share (100 by default: 101 of 1000 refused), for a day not over, and a second time for one territory and day, by the same pool or another; a raid's share keeps its objects and lifecycles on the ground, is saved by its pickup as a new row and counted once (census equals counters), and a rollback or an unresolved commit drops nothing; in `truth` every id is released as upstream and the startup pass writes nothing |
+| AT-ASSET-31 | integration, restart | `track` refused, changing nothing, for a stackable, retired or destroyed (count 0 or `VOID`) item and on a full queue; `track` of an item `craft` gave a lifecycle binds to it, a second `track` binds again; a capture of a new item not yet saved, of a dropped item on the ground, and of an item unloaded by a logout (offline, or reloaded by a login) begins its lifecycle; a capture whose object was destroyed before it was offered (its row not yet deleted) or before the writer's check writes nothing; one destroyed after the check has what it began ended `DESTROYED` by the end that follows; an object funded and taken by a corrective sink between the writer's check and its transaction writes nothing, and a `fund` racing the transaction binds to what it began or is bound to; no deadlock with a retail write of the item under its monitor; a non-stackable item destroyed (tracked or not, before or after the writer's begin) keeps its id unreleased and, if tracked, its lifecycle ends `DESTROYED` with its fact; a stackable item's id is released as upstream; a tracked ground item that decays keeps its lifecycle live until the next start ends it `VANISHED`; with the writer stopped and its queue full, a destroyed tracked item's lifecycle is ended `VANISHED` with its fact by the next start before any id is handed out, and the kept ids are free after it; with the used-id scan failing at a start, no id a live lifecycle names is handed out, and a failing startup pass stops the start; `issue` of two parchments in one operation, refused a second time for one key and for a template that is not a representation (one test per clause: stackable, tradable, droppable, sellable, depositable, priced, crystallizable, extractable, with skills, a handler other than `Bypass`), its lifecycle in its fact; `recycle` refused with no reader or no supplier, nothing recorded, a permille of 0 or above 250, above the active share (100 by default: 101 of 1000 refused), for a day not over, and a second time for one territory and day, by the same pool or another; a raid's share keeps its objects and lifecycles on the ground, is saved by its pickup as a new row and counted once (census equals counters), and a rollback or an unresolved commit drops nothing; in `truth` every id is released as upstream and the startup pass writes nothing |
 
 ## 11. Upstream constraints (for N3 design and N4 implementation)
 
@@ -864,40 +865,53 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     `FirstObjectId`-`LastObjectId` (268 435 456-2 147 483 647 by default, IdManagerConfig.java:46-47). Core patch
     CP-0034 and the lifecycle writer:
     - **release**: where either CP-0011 place would release the id of a non-stackable item while Living Chronicle runs,
-      the id is kept; the item's destruction is offered to the lifecycle writer's queue (an end) if the service's index
-      of live lifecycles (object id → lifecycle id, a concurrent map read without a lock, kept after every commit that
-      begins or ends one and loaded by the startup pass) names the id. A stackable item's id, and every id in `truth`
-      (where the switch is off and the index empty), is released exactly as upstream;
+      the id is kept and the destruction is offered to the lifecycle writer's queue (an end), whether or not the item
+      has a lifecycle: no lookup, no lock but the queue's. A stackable item's id, and every id in `truth` (where the
+      switch is off), is released exactly as upstream;
     - **capture** (`track`, §4.3): checks on the item's own fields and one offer to the queue;
-    - the **lifecycle writer** is one thread draining one bounded queue (`LifecycleQueueCapacity`) in order, each item a
-      transaction of its own (an operation with no legs). A capture: off the hot path, the writer takes the captured
-      item's monitor (retail's destruction sets count 0 and `VOID` and removes the object from the world under it,
-      ItemManager.java:168-176), does no I/O while holding it, and finds the item **live** if its count is above 0, its
-      location not `VOID`, it is not retired, and it is still the object the world knows by its id
-      (`World.findObject`: a logout unloads and a destruction removes it); a row is never the test, since a new item
-      lives unsaved in its container (ItemContainer.java:261-316) and a destroyed one's row outlives it for a moment.
-      Not live: it writes nothing. Live: in a transaction it locks the object's live lifecycle row if any
-      (`SELECT … FOR UPDATE`) and binds to it, else inserts one (an operation's begin of the same object meets the unique
-      key, so the writer binds instead of doubling); writes `Asset.LifecycleTracked`; commits; puts the lifecycle in the
-      index; then takes the monitor again and, if the item was destroyed meanwhile (count 0 or `VOID`; an unload is not a
-      destruction), ends the lifecycle itself as an end does below. A destruction before that second look is seen by it; one after it finds the lifecycle in the index (put
-      before the look, which the monitor orders before the destruction's own read of the index) and offers an end; both
-      may end it, and the second finds it ended and writes nothing. An item unloaded meanwhile (a logout) still exists:
-      its lifecycle stays. An end: it ends the live lifecycle of the id `DESTROYED` with `Asset.LifecycleEnded` (the id
-      cannot have been reused: it was kept), commit, the index. Each retries and resolves an uncertain commit as an
-      operation does (§3.2); one that fails or is left uncertain is logged and counted and changes nothing more: a lost begin leaves the item untracked until its
-      next entry, a lost end leaves the lifecycle live until the next start ends it `VANISHED`. A full queue loses the
+    - the **lifecycle writer** is one thread draining that one bounded queue (`LifecycleQueueCapacity`) in the order of
+      the offers, so a destruction offered after a capture is handled after it, and one offered before it first. It keeps,
+      for the run, the set of object ids whose destruction it has handled (a bit per id from `FirstObjectId`; such an id
+      is never reused in the run). Each item is a transaction of its own (an operation with no legs) and takes its row
+      locks in the global order (fact-journal.md §3.1, where a lifecycle's rows follow its `items` row); the writer never
+      holds a row lock while it takes an item's monitor, so it never waits on a Mobius thread that holds a monitor and
+      writes that item's row.
+      An **end** of an id: it ends that id's live lifecycle, if any, `DESTROYED` with `Asset.LifecycleEnded`, commits, and
+      marks the id destroyed.
+      A **capture**: first, holding no row lock, a check in memory: an id marked destroyed is gone; otherwise the
+      object the world knows by the id (`World.findObject`, which may be a later object of the same item after a logout
+      and a login) is taken under its monitor, which retail's destruction holds while it sets count 0
+      (ItemManager.java:168-177), and is **live** if its count is above 0 and it is not retired (a drop's `VOID` and an
+      unload are not destructions); with no object loaded, the item is **offline**. Gone, or loaded and not live: it
+      writes nothing. Then, in the transaction, it locks the object's `items` row (`SELECT … FOR UPDATE`, if it has one;
+      a new item lives unsaved in its container, ItemContainer.java:261-316) and then its lifecycle rows (the latest by
+      id, and the live one): a live lifecycle is bound (one an operation began); a latest lifecycle ended in this run
+      (`ended_run`) means an operation's sink took the object since the check, and it writes nothing; otherwise it begins
+      one, an offline item only if its `items` row holds the captured item id outside `ESCROW` (character deletion and
+      the other SQL purges delete it). It writes `Asset.LifecycleTracked` when it binds or begins, and commits. A
+      destruction after the check is offered after the capture, so the end that follows ends what the capture began; an
+      operation's begin or sink after the check meets the row locks, so it binds to what the capture began, or the
+      capture sees what it did. An item retired and escrowed right after its entry loses that entry's capture (the
+      escrow begins its lifecycle; its next entry tries again).
+      Each retries and resolves an uncertain commit as an operation does (§3.2); one that fails or is left uncertain is
+      logged and counted and changes nothing more: a lost capture leaves the item untracked until its next entry; a lost
+      end leaves the lifecycle live and the id unmarked until the next start ends it `VANISHED`. A full queue loses the
       same way. Nothing waits on the writer;
-    - an **operation's** begins and ends are rows written in its transaction: a sink taking a custody row ends the live
-      lifecycle of that row's object id, read in the transaction; the index follows its commit, and a lag there only
-      delays or loses an end's offer, which the next start then makes `VANISHED`;
+    - an **operation's** begins and ends are rows written in its transaction, in the same order: a begin locks the
+      object's lifecycle rows and binds to a live one; a sink taking a custody row ends the live lifecycle of that row's
+      object id `DESTROYED`, with `ended_op`, `ended_run` and its fact;
+    - a **ground item that leaves the world without a destruction** (decay, ItemsAutoDestroyTaskManager.java:79; an
+      instance's ground items when it closes) reaches no release, as upstream, which keeps its id until the next start;
+      its lifecycle ends there, `VANISHED`;
     - the **startup pass** (in `DatabaseIdManager`, after its cleanup queries and before the id set is built, so before
       any id is handed out) ends `VANISHED`, with its fact, every live lifecycle whose object id is in no `items` and no
       `itemsonground` row (a destroyed item whose end was lost, a decayed ground item, a raid share a crash kept from
-      dropping, a character's rows deleted by SQL), then loads the index, and the id set marks every id the index names
-      as used, apart from the row scan: upstream's scan logs a failed query and returns what it has
-      (DatabaseIdManager.java:263-293), so a live lifecycle's id is reserved even then. While Living Chronicle runs, a
-      failure of the pass or of that reservation stops the start; in `truth` there is none, so it writes nothing.
+      dropping, a character's rows deleted by SQL), its `ended_run` the previous run, the last its object was known in
+      (null before the first), since the new run may hand that id to a new object; then writes this run's
+      `lc_asset_run` row, and hands the id
+      set every id a live lifecycle names, marked used apart from the row scan: upstream's scan logs a failed query and
+      returns what it has (DatabaseIdManager.java:263-293), so a live lifecycle's id is reserved even then. While Living
+      Chronicle runs, a failure of the pass or of that reservation stops the start; in `truth` it does nothing.
     A whole-object leg of a non-stackable item without a lifecycle begins one (a capture the writer reaches later binds to
     it) (`began_op` the operation), and every leg of such an item names it; a non-stackable
     item a source creates (`route`, `relocate`, `craft`, `issue`, a correction) begins one in the operation; a sink taking
@@ -953,6 +967,15 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   and accepted a destroyed item whose row was not yet deleted (3). Fixed (still revision 16): the startup pass reserves
   the index's ids itself and its failure stops the start; the writer tests the item in memory under its monitor (off
   the hot path, no I/O held) and looks again after its commit, ending what a destruction overtook.
+- Amendment round 39 (Codex, spec only), NO SIGN-OFF: the writer took a drop's `VOID` for a destruction and would
+  end a live item's lifecycle (1); between its check in memory and its transaction a `fund` and a corrective sink could
+  take the object, and it began a second lifecycle (2). Fixed (still revision 16): only count 0 is a destruction; every
+  non-stackable destruction is offered to the writer, in one queue with the captures, and the writer remembers the ids
+  it saw destroyed this run, so order of offers decides against retail; inside its transaction it locks the item's and
+  the lifecycle's rows (global order, fact-journal.md §3.1 amended) and treats a lifecycle ended in this run
+  (`ended_run`, `lc_asset_run`) as the object gone, so operations are ordered by rows; the writer never holds a row
+  lock while taking a monitor (a JVM monitor and a row lock cannot form a deadlock the database would see); the index
+  and the second look are gone; a decayed ground item's lifecycle ends at the next start, as its id does.
 - Revision 15 (amendment, signed off in round 33): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates

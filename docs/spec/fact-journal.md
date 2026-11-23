@@ -162,7 +162,7 @@ a lookup that cannot be made leaves the batch unresolved and the writer retrying
 
 **Row-lock order.** Every Living Chronicle transaction takes its database row locks in one global order, each category
 by key: `characters` rows; `castle` rows; custody rows; `items` rows and their attribute, elemental and variable rows (by
-object id); `messages` and `lc_mail_delivery` rows; `lc_asset_pending` rows; owner-module rows (by table, then id);
+object id), each object's `lc_item_lifecycle` rows right after its `items` row (asset-service.md §11.35); `messages` and `lc_mail_delivery` rows; `lc_asset_pending` rows; owner-module rows (by table, then id);
 `lc_settlement_key` and `lc_asset_op` rows; stream heads; then the inserts into `lc_fact_outbox`, which lock nothing
 another transaction waits for. Every transaction sets a lock-wait timeout of `LockWaitMillis`. Lock waits arise only from contention on one row (two
 operations on one character, custody or stream at once), which the Asset Service's commit budget (asset-service.md §8,
@@ -507,6 +507,9 @@ projectors that applied it; `lc journal gaps`; `lc journal ack <gap> <reason>`; 
 
 ## 12. Review record
 
+- With revision 10, from asset-service.md revision 16 (its review rounds 34-39): §3.1's row-lock order places each
+  object's `lc_item_lifecycle` rows right after its `items` row, the order the lifecycle writer and every Asset
+  operation take them in (asset-service.md §11.35).
 - Revision 10 (amendment, under review): §2's telemetry `actor_class` is the actor's origin as actor-identity.md §3 defines it
   (HUMAN, SYNTHETIC_CITIZEN, NPC_FAKE, NPC, SYSTEM), so economy accounting per class is possible (Citizens review round 1 (citizens.md revision 2)).
 - Amendment round 3 (Codex), **SIGN-OFF WITH FIXES**: the bucket retention needed its test oracle, added to AT-FACT-11.

@@ -104,7 +104,7 @@ public final class LifecycleWriter
 		{
 			return false;
 		}
-		if (!writer._queue.offer(new Offer(item.getObjectId(), item.getId(), null, 0, null, 0, null, 0)))
+		if (!writer.offer(new Offer(item.getObjectId(), item.getId(), null, 0, null, 0, null, 0)))
 		{
 			writer._lost.incrementAndGet(); // the id is still kept; the next start ends its lifecycle VANISHED
 		}
@@ -122,7 +122,7 @@ public final class LifecycleWriter
 		{
 			return false;
 		}
-		return writer._queue.offer(captureOf(item, process, reference));
+		return writer.offer(captureOf(item, process, reference));
 	}
 
 	/** The capture's offer, as {@link #capture} builds it. */
@@ -134,7 +134,12 @@ public final class LifecycleWriter
 	/** Tests: an offer as a hot path would make it. */
 	boolean offer(Offer offer)
 	{
-		return _queue.offer(offer);
+		if (!_queue.offer(offer))
+		{
+			return false;
+		}
+		_offered.incrementAndGet();
+		return true;
 	}
 
 	/** @return this writer's run */
@@ -147,6 +152,13 @@ public final class LifecycleWriter
 	public static Set<Integer> reservedAtStartup()
 	{
 		return _reserved;
+	}
+
+	/** @return the run an operation's ends belong to ({@code ended_run}), or null with no writer (truth, tests) */
+	static Integer currentRun()
+	{
+		final LifecycleWriter writer = _running;
+		return writer == null ? null : writer._run;
 	}
 
 	/** @return whether a writer runs (Living Chronicle runs, not truth) */
@@ -325,13 +337,14 @@ public final class LifecycleWriter
 		return _lost.get();
 	}
 
-	/** Tests: whether the queue is empty and nothing is being handled. */
+	/** Tests: whether every offer accepted so far has been handled. */
 	boolean idle()
 	{
-		return _queue.isEmpty() && (_handling == 0);
+		return _handled.get() == _offered.get();
 	}
 
-	private volatile int _handling;
+	private final AtomicLong _offered = new AtomicLong();
+	private final AtomicLong _handled = new AtomicLong();
 
 	private void drain()
 	{
@@ -346,7 +359,6 @@ public final class LifecycleWriter
 			{
 				return;
 			}
-			_handling = 1;
 			try
 			{
 				if (offer.isEnd())
@@ -365,7 +377,7 @@ public final class LifecycleWriter
 			}
 			finally
 			{
-				_handling = 0;
+				_handled.incrementAndGet();
 			}
 		}
 	}

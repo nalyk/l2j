@@ -175,13 +175,14 @@ public final class AssetTx implements AutoCloseable
 			execution.notFrozen(target);
 			execution.allowsHolding(target);
 			final List<Map<String, Object>> legs = new ArrayList<>();
-			for (Asset asset : moved)
+			for (Asset asset : execution.wholes(from, moved))
 			{
 				execution.take(from, asset, false);
 				execution.give(to, from, asset);
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, from, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, to, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
-				legs.add(legOf(asset));
+				final Long lifecycle = execution.lifecycle(asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, from, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, to, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+				legs.add(legOf(asset, lifecycle));
 			}
 			execution.facts().add(AssetFact.of("CustodyMoved", from, "operation", _op.hex(), "from", from, "to", to, "legs", legs));
 		}, from, to);
@@ -341,7 +342,7 @@ public final class AssetTx implements AutoCloseable
 			final Connection connection = execution.connection();
 			final int message = insertServiceMail(connection, receiverCharId, subject, content);
 			final List<Map<String, Object>> legs = new ArrayList<>();
-			for (Asset asset : released)
+			for (Asset asset : execution.wholes(custody, released))
 			{
 				execution.take(custody, asset, false);
 				if (asset.objectId() != null)
@@ -365,9 +366,10 @@ public final class AssetTx implements AutoCloseable
 						attach.executeUpdate();
 					}
 				}
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
-				legs.add(legOf(asset));
+				final Long lifecycle = execution.lifecycle(asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+				legs.add(legOf(asset, lifecycle));
 			}
 			execution.mailed(message, receiverCharId, reason);
 			execution.facts().add(AssetFact.of("EscrowReleased", custody, "custody", custody, "receiver", receiverCharId, "mail", message, "reason", reason.name(), "legs", legs));
@@ -437,13 +439,14 @@ public final class AssetTx implements AutoCloseable
 				final int message = insertServiceMail(connection, entry.getKey(), subject, content);
 				for (RoutedDrop drop : entry.getValue())
 				{
-					for (Asset asset : units(drop.itemId(), drop.count()))
+					for (Asset amount : units(drop.itemId(), drop.count()))
 					{
-						attachCreated(connection, message, asset);
-						execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
-						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+						final Asset asset = attachCreated(connection, message, amount);
+						final Long lifecycle = execution.lifecycle(asset);
+						execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
 						execution.existence(asset.itemId(), asset.qty());
-						legs.add(legOf(asset));
+						legs.add(legOf(asset, lifecycle));
 					}
 				}
 				execution.mailed(message, entry.getKey(), MailReason.PAYOUT);
@@ -454,12 +457,14 @@ public final class AssetTx implements AutoCloseable
 			}
 			for (RoutedDrop drop : auctioned)
 			{
-				final Asset asset = new Asset(drop.itemId(), drop.count(), null);
-				execution.give(custody, custody, asset);
-				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
-				execution.existence(asset.itemId(), asset.qty());
-				legs.add(legOf(asset));
+				for (Asset asset : execution.create(custody, new Asset(drop.itemId(), drop.count(), null)))
+				{
+					final Long lifecycle = execution.lifecycle(asset);
+					execution.legs().add(new Leg(Leg.AccountKind.SOURCE, charter, code, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+					execution.existence(asset.itemId(), asset.qty());
+					legs.add(legOf(asset, lifecycle));
+				}
 			}
 			execution.touched(custody);
 			execution.facts().add(AssetFact.of("LootRouted", custody, "operation", _op.hex(), "charter", charter, "kill", kill, "npc", npcObjectId, "custody", custody, "legs", legs, "receivers", receivers));
@@ -504,12 +509,14 @@ public final class AssetTx implements AutoCloseable
 			final Map<Integer, List<Map<String, Object>>> legs = new TreeMap<>();
 			for (Relocation drop : relocated)
 			{
-				final Asset asset = new Asset(drop.itemId(), drop.count(), null);
-				execution.give(drop.custody(), drop.custody(), asset);
-				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, kill, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, drop.custody(), null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
-				execution.existence(asset.itemId(), asset.qty());
-				legs.computeIfAbsent(drop.custody(), custody -> new ArrayList<>()).add(legOf(asset));
+				for (Asset asset : execution.create(drop.custody(), new Asset(drop.itemId(), drop.count(), null)))
+				{
+					final Long lifecycle = execution.lifecycle(asset);
+					execution.legs().add(new Leg(Leg.AccountKind.SOURCE, kill, code, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, drop.custody(), null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+					execution.existence(asset.itemId(), asset.qty());
+					legs.computeIfAbsent(drop.custody(), custody -> new ArrayList<>()).add(legOf(asset, lifecycle));
+				}
 			}
 			for (Map.Entry<Integer, List<Map<String, Object>>> entry : legs.entrySet())
 			{
@@ -557,13 +564,18 @@ public final class AssetTx implements AutoCloseable
 		};
 	}
 
-	/** Writes a service mail's attachment row for a created quantity (no object of it exists yet), with its lifetime. */
-	private void attachCreated(Connection connection, int message, Asset asset) throws SQLException
+	/**
+	 * Writes a service mail's attachment row for a created quantity (no object of it exists yet), with its lifetime.
+	 * @return the created asset: for a non-stackable unit, the whole object (its id), so its lifecycle can begin
+	 */
+	private Asset attachCreated(Connection connection, int message, Asset asset) throws SQLException
 	{
 		final long[] lifetime = lifetime(asset.itemId());
+		final int objectId = _service.ids().next();
+		final ItemTemplate template = ItemData.getInstance().getTemplate(asset.itemId());
 		try (PreparedStatement attach = connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, ?, 0, 'MAIL', ?, NULL, 0, 0, ?, ?)"))
 		{
-			attach.setInt(1, _service.ids().next());
+			attach.setInt(1, objectId);
 			attach.setInt(2, asset.itemId());
 			attach.setLong(3, asset.qty());
 			attach.setInt(4, message);
@@ -571,6 +583,7 @@ public final class AssetTx implements AutoCloseable
 			attach.setLong(6, lifetime[1]);
 			attach.executeUpdate();
 		}
+		return ((template != null) && !template.isStackable()) ? new Asset(asset.itemId(), asset.qty(), objectId) : asset;
 	}
 
 	/**
@@ -603,13 +616,14 @@ public final class AssetTx implements AutoCloseable
 				throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + receiverCharId + " is gone or marked for deletion");
 			}
 			final List<Map<String, Object>> inputs = new ArrayList<>();
-			for (Asset asset : used)
+			for (Asset asset : execution.wholes(custody, used))
 			{
 				execution.take(custody, asset, true);
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.SINK, contract, SinkCode.CRAFT_INPUT.name(), asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				final Long lifecycle = execution.lifecycle(asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, contract, SinkCode.CRAFT_INPUT.name(), asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
 				execution.existence(asset.itemId(), -asset.qty());
-				inputs.add(legOf(asset));
+				inputs.add(legOf(asset, lifecycle));
 			}
 			final List<Map<String, Object>> outputs = new ArrayList<>();
 			Integer mail = null;
@@ -617,13 +631,14 @@ public final class AssetTx implements AutoCloseable
 			{
 				final Connection connection = execution.connection();
 				mail = insertServiceMail(connection, receiverCharId, subject, content);
-				for (Asset asset : units(product.getId(), product.getCount()))
+				for (Asset amount : units(product.getId(), product.getCount()))
 				{
-					attachCreated(connection, mail, asset);
-					execution.legs().add(new Leg(Leg.AccountKind.SOURCE, contract, "CRAFT_OUTPUT", asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
-					execution.legs().add(new Leg(Leg.AccountKind.MAIL, mail, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+					final Asset asset = attachCreated(connection, mail, amount);
+					final Long lifecycle = execution.lifecycle(asset);
+					execution.legs().add(new Leg(Leg.AccountKind.SOURCE, contract, "CRAFT_OUTPUT", asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.MAIL, mail, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
 					execution.existence(asset.itemId(), asset.qty());
-					outputs.add(legOf(asset));
+					outputs.add(legOf(asset, lifecycle));
 				}
 				execution.mailed(mail, receiverCharId, MailReason.PAYOUT);
 			}
@@ -710,9 +725,10 @@ public final class AssetTx implements AutoCloseable
 				if (taken.whole())
 				{
 					ItemRows.write(execution.connection(), item, -1, "ESCROW", custody, taken.variables());
-					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
-					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
-					legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+					final Long lifecycle = execution.lifecycleOf(item.getObjectId(), item.getId());
+					execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), lifecycle, item.getCount(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, item.getId(), item.getObjectId(), lifecycle, item.getCount(), Leg.Direction.CREDIT));
+					legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId()), lifecycle));
 				}
 				else
 				{
@@ -1178,9 +1194,10 @@ public final class AssetTx implements AutoCloseable
 					if (t.whole())
 					{
 						ItemRows.write(connection, item, ServiceMail.SENDER, "MAIL", message, t.variables());
-						execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.DEBIT));
-						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), item.getObjectId(), null, item.getCount(), Leg.Direction.CREDIT));
-						legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId())));
+						final Long lifecycle = execution.lifecycleOf(item.getObjectId(), item.getId());
+						execution.legs().add(new Leg(holder.account(), holder.id(), null, item.getId(), item.getObjectId(), lifecycle, item.getCount(), Leg.Direction.DEBIT));
+						execution.legs().add(new Leg(Leg.AccountKind.MAIL, message, null, item.getId(), item.getObjectId(), lifecycle, item.getCount(), Leg.Direction.CREDIT));
+						legs.add(legOf(new Asset(item.getId(), item.getCount(), item.getObjectId()), lifecycle));
 					}
 					else
 					{
@@ -1264,13 +1281,14 @@ public final class AssetTx implements AutoCloseable
 		{
 			execution.notFrozen(execution.open(custody));
 			final List<Map<String, Object>> legs = new ArrayList<>();
-			for (Asset asset : sunk)
+			for (Asset asset : execution.wholes(custody, sunk))
 			{
 				execution.take(custody, asset, true);
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.SINK, reference, code.name(), asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				final Long lifecycle = execution.lifecycle(asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, reference, code.name(), asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
 				execution.existence(asset.itemId(), -asset.qty());
-				legs.add(legOf(asset));
+				legs.add(legOf(asset, lifecycle));
 			}
 			execution.facts().add(AssetFact.of("FeeCharged", custody, "holder", "CUSTODY", "custody", custody, "code", code.name(), "reference", reference, "legs", legs));
 		}, custody);
@@ -1332,18 +1350,22 @@ public final class AssetTx implements AutoCloseable
 					}
 				}
 			}
-			for (Asset asset : added)
+			for (Asset amount : added)
 			{
-				execution.give(custody, custody, asset);
-				execution.legs().add(new Leg(Leg.AccountKind.SOURCE, violationFactId, code, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
-				execution.existence(asset.itemId(), asset.qty());
+				for (Asset asset : execution.create(custody, amount))
+				{
+					final Long lifecycle = execution.lifecycle(asset);
+					execution.legs().add(new Leg(Leg.AccountKind.SOURCE, violationFactId, code, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+					execution.existence(asset.itemId(), asset.qty());
+				}
 			}
-			for (Asset asset : removed)
+			for (Asset asset : execution.wholes(custody, removed))
 			{
 				execution.take(custody, asset, true);
-				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.DEBIT));
-				execution.legs().add(new Leg(Leg.AccountKind.SINK, violationFactId, code, asset.itemId(), asset.objectId(), null, asset.qty(), Leg.Direction.CREDIT));
+				final Long lifecycle = execution.lifecycle(asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, custody, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, violationFactId, code, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
 				execution.existence(asset.itemId(), -asset.qty());
 			}
 			execution.touched(custody);
@@ -1364,6 +1386,14 @@ public final class AssetTx implements AutoCloseable
 		leg.put("item", asset.itemId());
 		leg.put("object", asset.objectId());
 		leg.put("qty", asset.qty());
+		return leg;
+	}
+
+	/** A fact's leg naming the object's lifecycle (§5: item id, object id, lifecycle id, qty). */
+	static Map<String, Object> legOf(Asset asset, Long lifecycle)
+	{
+		final Map<String, Object> leg = legOf(asset);
+		leg.put("lifecycle", lifecycle);
 		return leg;
 	}
 
@@ -1908,6 +1938,8 @@ public final class AssetTx implements AutoCloseable
 		private final List<Integer> _mails = new ArrayList<>();
 		private final List<Delivery> _deliveries = new ArrayList<>();
 		private final List<Leg> _legs = new ArrayList<>();
+		/** Object id to lifecycle id, as this operation found or began it (§2.2, §11.35). */
+		private final Map<Integer, Long> _lifecycles = new HashMap<>();
 		private final Map<Integer, Long> _existence = new java.util.TreeMap<>();
 		private final List<DurableFact> _facts = new ArrayList<>();
 
@@ -2113,6 +2145,7 @@ public final class AssetTx implements AutoCloseable
 				}
 				if (removing)
 				{
+					endLifecycle(asset.objectId(), asset.itemId()); // a sink takes its row: the object leaves existence (§11.35)
 					deleteObject(asset.objectId());
 				}
 				return;
@@ -2258,6 +2291,171 @@ public final class AssetTx implements AutoCloseable
 		}
 
 		/** An object leaves existence: its row and its metadata rows (§2.3), in the transaction. */
+		/**
+		 * An amount of a non-stackable item in a custody is its whole objects there, lowest object ids first (§11.35,
+		 * ASSET-R07): each then moves, leaves or is sunk as itself, its id and lifecycle kept; any other asset as it is.
+		 */
+		List<Asset> wholes(int custody, List<Asset> assets) throws SQLException, AssetAbort
+		{
+			final List<Asset> wholes = new ArrayList<>();
+			for (Asset asset : assets)
+			{
+				final ItemTemplate template = ItemData.getInstance().getTemplate(asset.itemId());
+				if ((asset.objectId() != null) || (template == null) || template.isStackable())
+				{
+					wholes.add(asset);
+					continue;
+				}
+				final List<Integer> objects = new ArrayList<>();
+				try (PreparedStatement rows = _connection.prepareStatement("SELECT object_id FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ? AND item_id = ? AND count = 1 ORDER BY object_id"))
+				{
+					rows.setInt(1, custody);
+					rows.setInt(2, asset.itemId());
+					try (ResultSet result = rows.executeQuery())
+					{
+						while (result.next() && (objects.size() < asset.qty()))
+						{
+							final int objectId = result.getInt(1);
+							if (!isWholeAlready(wholes, objectId))
+							{
+								objects.add(objectId);
+							}
+						}
+					}
+				}
+				if (objects.size() < asset.qty())
+				{
+					throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "custody " + custody + " holds " + objects.size() + " of item " + asset.itemId() + ", not " + asset.qty());
+				}
+				for (int objectId : objects)
+				{
+					wholes.add(new Asset(asset.itemId(), 1, objectId));
+				}
+			}
+			return wholes;
+		}
+
+		private static boolean isWholeAlready(List<Asset> wholes, int objectId)
+		{
+			for (Asset whole : wholes)
+			{
+				if ((whole.objectId() != null) && (whole.objectId() == objectId))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * The object's live lifecycle, begun by this operation ({@code began_op}) if it has none; null for a stackable item,
+		 * which has none (§2.2, §11.35). All the object's lifecycle rows are locked, after its {@code items} row
+		 * (fact-journal.md §3.1), so the lifecycle writer's capture of the same object and this begin are ordered.
+		 */
+		Long lifecycleOf(int objectId, int itemId) throws SQLException
+		{
+			final ItemTemplate template = ItemData.getInstance().getTemplate(itemId);
+			if ((template == null) || template.isStackable())
+			{
+				return null;
+			}
+			final Long known = _lifecycles.get(objectId);
+			if (known != null)
+			{
+				return known;
+			}
+			long live = 0;
+			try (PreparedStatement rows = _connection.prepareStatement("SELECT lifecycle_id, ended_at IS NULL FROM lc_item_lifecycle WHERE object_id = ? FOR UPDATE"))
+			{
+				rows.setInt(1, objectId);
+				try (ResultSet result = rows.executeQuery())
+				{
+					while (result.next())
+					{
+						if (result.getBoolean(2))
+						{
+							live = result.getLong(1);
+						}
+					}
+				}
+			}
+			if (live == 0)
+			{
+				try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO lc_item_lifecycle (object_id, item_id, began_op, began_at) VALUES (?, ?, ?, NOW(3))", Statement.RETURN_GENERATED_KEYS))
+				{
+					insert.setInt(1, objectId);
+					insert.setInt(2, itemId);
+					insert.setBytes(3, _op.bytes());
+					insert.executeUpdate();
+					try (ResultSet keys = insert.getGeneratedKeys())
+					{
+						keys.next();
+						live = keys.getLong(1);
+					}
+				}
+			}
+			_lifecycles.put(objectId, live);
+			return live;
+		}
+
+		/** The lifecycle of a whole object's leg: its own for a non-stackable object, none for an amount or a stack. */
+		Long lifecycle(Asset asset) throws SQLException
+		{
+			return asset.objectId() == null ? null : lifecycleOf(asset.objectId(), asset.itemId());
+		}
+
+		/** Ends the object's live lifecycle {@code DESTROYED} in this operation: a sink took its custody row (§11.35). */
+		void endLifecycle(int objectId, int itemId) throws SQLException
+		{
+			final Long lifecycle = lifecycleOf(objectId, itemId);
+			if (lifecycle == null)
+			{
+				return;
+			}
+			final Integer run = LifecycleWriter.currentRun();
+			try (PreparedStatement end = _connection.prepareStatement("UPDATE lc_item_lifecycle SET ended_at = GREATEST(NOW(3), began_at), end_reason = 'DESTROYED', ended_op = ?, ended_run = ? WHERE lifecycle_id = ? AND ended_at IS NULL"))
+			{
+				end.setBytes(1, _op.bytes());
+				end.setObject(2, run);
+				end.setLong(3, lifecycle);
+				end.executeUpdate();
+			}
+			_facts.add(AssetFact.lifecycle("LifecycleEnded", "lifecycle", lifecycle, "object", objectId, "item", itemId, "reason", "DESTROYED", "operation", _op.hex()));
+		}
+
+		/**
+		 * Creates an asset in a custody (a source's): a non-stackable amount is that many new objects of one, each with a
+		 * lifecycle begun here, returned as whole assets; any other amount joins the custody's rows as {@link #give} does.
+		 */
+		List<Asset> create(int custody, Asset asset) throws SQLException, AssetAbort
+		{
+			final ItemTemplate template = ItemData.getInstance().getTemplate(asset.itemId());
+			if ((template == null) || template.isStackable())
+			{
+				give(custody, custody, asset);
+				return List.of(asset);
+			}
+			_touched.add(custody);
+			final List<Asset> created = new ArrayList<>();
+			for (long i = 0; i < asset.qty(); i++)
+			{
+				final int objectId = _service.ids().next();
+				final long[] lifetime = lifetime(asset.itemId());
+				try (PreparedStatement insert = _connection.prepareStatement("INSERT INTO items (owner_id, object_id, item_id, count, enchant_level, loc, loc_data, time_of_use, custom_type1, custom_type2, mana_left, time) VALUES (-1, ?, ?, 1, 0, 'ESCROW', ?, NULL, 0, 0, ?, ?)"))
+				{
+					insert.setInt(1, objectId);
+					insert.setInt(2, asset.itemId());
+					insert.setInt(3, custody);
+					insert.setLong(4, lifetime[0]);
+					insert.setLong(5, lifetime[1]);
+					insert.executeUpdate();
+				}
+				created.add(new Asset(asset.itemId(), 1, objectId));
+				lifecycleOf(objectId, asset.itemId());
+			}
+			return created;
+		}
+
 		private void deleteObject(long objectId) throws SQLException, AssetAbort
 		{
 			for (String table : new String[] { "item_attributes", "item_elementals", "item_variables" })

@@ -84,12 +84,15 @@ to reserve; throws on failure); `LifecycleWriter.isRunning()`.
 **Files:** Modify `AssetTx.java` (leg building, commit's posting insert, created rows in `attachCreated` / `give`, sink of
 custody rows, after-commit marks); Test `FundWholeObjectTest` (AT-ASSET-07) or a new `LifecycleLegTest`.
 
-- [ ] Tests: a fund of a non-stackable item begins one lifecycle (`began_op` the fund) named by both legs; release names
+- [x] Tests: a fund of a non-stackable item begins one lifecycle (`began_op` the fund) named by both legs; release names
   it; the claimed item carries it; a second fund of the same object reuses it; a stack part names none; `route`/`craft`
   create non-stackables each with its own lifecycle; `CRAFT_INPUT` of an escrowed object ends it `DESTROYED` with
   `ended_op`.
-- [ ] Implement: lifecycle rows are inserted in the transaction before the postings; marks after commit only.
-- [ ] Commit.
+- [x] Implement: lifecycle rows are inserted in the transaction before the postings; marks after commit only.
+- [x] Commit.
+  Done as `LifecycleLegTest` (6, red first: 5 of 6). An amount of a non-stackable item in a custody now moves, leaves
+  or is sunk as its whole objects, lowest ids first (`Execution.wholes`), so `move` and `release` keep their ids and
+  lifecycles instead of recreating them (and `release` no longer mails one row counting several).
 
 ### Task 4: `raid`
 

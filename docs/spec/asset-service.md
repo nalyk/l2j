@@ -655,7 +655,7 @@ during the refund, after each memory step of `DONE`, after each client packet.
 | AT-ASSET-28 | integration | logout and re-login racing a whole-object fund, both outcomes: no second live `Item`, the row restored is the committed one |
 | AT-ASSET-29 | integration | both deletion paths (marking, and immediate with `DeleteDays = 0`): refused with unclaimed service mail or a pending mark, allowed after; a payout, and a debit that aborts and must be refunded, racing a deletion: either the operation and its refund complete first and the deletion is refused, or the deletion wins and the operation aborts with `RECEIVER_GONE` before taking anything |
 | AT-ASSET-30 | sim | capacity benchmark: commit p99 within budget |
-| AT-ASSET-31 | integration, restart | `track` refused, changing nothing, for a stackable, retired or destroyed (count 0 or `VOID`) item and on a full queue; `track` of an item `craft` gave a lifecycle binds to it, a second `track` binds again; a capture whose object was destroyed, or funded and taken by a corrective sink, before the writer reached it writes nothing, and a sink racing the writer's begin either waits for it and ends what it began or deletes first and the begin writes nothing; a non-stackable item destroyed (tracked or not, before or after the writer's begin) keeps its id unreleased and, if tracked, its lifecycle ends `DESTROYED` with its fact; a stackable item's id is released as upstream; with the writer stopped and its queue full, a destroyed tracked item's lifecycle is ended `VANISHED` with its fact by the next start before any id is handed out, and the kept ids are free after it; `issue` of two parchments in one operation, refused a second time for one key and for a template that is not a representation (one test per clause: stackable, tradable, droppable, sellable, depositable, priced, crystallizable, extractable, with skills, a handler other than `Bypass`), its lifecycle in its fact; `recycle` refused with no reader or no supplier, nothing recorded, a permille of 0 or above 250, above the active share (100 by default: 101 of 1000 refused), for a day not over, and a second time for one territory and day, by the same pool or another; a raid's share keeps its objects and lifecycles on the ground, is saved by its pickup as a new row and counted once (census equals counters), and a rollback or an unresolved commit drops nothing; in `truth` every id is released as upstream and the startup pass writes nothing |
+| AT-ASSET-31 | integration, restart | `track` refused, changing nothing, for a stackable, retired or destroyed (count 0 or `VOID`) item and on a full queue; `track` of an item `craft` gave a lifecycle binds to it, a second `track` binds again; a capture of a new item not yet saved begins its lifecycle; a capture whose object was destroyed (its row not yet deleted), unloaded and replaced by a login, or funded and taken by a corrective sink before the writer reached it writes nothing, or, if the destruction comes between the writer's commit and its second look or after it, ends what it began `DESTROYED` once; a non-stackable item destroyed (tracked or not, before or after the writer's begin) keeps its id unreleased and, if tracked, its lifecycle ends `DESTROYED` with its fact; a stackable item's id is released as upstream; with the writer stopped and its queue full, a destroyed tracked item's lifecycle is ended `VANISHED` with its fact by the next start before any id is handed out, and the kept ids are free after it; with the used-id scan failing at a start, no id a live lifecycle names is handed out, and a failing startup pass stops the start; `issue` of two parchments in one operation, refused a second time for one key and for a template that is not a representation (one test per clause: stackable, tradable, droppable, sellable, depositable, priced, crystallizable, extractable, with skills, a handler other than `Bypass`), its lifecycle in its fact; `recycle` refused with no reader or no supplier, nothing recorded, a permille of 0 or above 250, above the active share (100 by default: 101 of 1000 refused), for a day not over, and a second time for one territory and day, by the same pool or another; a raid's share keeps its objects and lifecycles on the ground, is saved by its pickup as a new row and counted once (census equals counters), and a rollback or an unresolved commit drops nothing; in `truth` every id is released as upstream and the startup pass writes nothing |
 
 ## 11. Upstream constraints (for N3 design and N4 implementation)
 
@@ -870,15 +870,22 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
       (where the switch is off and the index empty), is released exactly as upstream;
     - **capture** (`track`, §4.3): checks on the item's own fields and one offer to the queue;
     - the **lifecycle writer** is one thread draining one bounded queue (`LifecycleQueueCapacity`) in order, each item a
-      transaction of its own (an operation with no legs), ordered with operations by row locks, not memory. A capture:
-      it locks the object's live lifecycle row if any (`SELECT … FOR UPDATE`) and binds to it; otherwise it locks the
-      object's `items` row and begins a lifecycle only if that row holds the captured item id, or, with no row, the
-      captured object is still the ground item the world knows by that id with a count above 0 (a sink deleting the row
-      waits on that lock, and an operation's begin of the same object meets the unique key, so the writer binds instead
-      of doubling); otherwise it writes nothing; then `Asset.LifecycleTracked`, commit, the index. An end: it ends the
-      live lifecycle of the id `DESTROYED` with `Asset.LifecycleEnded` (the id cannot have been reused: it was kept),
-      commit, the index. Each retries and resolves an uncertain commit as an operation does (§3.2); one that fails or is
-      left uncertain is logged and counted and changes nothing more: a lost begin leaves the item untracked until its
+      transaction of its own (an operation with no legs). A capture: off the hot path, the writer takes the captured
+      item's monitor (retail's destruction sets count 0 and `VOID` and removes the object from the world under it,
+      ItemManager.java:168-176), does no I/O while holding it, and finds the item **live** if its count is above 0, its
+      location not `VOID`, it is not retired, and it is still the object the world knows by its id
+      (`World.findObject`: a logout unloads and a destruction removes it); a row is never the test, since a new item
+      lives unsaved in its container (ItemContainer.java:261-316) and a destroyed one's row outlives it for a moment.
+      Not live: it writes nothing. Live: in a transaction it locks the object's live lifecycle row if any
+      (`SELECT … FOR UPDATE`) and binds to it, else inserts one (an operation's begin of the same object meets the unique
+      key, so the writer binds instead of doubling); writes `Asset.LifecycleTracked`; commits; puts the lifecycle in the
+      index; then takes the monitor again and, if the item was destroyed meanwhile (count 0 or `VOID`; an unload is not a
+      destruction), ends the lifecycle itself as an end does below. A destruction before that second look is seen by it; one after it finds the lifecycle in the index (put
+      before the look, which the monitor orders before the destruction's own read of the index) and offers an end; both
+      may end it, and the second finds it ended and writes nothing. An item unloaded meanwhile (a logout) still exists:
+      its lifecycle stays. An end: it ends the live lifecycle of the id `DESTROYED` with `Asset.LifecycleEnded` (the id
+      cannot have been reused: it was kept), commit, the index. Each retries and resolves an uncertain commit as an
+      operation does (§3.2); one that fails or is left uncertain is logged and counted and changes nothing more: a lost begin leaves the item untracked until its
       next entry, a lost end leaves the lifecycle live until the next start ends it `VANISHED`. A full queue loses the
       same way. Nothing waits on the writer;
     - an **operation's** begins and ends are rows written in its transaction: a sink taking a custody row ends the live
@@ -887,7 +894,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     - the **startup pass** (in `DatabaseIdManager`, after its cleanup queries and before the id set is built, so before
       any id is handed out) ends `VANISHED`, with its fact, every live lifecycle whose object id is in no `items` and no
       `itemsonground` row (a destroyed item whose end was lost, a decayed ground item, a raid share a crash kept from
-      dropping, a character's rows deleted by SQL), then loads the index; in `truth` there is none, so it writes nothing.
+      dropping, a character's rows deleted by SQL), then loads the index, and the id set marks every id the index names
+      as used, apart from the row scan: upstream's scan logs a failed query and returns what it has
+      (DatabaseIdManager.java:263-293), so a live lifecycle's id is reserved even then. While Living Chronicle runs, a
+      failure of the pass or of that reservation stops the start; in `truth` there is none, so it writes nothing.
     A whole-object leg of a non-stackable item without a lifecycle begins one (a capture the writer reaches later binds to
     it) (`began_op` the operation), and every leg of such an item names it; a non-stackable
     item a source creates (`route`, `relocate`, `craft`, `issue`, a correction) begins one in the operation; a sink taking
@@ -938,6 +948,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   lock; instead no non-stackable id is released at runtime while Living Chronicle runs, so no id a lifecycle names is
   ever reused, and the start ends what is gone; ends are offered to the writer for timeliness only; the writer orders
   with operations by row locks; capture and release take no lock but the queue's; AT-ASSET-14 says territory and day.
+- Amendment round 38 (Codex, spec only), NO SIGN-OFF: a failed used-id scan at a start returns a partial set, so a
+  live lifecycle's id could be handed out (1); the writer's existence test by row dropped a new item not yet saved (2)
+  and accepted a destroyed item whose row was not yet deleted (3). Fixed (still revision 16): the startup pass reserves
+  the index's ids itself and its failure stops the start; the writer tests the item in memory under its monitor (off
+  the hot path, no I/O held) and looks again after its commit, ending what a destruction overtook.
 - Revision 15 (amendment, signed off in round 33): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates

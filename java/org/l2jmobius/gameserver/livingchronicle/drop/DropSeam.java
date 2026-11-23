@@ -15,6 +15,7 @@ import org.l2jmobius.commons.threads.ThreadPool;
 import org.l2jmobius.gameserver.entity.actor.Attackable;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.item.holders.ItemHolder;
+import org.l2jmobius.gameserver.managers.InstanceManager;
 
 /**
  * The drop seam (docs/spec/asset-service.md §11.33, core patch CP-0032): {@code Attackable.doItemDrop} hands it a kill's
@@ -116,6 +117,13 @@ public final class DropSeam
 				}
 			}
 			SLOTS.decrementAndGet();
+			if ((pending.instanceId() != 0) && (InstanceManager.getInstance().getInstance(pending.instanceId()) == null))
+			{
+				// Its instance is gone: retail destroys an instance's ground items with it, so its drops appear nowhere,
+				// least of all in the world outside (an item cannot enter an instance that no longer exists).
+				LOGGER.warning("Drop seam: " + pending.kill().key() + "'s instance " + pending.instanceId() + " is gone; its uncommitted drops went with it");
+				continue;
+			}
 			for (int i = 0; i < pending.offered().size(); i++)
 			{
 				if ((committed == null) || !committed.contains(i))

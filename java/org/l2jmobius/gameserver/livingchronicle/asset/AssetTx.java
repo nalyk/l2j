@@ -278,9 +278,10 @@ public final class AssetTx implements AutoCloseable
 	 * {@code LOOT_DROP} source, referenced by the charter (the custody's owner); each receiver's by one service mail, the auctioned
 	 * ones (receiver 0) into the custody, which they must be eligible for by their template (§4.4). All or nothing: an
 	 * ineligible auctioned drop or a receiver gone refuses the whole operation. A non-stackable count is rows of one. The
-	 * caller writes the kill's settlement key.
+	 * caller writes the kill's settlement key; {@code kill} is its number ({@code Kill.ref}) and {@code npcObjectId} the
+	 * monster's, both in {@code Asset.LootRouted} with the charter, the receivers and their mails (§5).
 	 */
-	public void route(int custody, List<RoutedDrop> drops, String subject, String content)
+	public void route(int custody, long kill, int npcObjectId, List<RoutedDrop> drops, String subject, String content)
 	{
 		if ((subject == null) || subject.isBlank() || (content == null))
 		{
@@ -328,6 +329,7 @@ public final class AssetTx implements AutoCloseable
 			}
 			final String code = "LOOT_DROP";
 			final List<Map<String, Object>> legs = new ArrayList<>();
+			final List<Map<String, Object>> receivers = new ArrayList<>();
 			final Connection connection = execution.connection();
 			for (Map.Entry<Integer, List<RoutedDrop>> entry : byReceiver.entrySet())
 			{
@@ -344,6 +346,10 @@ public final class AssetTx implements AutoCloseable
 					}
 				}
 				execution.mailed(message, entry.getKey(), MailReason.PAYOUT);
+				final Map<String, Object> receiver = new LinkedHashMap<>();
+				receiver.put("receiver", entry.getKey());
+				receiver.put("mail", message);
+				receivers.add(receiver);
 			}
 			for (RoutedDrop drop : auctioned)
 			{
@@ -355,7 +361,7 @@ public final class AssetTx implements AutoCloseable
 				legs.add(legOf(asset));
 			}
 			execution.touched(custody);
-			execution.facts().add(AssetFact.of("LootRouted", custody, "operation", _op.hex(), "custody", custody, "legs", legs));
+			execution.facts().add(AssetFact.of("LootRouted", custody, "operation", _op.hex(), "charter", charter, "kill", kill, "npc", npcObjectId, "custody", custody, "legs", legs, "receivers", receivers));
 		}, custody);
 	}
 
@@ -471,9 +477,10 @@ public final class AssetTx implements AutoCloseable
 	 * leave the contract's custody to the {@code CRAFT_INPUT} sink; the product, if the craft succeeded, enters from the
 	 * {@code CRAFT_OUTPUT} source straight to the receiver by service mail, never into a custody. Both are referenced by
 	 * the contract (the custody's owner). The owner writes its outcome row in the same operation ({@link #ownerRow}).
+	 * @param attempt the contract's attempt this craft applies (pact.md §4.3), in {@code Asset.Crafted}
 	 * @param product what the craft made, or null when it failed
 	 */
-	public void craft(int custody, List<Asset> materials, int receiverCharId, ItemHolder product, String subject, String content)
+	public void craft(int custody, int attempt, List<Asset> materials, int receiverCharId, ItemHolder product, String subject, String content)
 	{
 		if ((product != null) && ((subject == null) || subject.isBlank() || (content == null)))
 		{
@@ -520,7 +527,7 @@ public final class AssetTx implements AutoCloseable
 				execution.mailed(mail, receiverCharId, MailReason.PAYOUT);
 			}
 			execution.touched(custody);
-			execution.facts().add(AssetFact.of("Crafted", custody, "operation", _op.hex(), "custody", custody, "contract", contract, "materials", inputs, "product", outputs, "mail", mail));
+			execution.facts().add(AssetFact.of("Crafted", custody, "operation", _op.hex(), "custody", custody, "contract", contract, "attempt", attempt, "materials", inputs, "product", outputs, "mail", mail));
 		}, custody);
 	}
 

@@ -505,7 +505,7 @@ to `SYSTEM`, whatever kind of operation it is; the postings (§2.2) still name t
 | `Asset.FeeCharged` | holder, sink code, amount |
 | `Asset.TreasuryCommitted`, `Asset.TreasuryReturned` | castle, custody, amount |
 | `Asset.Crafted` | contract, attempt, input legs, output legs (none on failure) |
-| `Asset.LootRouted` | charter, kill (npc object id and incarnation), source legs, receivers and their mails |
+| `Asset.LootRouted` | charter, kill (its key's number, §11.33, which is unique across restarts, and the NPC's object id), source legs, receivers and their mails |
 | `Asset.ParchmentIssued`, `Asset.SealIssued` | contract, character, mail, lifecycle id |
 | `Asset.ManifestRaided` | custody, code, reference, legs |
 | `Asset.CustodyMoved` | operation, settlement key, from custody, to custody, legs (item id, lifecycle id, qty) |
@@ -817,8 +817,9 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     body at a given place and instance, its destination validated from that place, `Item.dropMeFrom`; `dropItem` and
     `dropMe` call them with their own: a classified site, retail's draws unchanged). A kill takes one of 10 000 slots
     before any router runs and keeps it while held (02 §6: no unbounded queue), so an unknown outcome always has room;
-    with no slot free no router runs and retail drops the kill. A JVM death loses the kills held, the stated limit of a
-    kill's drops before its commit (pact.md §4.5). A position outside its list, or null, is ignored. Every epoch keeps its own kill
+    with no slot free no router runs and retail drops the kill. A held kill whose instance is gone when it resolves
+    drops nothing, as retail destroys an instance's ground items with it. A JVM death loses the kills held, the stated
+    limit of a kill's drops before its commit (pact.md §4.5). A position outside its list, or null, is ignored. Every epoch keeps its own kill
     counter for the server's life. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
     consumer derives its `OpId`; as a posting's reference the key is the number epoch × 2^40 + sequence. The fake-player branch (`FakePlayerCanDropItems`, off by default) and the spoil list
@@ -868,6 +869,12 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   a held drop was validated from, and fell in the instance of, where its monster is now (2). Fixed (still revision
   15): a kill takes its slot before any router runs, so retail drops a kill there is no room to hold; the drop is
   validated from the kill's place and falls in its instance (`Item.dropMeFrom`).
+- Amendment round 30 (Codex), NO SIGN-OFF: a held kill whose instance was destroyed before it resolved dropped its loot
+  into the world outside (1); `Asset.LootRouted` lacked the charter, the kill, the receivers and their mails, and
+  `Asset.Crafted` the attempt (2). Fixed (still revision 15): such a kill drops nothing, as retail's instance takes its
+  ground items with it; `route` takes the kill's number and the NPC's object id and `craft` the attempt, and the facts
+  carry what §5 names (the kill by its key's number, unique across restarts, where §5 had said an incarnation Mobius
+  does not keep).
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

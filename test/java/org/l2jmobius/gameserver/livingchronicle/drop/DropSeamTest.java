@@ -301,6 +301,42 @@ class DropSeamTest
 		}
 	}
 
+	private static void setInstance(WorldObject object, int instanceId)
+	{
+		try
+		{
+			final java.lang.reflect.Field location = WorldObject.class.getDeclaredField("_location");
+			location.setAccessible(true);
+			final java.lang.reflect.Field id = org.l2jmobius.gameserver.entity.Location.class.getDeclaredField("_instanceId");
+			id.setAccessible(true);
+			id.setInt(location.get(object), instanceId);
+		}
+		catch (ReflectiveOperationException e)
+		{
+			throw new AssertionError(e);
+		}
+	}
+
+	@Test
+	void aHeldKillWhoseInstanceIsGoneDropsNowhere()
+	{
+		final java.util.concurrent.atomic.AtomicBoolean readable = new java.util.concurrent.atomic.AtomicBoolean(false);
+		DropSeam.install(7, List.of(unreadable(readable)));
+		final int instance = _victim.getInstanceId();
+		setInstance(_victim, 777_777); // killed in an instance that is destroyed before the kill resolves
+		try
+		{
+			assertEquals(new TreeMap<>(), kill());
+		}
+		finally
+		{
+			setInstance(_victim, instance);
+		}
+		readable.set(true);
+		assertEquals(new TreeMap<>(), resolve(), "retail destroys an instance's ground items with it: none appears in the world");
+		assertEquals(0, DropSeam.pending(), "resolved, not kept");
+	}
+
 	@Test
 	void aHeldKillDropsWhereItDiedEvenIfItsMonsterMoved()
 	{

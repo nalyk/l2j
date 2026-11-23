@@ -592,7 +592,9 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   kill. A JVM death loses the kills held, as it loses a kill's drops before any commit (pact.md §4.5). The held drop is
   Mobius's own: `Npc.dropItemAt` is `dropItem`'s body at a given place and instance, validated by
   `Item.dropMeFrom` from that place (`dropMe` is `dropMeFrom` from the dropper's own), and `dropItem` calls it with the
-  NPC's own (its draws unchanged), so the drop stays a scanned, classified site and lands where the kill was.
+  NPC's own (its draws unchanged), so the drop stays a scanned, classified site and lands where the kill was. A held
+  kill whose instance is gone when it resolves drops nothing: retail destroys an instance's ground items with it, and
+  an item cannot enter an instance that no longer exists, so it would otherwise fall into the world outside.
   A position outside its list, or null, is ignored. Every epoch keeps its own kill counter for the JVM's life, so no
   key is given twice. The fake-player branch and the spoil list are not offered.
 - Invariant: every item a kill rolls is dropped, auto-looted or taken by exactly one committed operation; with no router
@@ -604,7 +606,8 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   a null position losing the rest of the kill, an epoch reinstalled after another reusing `kill/73/1`); a held kill
   drops at its place after its monster moved (the test world has no geodata and no live instance, so that the drop is
   validated from the kill's place and falls in its instance is by construction: `dropMe` is `dropMeFrom` with the
-  dropper's own place and instance); `DropLockTest`,
+  dropper's own place and instance); a held kill whose instance is gone drops nothing (red without the check: its
+  drops fell into instance 0); `DropLockTest`,
   `PausedWorldTest` and the other behaviour locks unchanged.
 
 ## CP-0033 The crafting boundary

@@ -62,7 +62,7 @@ class RouteTest
 		try (AssetTx tx = _f.service.begin(_f.op("ROUTE"), "PACT", "ROUTE", custody))
 		{
 			tx.settlementKey("PACT", killKey);
-			tx.route(custody, List.of(drops), "Loot Charter", "Your share of the kill.");
+			tx.route(custody, (7L << 40) | Long.parseLong(killKey.substring(killKey.lastIndexOf('/') + 1)), 20_001, List.of(drops), "Loot Charter", "Your share of the kill.");
 			return tx.commit();
 		}
 	}
@@ -90,6 +90,12 @@ class RouteTest
 		assertEquals(adena + 300, counted(ADENA), "what the kill made exists");
 		assertEquals(swords + 3, counted(SHORT_SWORD));
 		assertEquals(1, _f.facts("LootRouted", custody));
+		final String fact = _f.lastPayload("LootRouted", custody);
+		final long charter = _f.number("SELECT owner_ref FROM lc_custody WHERE custody_id = " + custody);
+		assertTrue(fact.contains("\"charter\":" + charter), fact);
+		assertTrue(fact.contains("\"kill\":" + ((7L << 40) | 1)) && fact.contains("\"npc\":20001"), "the kill: its key and its NPC, " + fact);
+		final long mailA = _f.number("SELECT messageId FROM messages WHERE receiverId = " + a.getObjectId());
+		assertTrue(fact.contains("\"receiver\":" + a.getObjectId()) && fact.contains("\"mail\":" + mailA), "each receiver and its mail, " + fact);
 	}
 
 	@Test
@@ -140,7 +146,7 @@ class RouteTest
 		final int custody = _f.open("NOHOLD");
 		try (AssetTx tx = _f.service.begin(_f.op("ROUTE"), "NOHOLD", "ROUTE", custody))
 		{
-			tx.route(custody, List.of(new RoutedDrop(SHORT_SWORD, 1, 0)), "Loot Charter", "Your share of the kill.");
+			tx.route(custody, (7L << 40) | 99, 20_001, List.of(new RoutedDrop(SHORT_SWORD, 1, 0)), "Loot Charter", "Your share of the kill.");
 			assertEquals(AssetAbort.Reason.NOT_ALLOWED_TO_HOLD, assertThrows(AssetAbort.class, tx::commit).reason());
 		}
 		assertEquals(0, _f.held(custody, SHORT_SWORD), "INV05: its owner holds nothing it may not");

@@ -111,7 +111,7 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
 
 **Interfaces:**
 - Produces: `record RoutedDrop(int itemId, long count, int receiverCharId)` (in `asset`; `receiverCharId` 0 = the
-  custody); `void AssetTx.route(int custody, List<RoutedDrop> drops, String subject, String content)` (the service mail names its institution, as `release`'s); `static String Eligibility.templateRefusal(ItemTemplate t)`.
+  custody); `void AssetTx.route(int custody, long kill, int npcObjectId, List<RoutedDrop> drops, String subject, String content)` (the service mail names its institution, as `release`'s); `static String Eligibility.templateRefusal(ItemTemplate t)`.
 
 - [x] **Step 1: Write the failing tests** (`AssetFixtures` as `ReleaseTest` uses):
   - `routedDropsReachTheirReceiversByServiceMailAndTheAuctionedOnesTheCustody`: two receivers and one auctioned drop →
@@ -169,7 +169,7 @@ Remembers' relocation, N11e); the window buckets (N5, asset-service.md §2.6 "Wa
 
 **Interfaces:**
 - Consumes: `RecipeManager.Craft.materials`, `product` (Task 5).
-- Produces: `void AssetTx.craft(int custody, List<Asset> materials, int receiverCharId, ItemHolder product, String subject, String content)`
+- Produces: `void AssetTx.craft(int custody, int attempt, List<Asset> materials, int receiverCharId, ItemHolder product, String subject, String content)`
   (`product` null on failure); `void AssetTx.ownerRow(String table, Map<String, Object> columns)` (refused unless
   `table` starts with `lc_` + the operation's module in lower case + `_`).
 

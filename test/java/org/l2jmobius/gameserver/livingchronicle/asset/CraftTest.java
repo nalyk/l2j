@@ -2,6 +2,7 @@ package org.l2jmobius.gameserver.livingchronicle.asset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,7 +76,7 @@ class CraftTest
 	{
 		try (AssetTx tx = _f.service.begin(_f.op("CRAFT"), "TEST", "CRAFT", custody))
 		{
-			tx.craft(custody, List.of(new Asset(STEEL, 10, null), new Asset(VARNISH, 4, null)), receiver, product, "Notarius of Giran", "Your contract's craft.");
+			tx.craft(custody, attempt, List.of(new Asset(STEEL, 10, null), new Asset(VARNISH, 4, null)), receiver, product, "Notarius of Giran", "Your contract's craft.");
 			final Map<String, Object> outcome = new LinkedHashMap<>();
 			outcome.put("attempt", attempt);
 			outcome.put("success", product != null);
@@ -101,6 +102,8 @@ class CraftTest
 		assertEquals(steel - 10, counted(STEEL));
 		assertEquals(swords + 1, counted(SHORT_SWORD));
 		assertEquals(1, _f.facts("Crafted", custody));
+		final String fact = _f.lastPayload("Crafted", custody);
+		assertTrue(fact.contains("\"contract\":" + contract) && fact.contains("\"attempt\":1"), "the contract and the attempt, " + fact);
 		assertEquals(1, _f.number("SELECT COUNT(*) FROM lc_test_outcome WHERE attempt = 1 AND success"), "the outcome row in the same operation");
 	}
 
@@ -132,7 +135,7 @@ class CraftTest
 		_f.seed(custody, STEEL, 10, false);
 		try (AssetTx tx = _f.service.begin(_f.op("CRAFT"), "NOHOLD", "CRAFT", custody))
 		{
-			tx.craft(custody, List.of(new Asset(STEEL, 10, null)), crafter.getObjectId(), new ItemHolder(SHORT_SWORD, 1), "Notarius of Giran", "Your contract's craft.");
+			tx.craft(custody, 9, List.of(new Asset(STEEL, 10, null)), crafter.getObjectId(), new ItemHolder(SHORT_SWORD, 1), "Notarius of Giran", "Your contract's craft.");
 			assertEquals(AssetAbort.Reason.NOT_ALLOWED_TO_HOLD, assertThrows(AssetAbort.class, tx::commit).reason());
 		}
 		assertEquals(10, _f.held(custody, STEEL), "INV05: nothing consumed under an owner that may not hold it");

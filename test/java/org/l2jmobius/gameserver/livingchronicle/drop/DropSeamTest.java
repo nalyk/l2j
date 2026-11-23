@@ -256,6 +256,87 @@ class DropSeamTest
 		assertEquals(0, DropSeam.pending());
 	}
 
+	private static DropRouter unreadable(java.util.concurrent.atomic.AtomicBoolean readable)
+	{
+		return new DropRouter()
+		{
+			@Override
+			public Set<Integer> route(Kill kill, List<ItemHolder> offered)
+			{
+				throw new IllegalStateException("committed nothing, then the connection failed");
+			}
+
+			@Override
+			public Set<Integer> committed(Kill kill, List<ItemHolder> offered)
+			{
+				if (!readable.get())
+				{
+					throw new IllegalStateException("the store cannot be read");
+				}
+				return Set.of();
+			}
+		};
+	}
+
+	@Test
+	void withNoRoomToHoldAKillTheRoutersAreNotAskedAndRetailDropsIt()
+	{
+		final java.util.concurrent.atomic.AtomicBoolean readable = new java.util.concurrent.atomic.AtomicBoolean(false);
+		final TreeMap<Integer, Long> retail = kill();
+		DropSeam.capacity(1);
+		try
+		{
+			DropSeam.install(7, List.of(unreadable(readable)));
+			assertEquals(new TreeMap<>(), kill(), "the first kill is held, filling the room");
+			final Recorder late = new Recorder();
+			DropSeam.install(7, List.of(late, unreadable(readable)));
+			assertEquals(retail, kill(), "no room to hold an unknown outcome: no router runs, retail drops the kill");
+			assertTrue(late.offered.isEmpty(), "not even offered");
+			readable.set(true);
+			assertEquals(retail, resolve(), "the held kill drops once its router answers");
+		}
+		finally
+		{
+			DropSeam.capacity(DropSeam.MAX_PENDING);
+		}
+	}
+
+	@Test
+	void aHeldKillDropsWhereItDiedEvenIfItsMonsterMoved()
+	{
+		final java.util.concurrent.atomic.AtomicBoolean readable = new java.util.concurrent.atomic.AtomicBoolean(false);
+		DropSeam.install(7, List.of(unreadable(readable)));
+		final int x = _victim.getX();
+		final int y = _victim.getY();
+		assertEquals(new TreeMap<>(), kill());
+		_victim.setXYZ(x + 20_000, y + 20_000, _victim.getZ()); // respawned elsewhere (Spawn.respawnNpc reuses the object)
+		try
+		{
+			readable.set(true);
+			final Set<Integer> before = new HashSet<>();
+			for (WorldObject object : World.getVisibleObjects())
+			{
+				before.add(object.getObjectId());
+			}
+			DropSeam.resolvePending();
+			int dropped = 0;
+			for (WorldObject object : List.copyOf(World.getVisibleObjects()))
+			{
+				if ((object instanceof Item item) && !before.contains(item.getObjectId()) && item.isSpawned())
+				{
+					dropped++;
+					assertTrue((Math.abs(item.getX() - x) <= 500) && (Math.abs(item.getY() - y) <= 500), "at the kill's place, not where the monster is now: " + item.getX() + "," + item.getY());
+					item.decayMe();
+				}
+			}
+			assertTrue(dropped > 0, "the held kill dropped");
+		}
+		finally
+		{
+			_victim.setXYZ(x, y, _victim.getZ());
+		}
+	}
+
 	/** Resolves the seam's pending kills. @return what that dropped, id → total count */
 	private static TreeMap<Integer, Long> resolve()
 	{

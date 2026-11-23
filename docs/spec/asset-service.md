@@ -813,9 +813,11 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     the kill committed, read from durable state (the operation whose id it derives from the kill key), and that stays
     taken while the rest goes on. A router that cannot tell yet, the store unreadable, has what it was offered held by
     the seam with the kill's place, offered to no one, and asked again every ten seconds; once it answers, what it did
-    not commit drops at that place, once, through Mobius's own drop (`Npc.dropItemAt`, `dropItem`'s body at a given
-    place, which `dropItem` calls with the NPC's own: a classified site, retail's draws unchanged). At most
-    10 000 kills wait at a time (02 §6: no unbounded queue); a JVM death loses those waiting, the stated limit of a
+    not commit drops at that place and in that instance, once, through Mobius's own drop (`Npc.dropItemAt`, `dropItem`'s
+    body at a given place and instance, its destination validated from that place, `Item.dropMeFrom`; `dropItem` and
+    `dropMe` call them with their own: a classified site, retail's draws unchanged). A kill takes one of 10 000 slots
+    before any router runs and keeps it while held (02 §6: no unbounded queue), so an unknown outcome always has room;
+    with no slot free no router runs and retail drops the kill. A JVM death loses the kills held, the stated limit of a
     kill's drops before its commit (pact.md §4.5). A position outside its list, or null, is ignored. Every epoch keeps its own kill
     counter for the server's life. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
@@ -862,6 +864,10 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   withheld for good, its uncommitted drops lost (1). Fixed (still revision 15): the seam holds such a kill, bounded,
   and asks the router again until it answers, then drops what it did not commit at the kill's place, through Mobius's
   own drop made callable at a place (`Npc.dropItemAt`, the `npc_drop` row's member now).
+- Amendment round 29 (Codex), NO SIGN-OFF: with 10 000 kills held, the next unknown outcome was withheld for good (1);
+  a held drop was validated from, and fell in the instance of, where its monster is now (2). Fixed (still revision
+  15): a kill takes its slot before any router runs, so retail drops a kill there is no room to hold; the drop is
+  validated from the kill's place and falls in its instance (`Item.dropMeFrom`).
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

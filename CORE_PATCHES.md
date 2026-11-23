@@ -576,7 +576,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 
 ## CP-0032 The drop seam
 
-- Files: `java/org/l2jmobius/gameserver/entity/actor/Attackable.java`, `java/org/l2jmobius/gameserver/entity/actor/Npc.java`
+- Files: `java/org/l2jmobius/gameserver/entity/actor/Attackable.java`, `java/org/l2jmobius/gameserver/entity/actor/Npc.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
 - Reason: the Loot Charter's routing (pact.md §4.5) and Aden Remembers' relocation (aden-remembers.md §4.3.1) must take
   a kill's rolled drops before retail drops or auto-loots them, but `doItemDrop` computes the death-drop list and hands
   it out in one loop (Attackable.java:1176-1204), with nothing in between (blueprint 03 §4.2; asset-service.md §11.33).
@@ -587,17 +587,24 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   from durable state (`DropRouter.committed`): that stays taken and the rest goes on to the next router and retail.
   A router that cannot tell yet (the store unreadable) has what it was offered held by the seam, with the kill's
   place, and asked again every ten seconds; once it answers, what it did not commit drops at that place as retail
-  drops it, once. At most 10 000 kills wait at a time (02 §6); a JVM death loses those waiting, as it loses a kill's
-  drops before any commit (pact.md §4.5). The held drop is Mobius's own: `Npc.dropItemAt` is `dropItem`'s body at a given place,
-  and `dropItem` calls it with the NPC's own (its draws unchanged), so the drop stays a scanned, classified site.
+  drops it, once. A kill takes one of 10 000 slots before any router runs and keeps it while held (02 §6), so a kill
+  whose outcome becomes unknown always has room to be held; with no slot free no router runs and retail drops the
+  kill. A JVM death loses the kills held, as it loses a kill's drops before any commit (pact.md §4.5). The held drop is
+  Mobius's own: `Npc.dropItemAt` is `dropItem`'s body at a given place and instance, validated by
+  `Item.dropMeFrom` from that place (`dropMe` is `dropMeFrom` from the dropper's own), and `dropItem` calls it with the
+  NPC's own (its draws unchanged), so the drop stays a scanned, classified site and lands where the kill was.
   A position outside its list, or null, is ignored. Every epoch keeps its own kill counter for the JVM's life, so no
   key is given twice. The fake-player branch and the spoil list are not offered.
 - Invariant: every item a kill rolls is dropped, auto-looted or taken by exactly one committed operation; with no router
   the kill is retail's.
 - Proof: `DropSeamTest` (red with the seam ignoring its routers: a router's positions dropped anyway, the second router
   offered everything, kills unnumbered; red as first written, Codex rounds amd26-27: a throwing router's items dropped,
-  then all withheld though it committed nothing or only part, then withheld for good while its outcome was unreadable,
-  a null position losing the rest of the kill, an epoch reinstalled after another reusing `kill/73/1`); `DropLockTest`,
+  then all withheld though it committed nothing or only part, then withheld for good while its outcome was unreadable
+  or once 10 000 waited (red without the slots);
+  a null position losing the rest of the kill, an epoch reinstalled after another reusing `kill/73/1`); a held kill
+  drops at its place after its monster moved (the test world has no geodata and no live instance, so that the drop is
+  validated from the kill's place and falls in its instance is by construction: `dropMe` is `dropMeFrom` with the
+  dropper's own place and instance); `DropLockTest`,
   `PausedWorldTest` and the other behaviour locks unchanged.
 
 ## CP-0033 The crafting boundary

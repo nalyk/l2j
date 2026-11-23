@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,25 +41,32 @@ public final class DropSeam
 	}
 
 	/** A kill whose router's outcome could not be read: what it was offered and where the kill was. */
-	private record Pending(Kill kill, DropRouter router, List<ItemHolder> offered, int x, int y, int z)
+	private record Pending(Kill kill, DropRouter router, List<ItemHolder> offered, int x, int y, int z, int instanceId)
 	{
 	}
 
-	/** How many kills may wait for their router's outcome at once (02 §6: no unbounded queue). */
+	/** How many kills may be routed or wait for their router's outcome at once (02 §6: no unbounded queue). */
 	static final int MAX_PENDING = 10_000;
 	private static final List<Pending> PENDING = new ArrayList<>();
+	/**
+	 * Kills being routed or held: a kill takes a slot before any router runs and keeps it while held, so a kill whose
+	 * outcome becomes unknown always has room to be held; with none free, no router runs and retail drops the kill.
+	 */
+	private static final AtomicInteger SLOTS = new AtomicInteger();
+	private static volatile int _capacity = MAX_PENDING;
+
+	/** Sets how many kills may be routed or held at once (tests). */
+	static void capacity(int slots)
+	{
+		_capacity = slots;
+	}
 	private static boolean _resolving;
 
 	private static void hold(Pending pending, Throwable cause)
 	{
 		synchronized (PENDING)
 		{
-			if (PENDING.size() >= MAX_PENDING)
-			{
-				LOGGER.log(Level.SEVERE, "Drop seam: " + MAX_PENDING + " kills already wait for their router's outcome; " + pending.kill().key() + "'s " + pending.offered() + " withheld for good", cause);
-				return;
-			}
-			PENDING.add(pending);
+			PENDING.add(pending); // its slot was taken before its routers ran, so there is always room
 			LOGGER.log(Level.SEVERE, "Drop router " + pending.router() + " cannot tell what it committed of " + pending.kill().key() + "; " + pending.offered() + " held until it can", cause);
 			if (!_resolving)
 			{
@@ -107,6 +115,7 @@ public final class DropSeam
 					continue; // another pass resolved it
 				}
 			}
+			SLOTS.decrementAndGet();
 			for (int i = 0; i < pending.offered().size(); i++)
 			{
 				if ((committed == null) || !committed.contains(i))
@@ -120,7 +129,7 @@ public final class DropSeam
 	/** Mobius's own drop (Npc.dropItemAt, CP-0032), at the kill's place rather than where the monster is now. */
 	private static void drop(Pending pending, ItemHolder holder)
 	{
-		pending.kill().npc().dropItemAt(pending.kill().owner(), holder.getId(), holder.getCount(), pending.x(), pending.y(), pending.z());
+		pending.kill().npc().dropItemAt(pending.kill().owner(), holder.getId(), holder.getCount(), pending.x(), pending.y(), pending.z(), pending.instanceId());
 	}
 
 	/**
@@ -155,6 +164,39 @@ public final class DropSeam
 			return drops;
 		}
 
+		if (SLOTS.incrementAndGet() > _capacity)
+		{
+			SLOTS.decrementAndGet();
+			LOGGER.warning("Drop seam: " + _capacity + " kills are routed or held; this one is retail's, no router asked");
+			return drops;
+		}
+		
+		final Routed routed = new Routed();
+		try
+		{
+			return routed(installed, npc, owner, drops, routed);
+		}
+		finally
+		{
+			if (!routed.held)
+			{
+				SLOTS.decrementAndGet(); // a held kill keeps its slot until it is resolved
+			}
+		}
+	}
+	
+	/** Whether a kill was held. */
+	private static final class Routed
+	{
+		boolean held;
+	}
+	
+	private static Collection<ItemHolder> routed(Installed installed, Attackable npc, Player owner, Collection<ItemHolder> drops, Routed routed)
+	{
+		final int x = npc.getX();
+		final int y = npc.getY();
+		final int z = npc.getZ();
+		final int instanceId = npc.getInstanceId();
 		final Kill kill = new Kill(installed.epoch(), installed.seq().incrementAndGet(), npc, owner);
 		List<ItemHolder> left = new ArrayList<>(drops);
 		boolean taken = false;
@@ -185,7 +227,8 @@ public final class DropSeam
 				{
 					// Unknown until the store answers: held here, with the kill's place, and resolved later (resolvePending);
 					// what the router did not commit then drops there, once. Nothing goes on meanwhile.
-					hold(new Pending(kill, router, offered, npc.getX(), npc.getY(), npc.getZ()), unknown);
+					hold(new Pending(kill, router, offered, x, y, z, instanceId), unknown);
+					routed.held = true;
 					return new ArrayList<>(); // mutable: doItemDrop clears what it is given
 				}
 			}

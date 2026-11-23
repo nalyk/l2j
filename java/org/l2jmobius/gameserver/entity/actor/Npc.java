@@ -1923,7 +1923,7 @@ public class Npc extends Creature
 	 */
 	public Item dropItem(Creature creature, int itemId, long itemCount)
 	{
-		return dropItemAt(creature, itemId, itemCount, getX(), getY(), getZ());
+		return dropItemAt(creature, itemId, itemCount, getX(), getY(), getZ(), getInstanceId());
 	}
 	
 	/**
@@ -1935,9 +1935,10 @@ public class Npc extends Creature
 	 * @param x the place's x
 	 * @param y the place's y
 	 * @param z the place's z
+	 * @param instanceId the place's instance
 	 * @return the dropped item
 	 */
-	public Item dropItemAt(Creature creature, int itemId, long itemCount, int x, int y, int z)
+	public Item dropItemAt(Creature creature, int itemId, long itemCount, int x, int y, int z, int instanceId)
 	{
 		Item item = null;
 		for (int i = 0; i < itemCount; i++)
@@ -1964,7 +1965,7 @@ public class Npc extends Creature
 			final int newY = (y + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
 			final int newZ = z + 20;
 			
-			item.dropMe(this, newX, newY, newZ);
+			item.dropMeFrom(this, x, y, z, instanceId, newX, newY, newZ); // from the place, as dropMe from where this NPC is
 			
 			// Add drop to auto destroy item task.
 			if (!GeneralConfig.LIST_PROTECTED_ITEMS.contains(itemId) && (((GeneralConfig.AUTODESTROY_ITEM_AFTER > 0) && !item.getTemplate().hasExImmediateEffect()) || ((GeneralConfig.HERB_AUTO_DESTROY_TIME > 0) && item.getTemplate().hasExImmediateEffect())))

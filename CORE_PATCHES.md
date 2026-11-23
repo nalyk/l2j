@@ -541,7 +541,7 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
 
 ## CP-0031 A player's clan-hall sale ends on its date and leaves no row
 
-- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`
+- Files: `java/org/l2jmobius/gameserver/entity/residences/ClanHallAuction.java`, `java/org/l2jmobius/gameserver/managers/ClanHallAuctionManager.java`
 - Reason: a sale put up by a player is never scheduled to end (`startAutoTask` runs only for a sale loaded at startup,
   ClanHallAuction.java:142-146; the constructor of a new sale, 149, and `confirmAuction`, 522, do not call it), so it
   ends only after a restart. And a player's sale that ends without bids is dropped from memory only ("THIS MUST BE
@@ -556,7 +556,10 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   (`deleteAuctionFromDB`, which now deletes the row before the listing, under the same lock) marks it over and cancels
   its task; `endAuction`, `cancelAuction`, `setBid` and `cancelBid` run under the auction's monitor and do nothing for a
   sale already over, so a timer that outlives a cancel neither pays the cancelled seller nor deletes the hall's next
-  sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. A sale closes
+  sale (both delete by hall), and a bid that waited on the monitor while the sale closed takes nothing. With sales
+  closing on timer threads while game threads read the listing, the manager's `ArrayList` (read without a lock, so an
+  iteration threw `ConcurrentModificationException`) is a `CopyOnWriteArrayList`, and `getAuction` reads one snapshot
+  rather than an index another thread may shift. A sale closes
   only once its bids are gone: a cancel and an end delete the bid rows first, and while that fails (CP-0026 refunds
   nothing then) the sale stays open, nothing is paid and the hall changes no owner; `cancelAuction` returns whether it
   cancelled, and the Auctioneer tells the seller either way (upstream always said "Your auction has been canceled"), so
@@ -570,6 +573,71 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   `aSaleWhoseRowCannotBeWrittenIsRefusedAndRefunded` (red on upstream: listed, the deposit kept),
   `aSaleWhoseRowCannotBeResolvedIsNotListedAndKeepsItsDeposit` (red when an unreadable row counted as written: listed),
   `aBidAfterTheSaleClosedTakesNothing` (red on upstream: 30 000 taken into a deleted auction, its bid row stranded),
+  `readingTheSalesWhileOneCloses` (red on the ArrayList: ConcurrentModificationException, found by a gate in which a
+  timer closed a sale while the test read the listing),
   `aCancelWhoseBidsCannotBeDeletedCanBeRetried` and `anEndWhoseBidsCannotBeDeletedIsRetried` (red when the sale closed
   before its bids: the bid stranded, the sale closed for good), `theAuctioneerSaysWhenACancelFailed` (through the
   Auctioneer's bypass, its messages recorded: red on upstream's message, the sale still open).
+
+## CP-0032 The drop seam
+
+- Files: `java/org/l2jmobius/gameserver/entity/actor/Attackable.java`, `java/org/l2jmobius/gameserver/entity/actor/Npc.java`, `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: the Loot Charter's routing (pact.md §4.5) and Aden Remembers' relocation (aden-remembers.md §4.3.1) must take
+  a kill's rolled drops before retail drops or auto-loots them, but `doItemDrop` computes the death-drop list and hands
+  it out in one loop (Attackable.java:1176-1204), with nothing in between (blueprint 03 §4.2; asset-service.md §11.33).
+- Change: in the branch whose drop owner is a player, the computed list goes through `DropSeam.route` before the loop.
+  With no router installed (always in `truth`) it returns the very list after one volatile read; installed routers run
+  in order on the dropping thread, each taking positions its own committed operation took, and retail drops the rest
+  unchanged. A router that throws may have committed first, so the seam asks it what its operation committed, read
+  from durable state (`DropRouter.committed`): that stays taken and the rest goes on to the next router and retail.
+  A router that cannot tell yet (the store unreadable) has what it was offered held by the seam, with the kill's
+  place, and asked again every ten seconds; once it answers, what it did not commit drops at that place as retail
+  drops it, once. A kill takes one of 10 000 slots before any router runs and keeps it while held (02 §6), so a kill
+  whose outcome becomes unknown always has room to be held; with no slot free no router runs and retail drops the
+  kill. A JVM death loses the kills held, as it loses a kill's drops before any commit (pact.md §4.5). The held drop is
+  Mobius's own: `Npc.dropItemAt` is `dropItem`'s body at a given place and instance, validated by
+  `Item.dropMeFrom` from that place (`dropMe` is `dropMeFrom` from the dropper's own), and `dropItem` calls it with the
+  NPC's own (its draws unchanged), so the drop stays a scanned, classified site and lands where the kill was. A held
+  kill whose instance is gone when it resolves drops nothing: retail destroys an instance's ground items with it, and
+  an item cannot enter an instance that no longer exists, so it would otherwise fall into the world outside. Whenever
+  the instance went, the item's own instance after `dropMeFrom` assigns it decides: one that did not enter a non-zero
+  instance is not published, and `dropItemAt` destroys it at once (it was never in a holding). That guard is the held
+  kill's alone (`requireInstance`, which only the seam sets): retail's own drops, `dropItem`, `dropMe` and a player's,
+  publish as upstream does.
+  A position outside its list, or null, is ignored. Every epoch keeps its own kill counter for the JVM's life, so no
+  key is given twice. The fake-player branch and the spoil list are not offered.
+- Invariant: every item a kill rolls is dropped, auto-looted or taken by exactly one committed operation; with no router
+  the kill is retail's.
+- Proof: `DropSeamTest` (red with the seam ignoring its routers: a router's positions dropped anyway, the second router
+  offered everything, kills unnumbered; red as first written, Codex rounds amd26-27: a throwing router's items dropped,
+  then all withheld though it committed nothing or only part, then withheld for good while its outcome was unreadable
+  or once 10 000 waited (red without the slots);
+  a null position losing the rest of the kill, an epoch reinstalled after another reusing `kill/73/1`); a held kill
+  drops at its place after its monster moved (the test world has no geodata and no live instance, so that the drop is
+  validated from the kill's place and falls in its instance is by construction: `dropMe` is `dropMeFrom` with the
+  dropper's own place and instance); a held kill whose instance is gone drops nothing (red without the check: its
+  drops fell into instance 0), and `aDropThatCannotEnterItsInstanceIsNotPublished` (red without the check after the
+  assignment, Codex round amd31), and `aRetailDropIntoAVanishedInstanceIsPublishedAsUpstreamDoes` (red with that
+  guard on every drop, Codex round amd32); `DropLockTest`,
+  `PausedWorldTest` and the other behaviour locks unchanged.
+
+## CP-0033 The crafting boundary
+
+- Files: `java/org/l2jmobius/gameserver/managers/RecipeManager.java`
+- Reason: PACT's contractual craft (pact.md §4.3) validates, rolls with its own keyed draw and applies through the Asset
+  Service, but every retail rule of a craft lives inside one runnable, `RecipeItemMaker` (RecipeManager.java:171-782):
+  validation, the success and masterwork draws (:416, :679), the materials (:608-660) and the product (:669-686)
+  (blueprint 03 §4.3; asset-service.md §11.34).
+- Change: `RecipeManager.Craft` holds them as functions: `refusal` (what `requestMakeItem` and the maker's constructor
+  refuse), `successRate`, `masterworkApplies`, `masterworkRatePpm` (min(100, ceil(rarity × CraftMasterworkChanceRate)) ×
+  10 000, the probability retail's draw has), `materials`, `product`, `creationPasses` and `consumeStats` (what a craft's
+  passes take: with `AltGameCreation` its materials grabbed skill level × GIM at a time, each pass its integer share),
+  and `refusal` includes retail's one-craft-at-a-time guard with `AltGameCreation`.
+  The maker takes its success rate, its masterwork rule and product, its materials and its stat cost from them; its two
+  `Rnd` draws stay where they are, in the same order. `refusal` mirrors the maker's checks, which also send their
+  packets and abort; its test pins it to them.
+- Invariant: a retail craft draws the same numbers in the same order and makes the same thing as upstream.
+- Proof: `CraftBoundaryTest.retailCraftIsUnchanged` (110 crafts recorded on upstream's RecipeManager, each with its
+  stream's next draw, so a draw added or removed shows: red with the zero-probability masterwork draw removed);
+  `withAltGameCreationTheCallableRulesAreRetailsToo` (red as first written: 174 MP for retail's 165, no busy guard); `theRatesAreRetails`, `materialsAndProductAreRetails`, `refusalMatchesWhatRetailRefuses`,
+  `consumeStatsTakesWhatRetailTakes` (red without `Craft`: they do not compile).

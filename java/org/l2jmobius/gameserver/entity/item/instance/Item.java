@@ -1856,13 +1856,39 @@ public class Item extends WorldObject
 	 */
 	public void dropMe(Creature dropper, int locX, int locY, int locZ)
 	{
+		if (dropper != null)
+		{
+			dropMeFrom(dropper, dropper.getX(), dropper.getY(), dropper.getZ(), dropper.getInstanceId(), false, locX, locY, locZ);
+		}
+		else
+		{
+			dropMeFrom(null, 0, 0, 0, 0, false, locX, locY, locZ);
+		}
+	}
+	
+	/**
+	 * Drops as {@link #dropMe} does, the destination validated from a given place and instance rather than the dropper's
+	 * current ones (CP-0032: a kill's held drops fall where the kill was, though its NPC may have respawned elsewhere).
+	 * @param dropper the dropper, or null
+	 * @param fromX the place the drop is validated from
+	 * @param fromY the place the drop is validated from
+	 * @param fromZ the place the drop is validated from
+	 * @param instanceId the instance it falls in
+	 * @param requireInstance whether an item that cannot enter {@code instanceId} (gone meanwhile) is left unpublished
+	 *            rather than dropped in the world outside, as upstream's drop does: the drop seam's held kills only
+	 * @param locX the destination
+	 * @param locY the destination
+	 * @param locZ the destination
+	 */
+	public void dropMeFrom(Creature dropper, int fromX, int fromY, int fromZ, int instanceId, boolean requireInstance, int locX, int locY, int locZ)
+	{
 		int x = locX;
 		int y = locY;
 		int z = locZ;
 		
 		if (dropper != null)
 		{
-			final Location dropDest = GeoEngine.getInstance().getValidLocation(dropper.getX(), dropper.getY(), dropper.getZ(), x, y, z, dropper.getInstanceId());
+			final Location dropDest = GeoEngine.getInstance().getValidLocation(fromX, fromY, fromZ, x, y, z, instanceId);
 			x = dropDest.getX();
 			y = dropDest.getY();
 			z = dropDest.getZ();
@@ -1870,7 +1896,11 @@ public class Item extends WorldObject
 		
 		if (dropper != null)
 		{
-			setInstanceId(dropper.getInstanceId()); // Inherit instancezone when dropped in visible world.
+			setInstanceId(instanceId); // Inherit instancezone when dropped in visible world.
+			if (requireInstance && (getInstanceId() != instanceId))
+			{
+				return; // CP-0032: a held kill's instance is gone (the setter ignores one that does not exist): never the world outside
+			}
 		}
 		else
 		{

@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.entity.item.ItemTemplate;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.managers.ScriptManager;
 import org.l2jmobius.gameserver.mechanics.olympiad.Hero;
@@ -61,6 +62,31 @@ final class Eligibility
 			return "time-limited or shadow item";
 		}
 		if (blanketDeleted().contains(item.getId()))
+		{
+			return "an item id Mobius deletes by item id (hero or event item)";
+		}
+		return null;
+	}
+
+	/**
+	 * For an item a source creates straight into a custody (§4.4): the checks that need no holder, on its template.
+	 * @return why it may not, or null if it may
+	 */
+	static String templateRefusal(ItemTemplate template)
+	{
+		if (template == null)
+		{
+			return "no such item";
+		}
+		if (!template.isTradeable() || template.isQuestItem())
+		{
+			return "a quest item, or not tradeable";
+		}
+		if ((template.getTime() > 0) || (template.getDuration() >= 0))
+		{
+			return "time-limited or shadow item";
+		}
+		if (blanketDeleted().contains(template.getId()))
 		{
 			return "an item id Mobius deletes by item id (hero or event item)";
 		}

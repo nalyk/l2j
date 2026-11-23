@@ -63,6 +63,7 @@ import org.l2jmobius.gameserver.entity.groups.Party;
 import org.l2jmobius.gameserver.entity.item.ItemTemplate;
 import org.l2jmobius.gameserver.entity.item.holders.ItemHolder;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
+import org.l2jmobius.gameserver.livingchronicle.drop.DropSeam;
 import org.l2jmobius.gameserver.managers.CursedWeaponsManager;
 import org.l2jmobius.gameserver.managers.EventDropManager;
 import org.l2jmobius.gameserver.managers.PcCafePointsManager;
@@ -1173,7 +1174,7 @@ public class Attackable extends Npc
 			_sweepItems.set(npcTemplate.calculateDrops(DropType.SPOIL, this, player));
 		}
 		
-		final Collection<ItemHolder> deathItems = npcTemplate.calculateDrops(DropType.DROP, this, player);
+		final Collection<ItemHolder> deathItems = DropSeam.route(this, player, npcTemplate.calculateDrops(DropType.DROP, this, player)); // CP-0032
 		if (deathItems != null)
 		{
 			for (ItemHolder drop : deathItems)

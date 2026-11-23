@@ -34,6 +34,8 @@
    Do instead: one background agent per review, each told exactly which files it may touch and given its own
    `git worktree add --detach ~/gits/l2j-<x> n1-specs` on ultra; collect their cross-spec amendments, apply them, run
    `tools/spec/traceability.py` (row status is derived from spec status lines), one full gate, then commit the batch.
+   A Codex review reads the live worktree (`l2j-n4`): while one runs, change nothing there; stage your own fixes as a
+   script in the scratchpad, dry-run it on copies, and apply it after the verdict with the review's fixes, one gate for all.
 
 ## Lock Harness Guardrails
 1. **[2026-11-19] A lock case runs whole on its own stream, aligned, in a woken arena**
@@ -81,6 +83,13 @@
 7. **[2026-11-19] Cross-row trigger rules in migrations: no locking read of the trigger's own table**
    MariaDB raises error 1442 on `FOR UPDATE` of the table that fired the trigger.
    Do instead: turn the rule into a check of NEW against a row of another table read `FOR UPDATE` (e.g. a per-item band), never an isolation guard (see the `mariadb-trigger-enforced-immutability` skill, §6-7).
+8. **[2026-11-22] A hook that can run at boot must not call a lazy `getInstance()`**
+   Do instead: read a flag the manager sets once loaded (`MailManager.isLoaded`); an ended event is swept during script
+   loading (LongTimeEvent.java:128), before `MailManager` (GameServer.java:424), and `PausedWorldTest`'s boot report
+   caught the moved load line. Truth must boot exactly as upstream; never re-record that golden for it.
+9. **[2026-11-22] A new CP touching an already-ledgered file is not caught by the ledger check**
+   Do instead: write its CORE_PATCHES.md entry by hand; `check-core-ledger.sh` compares file sets only, so CP-0031
+   (ClanHallAuction.java, already in CP-0022/23/26/29) passed the gate without one.
 
 ## Shell & Command Reliability
 1. **[2026-11-19] `git checkout -- .` on ultra leaves scp'd NEW files untracked, and push (updateInstead) then fails**

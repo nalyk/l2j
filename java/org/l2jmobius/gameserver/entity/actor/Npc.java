@@ -1923,6 +1923,25 @@ public class Npc extends Creature
 	 */
 	public Item dropItem(Creature creature, int itemId, long itemCount)
 	{
+		return dropItemAt(creature, itemId, itemCount, getX(), getY(), getZ(), getInstanceId(), false);
+	}
+	
+	/**
+	 * Drops as {@link #dropItem(Creature, int, long)} does, around a given place rather than where this NPC is now (CP-0032:
+	 * the drop seam drops a kill's held drops at the kill's place once their router's outcome is known).
+	 * @param creature the drop's owner
+	 * @param itemId the item id
+	 * @param itemCount the count
+	 * @param x the place's x
+	 * @param y the place's y
+	 * @param z the place's z
+	 * @param instanceId the place's instance
+	 * @param requireInstance whether a drop that cannot enter the instance is destroyed rather than dropped in the world
+	 *            outside, as upstream's drop does (the drop seam's held kills only)
+	 * @return the dropped item, or null
+	 */
+	public Item dropItemAt(Creature creature, int itemId, long itemCount, int x, int y, int z, int instanceId, boolean requireInstance)
+	{
 		Item item = null;
 		for (int i = 0; i < itemCount; i++)
 		{
@@ -1944,11 +1963,16 @@ public class Npc extends Creature
 			}
 			
 			// Randomize drop position.
-			final int newX = (getX() + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
-			final int newY = (getY() + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
-			final int newZ = getZ() + 20;
+			final int newX = (x + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
+			final int newY = (y + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
+			final int newZ = z + 20;
 			
-			item.dropMe(this, newX, newY, newZ);
+			item.dropMeFrom(this, x, y, z, instanceId, requireInstance, newX, newY, newZ); // from the place, as dropMe from where this NPC is
+			if (requireInstance && !item.isSpawned())
+			{
+				ItemManager.destroyItem(ItemProcessType.LOOT, item, creature != null ? creature.asPlayer() : null, this); // its instance is gone
+				return null;
+			}
 			
 			// Add drop to auto destroy item task.
 			if (!GeneralConfig.LIST_PROTECTED_ITEMS.contains(itemId) && (((GeneralConfig.AUTODESTROY_ITEM_AFTER > 0) && !item.getTemplate().hasExImmediateEffect()) || ((GeneralConfig.HERB_AUTO_DESTROY_TIME > 0) && item.getTemplate().hasExImmediateEffect())))

@@ -433,9 +433,12 @@ was missed, idempotent).
   row store and the "written when due" trigger as the registry's enforcement; the tactical delay written into
   `lc_pub_type` at startup; and its §2 listing of the rule enum, which omits the three `LEDGER_*` rules its §4.7 and DDL
   hold.
-- asset-service.md: `track(objectId)`: in one transaction, if the object has no live lifecycle, insert one
-  (`began_op` null, kind `TRACKED`) and emit `Asset.LifecycleTracked`; idempotent; ended by the existing end sites;
-  runs under the object's stack lock like any operation that reads an object (§3.3).
+- asset-service.md (as its revision 16 states it, §4.3, §11.35): `track(item, process, reference)` on the container
+  seam's thread is an O(1) capture, with no item lock and no I/O, offered to the lifecycle writer's bounded queue (a
+  non-stackable, not retired, not destroyed item; refused on a full queue, the item's next entry trying again); the
+  writer begins the lifecycle (`began_op` null) or binds to the one the item has, and writes `Asset.LifecycleTracked`
+  with the entry's process and reference; every lifecycle ends with `Asset.LifecycleEnded` (`DESTROYED`, or `VANISHED`
+  at a start).
 - pact.md §4.10: `pact_completed` split into `pact_completed` (type, parties, outcome, day) and `pact_completed_terms`
   (with clause kinds and totals, written only for `PUBLIC` and `publishable` contracts), so the registry itself refuses
   terms on any other row; and `parties` split into `party_clans` (`PUBLIC_ENTITY`) and `party_characters` (`NAME_TOKEN`

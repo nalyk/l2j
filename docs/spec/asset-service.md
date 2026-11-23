@@ -1,6 +1,6 @@
 # SPEC-ASSET — Asset Service
 
-- Status: draft (revision 16, under review; revision 15 signed off by Codex in amendment round 33; record in §12)
+- Status: reviewed (revision 16; signed off with one fix by Codex in amendment round 42; record in §12)
 - Blueprint: 04 §3 (Asset Service), §8 (failure degradation), §9 (persistence); 02 §4 (production invariants), §6 (budgets);
   15 §3–§4 (PACT lifecycle and escrow rules); 16 §7 (zero minting); 12 §6.2 (treasury commitments), §8 (caravans);
   consensus §4.2 a–b, §4.3, §10.2–§10.3.
@@ -922,7 +922,7 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 
 ## 12. Review record
 
-- Revision 16 (amendment, under review): N4 part 7, the last four operations and the lifecycles they rest on.
+- Revision 16 (amendment, signed off with one fix in round 42): N4 part 7, the last four operations and the lifecycles they rest on.
   Implementing them found that no lifecycle was ever written, that §2.2 named a column (`began_kind`) the DDL does not
   have, and that a stackable's lifecycle cannot outlive its first retail move (§11.35), so its merges and splits would
   have had to track every Adena stack. Lifecycles are for non-stackable items only (§2.2, INV08, ASSET-R07): V019 drops
@@ -993,6 +993,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
   ends what it began; the writer locks the lifecycle rows only; `began_at` is the transaction's time, the capture's
   game time in the fact; the raid example rounds per item id, one to zero; chronicle.md §4.6 admits non-stackable
   saga items only and refuses a start whose list names a stackable.
+- Amendment round 42 (Codex), SIGN-OFF WITH FIXES: chronicle.md §11 still described the old `track`. Fixed: it
+  states revision 16's capture, writer and facts.
 - Revision 15 (amendment, signed off in round 33): N4 part 6, the drop and craft seams. §11.33 is the drop seam (03 §4.2) the
   Loot Charter's `route` and Aden Remembers' `relocate` share, its contract and its limits; §11.34 the crafting boundary
   (03 §4.3) PACT's contractual craft uses, retail's draws unchanged. §4.4 holds the template of an item a source creates

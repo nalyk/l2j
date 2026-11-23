@@ -8,6 +8,8 @@ public enum SinkCode
 {
 	/** Road wardens' wages paid from an Open Roads law's custody (aden-remembers.md §4.5). */
 	CROWN_UPKEEP,
+	/** The share of a raided manifest that falls on the ground after the commit (asset-service.md §4.3 {@code raid}). */
+	RAID_SHARE,
 	/** The rest of a raided manifest. */
 	ROAD_LOSS,
 	/** A contractual craft's materials, consumed from the contract's custody (pact.md §4.3). */

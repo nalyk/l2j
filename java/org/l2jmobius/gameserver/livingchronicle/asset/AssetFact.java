@@ -33,6 +33,17 @@ record AssetFact(String typeName, String stream, String payloadJson) implements 
 		return new AssetFact("Asset." + name, "asset.lifecycle", Json.object(payload));
 	}
 
+	/** A fact in a named stream ({@code issue}'s, of the contract it represents, §5). */
+	static AssetFact in(String stream, String name, Object... fields)
+	{
+		final Map<String, Object> payload = new LinkedHashMap<>();
+		for (int i = 0; i < fields.length; i += 2)
+		{
+			payload.put((String) fields[i], fields[i + 1]);
+		}
+		return new AssetFact("Asset." + name, stream, Json.object(payload));
+	}
+
 	static AssetFact of(String name, int custody, Object... fields)
 	{
 		final Map<String, Object> payload = new LinkedHashMap<>();

@@ -98,32 +98,32 @@ custody rows, after-commit marks); Test `FundWholeObjectTest` (AT-ASSET-07) or a
 
 **Files:** Modify `AssetTx.java`; Test `RaidTest.java` (AT-ASSET-27).
 
-- [ ] Tests: share and rest exactly the contents, else refused; at 300‰, 100 coal in two rows, four swords of one item id
+- [x] Tests: share and rest exactly the contents, else refused; at 300‰, 100 coal in two rows, four swords of one item id
   and one of another: one new object of 30 coal and the lowest-id sword of the four (id, enchant, lifecycle kept) at the
   Master's place after commit, 70 coal, three swords and the single one (rounded to 0) sunk, lifecycles ended, every row
   deleted; pickup saves a new row, census equals counters;
   `UNCERTAIN` resolved as not committed drops nothing; a crash after commit before the drop: nothing dropped, the
   lifecycle `VANISHED` at the next start.
-- [ ] Implement; commit.
+- [x] Implement; commit.
 
 ### Task 5: `issue`
 
 **Files:** Modify `AssetTx.java`; Test `IssueTest.java`.
 
-- [ ] Tests: two parchments in one operation (keys per recipient); a second issue for one key refused; refused per
+- [x] Tests: two parchments in one operation (keys per recipient); a second issue for one key refused; refused per
   clause (stackable, tradable, droppable, sellable, depositable, priced, crystallizable, extractable, skills, a handler
   but `Bypass`); issued item in service mail with a lifecycle, the fact carrying it.
-- [ ] Implement; commit.
+- [x] Implement; commit.
 
 ### Task 6: `recycle`
 
 **Files:** Create `livingchronicle/asset/RecordedSinks.java`; Modify `AssetTx.java`, `AssetService.java` (install);
 Test `RecycleTest.java`.
 
-- [ ] Tests: refused with no reader or supplier, nothing recorded, permille 0 or 251, today or later, above the active
+- [x] Tests: refused with no reader or supplier, nothing recorded, permille 0 or 251, today or later, above the active
   share (101 of 1000 at 100‰), a non-`POOL` custody, twice for one (territory, day) by one pool or two; credited once
   within the share with `Asset.SinkRecycled` naming the bound.
-- [ ] Implement; commit.
+- [x] Implement; commit.
 
 ### Task 7: INV08 at the census, ledger, traceability, gate
 

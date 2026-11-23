@@ -614,6 +614,42 @@ public class Item extends WorldObject
 	}
 	
 	/**
+	 * CP-0035 (docs/spec/asset-service.md §4.3 {@code raid}, §11.36): a raided share's object rebuilt from the state its
+	 * custody row held, which the raid's transaction deleted: a new, unsaved, uncounted object of the same id (no row, not
+	 * marked counted, location {@code VOID}), its augmentation and elementals set in memory only, so the first save writes
+	 * them with its row ({@link #insertIntoDb}); nothing is written here and nothing is counted.
+	 * @param augmentation the {@code augAttributes} its row held, or -1 for none
+	 * @param elementals pairs of element type and value its rows held
+	 * @return the object, or null for an unknown item id
+	 */
+	public static Item rebuilt(int objectId, int itemId, long count, int enchantLevel, int customType1, int customType2, int manaLeft, long time, int augmentation, int[][] elementals)
+	{
+		final ItemTemplate template = ItemData.getInstance().getTemplate(itemId);
+		if (template == null)
+		{
+			return null;
+		}
+		final Item item = new Item(objectId, template);
+		item.setCount(count);
+		item._enchantLevel = enchantLevel;
+		item._type1 = customType1;
+		item._type2 = customType2;
+		item._mana = manaLeft;
+		item._time = time;
+		item._loc = ItemLocation.VOID;
+		item._ownerId = 0;
+		if (augmentation != -1)
+		{
+			item._augmentation = new Augmentation(augmentation);
+		}
+		for (int[] element : elementals)
+		{
+			item.applyAttribute((byte) element[0], element[1]);
+		}
+		return item;
+	}
+
+	/**
 	 * Releases this destroyed item's object id as soon as no row holds it (CP-0011): at once if the item has no row,
 	 * otherwise right after {@link #updateDatabase()} has deleted the row, never if that delete fails, so the id manager
 	 * never hands out an id a row still uses (asset-service.md §11.6).

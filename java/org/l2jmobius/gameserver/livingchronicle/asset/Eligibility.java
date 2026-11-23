@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.l2jmobius.gameserver.entity.actor.Player;
+import org.l2jmobius.gameserver.entity.item.EtcItem;
 import org.l2jmobius.gameserver.entity.item.ItemTemplate;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
 import org.l2jmobius.gameserver.managers.ScriptManager;
@@ -89,6 +90,53 @@ final class Eligibility
 		if (blanketDeleted().contains(template.getId()))
 		{
 			return "an item id Mobius deletes by item id (hero or event item)";
+		}
+		return null;
+	}
+
+	/**
+	 * {@code issue}'s representation test (§4.3): a parchment or a seal is non-stackable, cannot be traded, dropped, sold,
+	 * deposited or crystallized ({@code RequestCrystallizeItem} pays crystals for any crystallizable item, whatever its
+	 * price or flags), has no reference price, no extractable items and no item skills (either would make something on
+	 * use), and no item handler but {@code Bypass}, which opens a page (Bypass.java:41-52).
+	 * @return why the template is not a representation, or null if it is
+	 */
+	static String representationRefusal(ItemTemplate template)
+	{
+		if (template == null)
+		{
+			return "no such item";
+		}
+		if (template.isStackable())
+		{
+			return "stackable";
+		}
+		if (template.isTradeable() || template.isDropable() || template.isSellable() || template.isDepositable())
+		{
+			return "tradable, droppable, sellable or depositable";
+		}
+		if (template.isCrystallizable())
+		{
+			return "crystallizable";
+		}
+		if (template.getReferencePrice() != 0)
+		{
+			return "priced";
+		}
+		if (template.hasSkills())
+		{
+			return "with item skills";
+		}
+		if (template instanceof EtcItem etc)
+		{
+			if ((etc.getExtractableItems() != null) && !etc.getExtractableItems().isEmpty())
+			{
+				return "extractable";
+			}
+			if ((etc.getHandlerName() != null) && !etc.getHandlerName().isEmpty() && !"Bypass".equals(etc.getHandlerName()))
+			{
+				return "a handler other than Bypass";
+			}
 		}
 		return null;
 	}

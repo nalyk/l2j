@@ -24,6 +24,10 @@ public final class AssetAbort extends Exception
 		MODULE_FROZEN,
 		/** The item may not enter a custody (§4.4): equipped, quest, time-limited, shadow, deleted by item id... */
 		INELIGIBLE,
+		/** {@code recycle}'s bound is unknown: no reader or permille installed, nothing recorded, or the day not over (§4.3). */
+		NOT_RECORDED,
+		/** {@code recycle} above its recorded share, or a {@code RecyclePermille} outside 1-250 (§4.3). */
+		ABOVE_SHARE,
 		/** The character to debit is not in the world. */
 		HOLDER_ABSENT,
 		/** The receiver of a service mail no longer exists or is marked for deletion (§2.1). */

@@ -667,3 +667,20 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   `theStartupCleanupRunsThePassWhileLivingChronicleRunsAndNothingInTruth` (red with the two `DatabaseIdManager` lines
   off); with the `truth` gate off the shared `truth` boot stops ("the server must not start"); `IdReleaseTest`
   (CP-0011's `truth` behaviour) and `PausedWorldTest` unchanged.
+
+## CP-0035 A raided share's object rebuilt from its row
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`
+- Reason: a raid's share falls on the ground once its commit is known, keeping each non-stackable object's id, enchant,
+  augmentation, elementals and lifecycle (asset-service.md §4.3 `raid`, §11.36); its custody rows were deleted in the
+  raid's transaction (INV07: no `Item` exists for an `ESCROW` row). Mobius builds an item only from its row
+  (`restoreFromDb`, which marks it counted, CP-0021, and reloads attributes from rows) or as new, and
+  `setAugmentation` writes its row at once and notifies scripts.
+- Change: `Item.rebuilt(objectId, itemId, count, enchant, type1, type2, mana, time, augmentation, elementals)` builds the
+  object in memory only: no row, not counted, `VOID`, owner 0, its augmentation and elementals in its fields, which
+  its first save writes (`insertIntoDb`). Nothing is written, nothing counted; nothing else changes.
+- Invariant: a rebuilt object enters the counted holdings only as any drop does (a pickup, or the saved ground); `truth`
+  never calls it.
+- Proof: `RaidTest.aRaidDropsItsShareOnceAfterTheCommitAndLosesTheRestToTheRoad` (red with the enchant not set: 0 for 3;
+  red with the after-commit drop off: the sword not on the ground; its pickup saves it as a new row with its enchant);
+  the site table classifies `Item.rebuilt` (`item_rebuilt`, SOURCE to GROUND; `AssetEconomySitesTest` red without it).

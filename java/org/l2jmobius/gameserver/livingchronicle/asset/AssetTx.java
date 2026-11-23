@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 
 import org.l2jmobius.gameserver.data.sql.ClanTable;
 import org.l2jmobius.gameserver.entity.World;
+import org.l2jmobius.gameserver.entity.actor.Npc;
 import org.l2jmobius.gameserver.entity.actor.Player;
 import org.l2jmobius.gameserver.entity.clan.Clan;
 import org.l2jmobius.gameserver.entity.item.instance.Item;
@@ -115,6 +116,8 @@ public final class AssetTx implements AutoCloseable
 	private final List<Version> _versions = new ArrayList<>();
 	private final List<Key> _keys = new ArrayList<>();
 	private final List<DurableFact> _facts = new ArrayList<>();
+	/** Run once by this call after its commit is known (§4.3 {@code raid}): never for a prior commit, never by recovery. */
+	private final List<Runnable> _afterCommit = new ArrayList<>();
 	private boolean _ended;
 	/** The owner modules of the custodies the last attempt locked: frozen with the operation's module on an unresolved commit. */
 	private final TreeSet<String> _owners = new TreeSet<>();
@@ -287,6 +290,182 @@ public final class AssetTx implements AutoCloseable
 			}
 			execution.facts().add(AssetFact.lifecycle("LifecycleEnded", "lifecycle", lifecycle, "object", objectId, "item", itemId, "reason", "DESTROYED", "operation", _op.hex()));
 		});
+	}
+
+	/**
+	 * A caravan's raid (§4.3 {@code raid}, §2.5 {@code RAID_SHARE}, {@code ROAD_LOSS}; aden-remembers.md §4.6): {@code share}
+	 * and {@code rest} (non-stackable items by object id, a stackable by item id and quantity) are together exactly the
+	 * manifest's contents, else nothing happens; every manifest row is deleted. A non-stackable share object's row is read
+	 * first and its lifecycle stays live; a stackable's share becomes one new object of its quantity. The share drops at
+	 * the Master's place and instance, as taken now, only once this call's commit is known, never repeated; the rest is
+	 * lost to the road, its lifecycles ended.
+	 */
+	public void raid(int manifest, List<Asset> share, List<Asset> rest, Npc master)
+	{
+		final List<Asset> shared = List.copyOf(share);
+		final List<Asset> lost = List.copyOf(rest);
+		final int x = master.getX();
+		final int y = master.getY();
+		final int z = master.getZ();
+		final int instanceId = master.getInstanceId();
+		final List<RaidShare.Snapshot> drops = new ArrayList<>();
+		step(execution ->
+		{
+			drops.clear(); // a retried attempt starts again
+			final Custody custody = execution.open(manifest);
+			execution.notFrozen(custody);
+			execution.exactlyTheContents(manifest, shared, lost);
+			final long caravan = custody.ownerRef();
+			final List<Map<String, Object>> shareLegs = new ArrayList<>();
+			for (Asset asset : shared)
+			{
+				if (asset.objectId() != null)
+				{
+					final RaidShare.Snapshot snapshot = execution.snapshot(asset.objectId());
+					final Long lifecycle = execution.lifecycleOf(asset.objectId(), asset.itemId());
+					execution.take(manifest, asset, true, false); // RAID_SHARE keeps its lifecycle: the object falls on the ground
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.RAID_SHARE.name(), asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+					shareLegs.add(legOf(asset, lifecycle));
+					drops.add(snapshot);
+				}
+				else
+				{
+					execution.take(manifest, asset, true);
+					execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), null, null, asset.qty(), Leg.Direction.DEBIT));
+					execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.RAID_SHARE.name(), asset.itemId(), null, null, asset.qty(), Leg.Direction.CREDIT));
+					shareLegs.add(legOf(asset));
+					drops.add(RaidShare.Snapshot.amount(_service.ids().next(), asset.itemId(), asset.qty()));
+				}
+				execution.existence(asset.itemId(), -asset.qty());
+			}
+			final List<Map<String, Object>> restLegs = new ArrayList<>();
+			for (Asset asset : execution.wholes(manifest, lost))
+			{
+				execution.take(manifest, asset, true);
+				final Long lifecycle = execution.lifecycle(asset);
+				execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, manifest, null, asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.DEBIT));
+				execution.legs().add(new Leg(Leg.AccountKind.SINK, caravan, SinkCode.ROAD_LOSS.name(), asset.itemId(), asset.objectId(), lifecycle, asset.qty(), Leg.Direction.CREDIT));
+				execution.existence(asset.itemId(), -asset.qty());
+				restLegs.add(legOf(asset, lifecycle));
+			}
+			final Map<String, Object> place = new LinkedHashMap<>();
+			place.put("x", x);
+			place.put("y", y);
+			place.put("z", z);
+			place.put("instance", instanceId);
+			execution.facts().add(AssetFact.of("ManifestRaided", manifest, "custody", manifest, "caravan", caravan, "share", shareLegs, "rest", restLegs, "place", place));
+		}, manifest);
+		_afterCommit.add(() -> RaidShare.drop(List.copyOf(drops), master, x, y, z, instanceId));
+	}
+
+	/** The representation codes {@code issue} creates from (§2.5): valueless, non-tradable, never minted value. */
+	public enum Representation
+	{
+		PACT_PARCHMENT("ParchmentIssued"),
+		LEDGER_SEAL("SealIssued");
+
+		private final String _fact;
+
+		Representation(String fact)
+		{
+			_fact = fact;
+		}
+	}
+
+	/**
+	 * Issues one representation item (§4.3 {@code issue}, §2.5 {@code PACT_PARCHMENT}, {@code LEDGER_SEAL}): from its source
+	 * to the character by service mail, with a lifecycle begun, under the settlement key
+	 * {@code issue}/{@code <code>/<reference>/<recipientKey>}, so one operation may issue to every party and an item is
+	 * never issued twice for one key; refused ({@code INELIGIBLE}) unless the template is a representation.
+	 * @param reference the contract the item represents
+	 * @param recipientKey a parchment's character (pact.md §4.8), a seal's hunter (black-ledger.md §4.9)
+	 */
+	public void issue(int charId, int itemId, Representation code, long reference, String recipientKey, String subject, String content)
+	{
+		if ((subject == null) || subject.isBlank() || (content == null))
+		{
+			throw new IllegalArgumentException("a service mail names its institution and says why");
+		}
+		settlementKey("issue", code.name() + "/" + reference + "/" + recipientKey);
+		_characters.add(charId);
+		step(execution ->
+		{
+			final String refusal = Eligibility.representationRefusal(ItemData.getInstance().getTemplate(itemId));
+			if (refusal != null)
+			{
+				throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, "item " + itemId + " is not a representation: " + refusal);
+			}
+			if (!execution.receiverAlive(charId))
+			{
+				throw new AssetAbort(AssetAbort.Reason.RECEIVER_GONE, "character " + charId + " is gone or marked for deletion");
+			}
+			final Connection connection = execution.connection();
+			final int mail = insertServiceMail(connection, charId, subject, content);
+			final Asset asset = attachCreated(connection, mail, new Asset(itemId, 1, null));
+			final Long lifecycle = execution.lifecycle(asset);
+			execution.legs().add(new Leg(Leg.AccountKind.SOURCE, reference, code.name(), itemId, asset.objectId(), lifecycle, 1, Leg.Direction.DEBIT));
+			execution.legs().add(new Leg(Leg.AccountKind.MAIL, mail, null, itemId, asset.objectId(), lifecycle, 1, Leg.Direction.CREDIT));
+			execution.existence(itemId, 1);
+			execution.mailed(mail, charId, MailReason.PAYOUT);
+			execution.facts().add(AssetFact.in("asset.contract." + reference, code._fact, "contract", reference, "character", charId, "mail", mail, "object", asset.objectId(), "lifecycle", lifecycle));
+		});
+	}
+
+	/**
+	 * A Guild pool's daily recycled share (§4.3 {@code recycle}, §2.5 {@code SINK_RECYCLE}; aden-remembers.md §4.6): Adena
+	 * from the source to a {@code POOL} custody, for a day already over, at most the recorded teleport-fee sink of the
+	 * territory that day × the active {@code RecyclePermille} / 1000, once per territory and day (settlement key
+	 * {@code recycle}/{@code <territory>/<day>}). Refused with no reader or permille installed, nothing recorded, a
+	 * permille of 0 or above {@link RecycleBound#CEILING_PERMILLE}, or above the share.
+	 */
+	public void recycle(int pool, int territory, java.time.LocalDate day, long amount)
+	{
+		if (amount <= 0)
+		{
+			throw new IllegalArgumentException("a recycled amount is positive, not " + amount);
+		}
+		settlementKey("recycle", territory + "/" + day);
+		step(execution ->
+		{
+			if (!day.isBefore(org.l2jmobius.gameserver.livingchronicle.clock.GameClock.localDateTime().toLocalDate()))
+			{
+				throw new AssetAbort(AssetAbort.Reason.NOT_RECORDED, "day " + day + " is not over");
+			}
+			final RecycleBound.RecordedSinks reader = RecycleBound.reader();
+			final java.util.function.IntSupplier permilles = RecycleBound.permille();
+			if ((reader == null) || (permilles == null))
+			{
+				throw new AssetAbort(AssetAbort.Reason.NOT_RECORDED, "no recorded-sink reader or no RecyclePermille installed");
+			}
+			final java.util.OptionalLong recorded = reader.teleportFeesDestroyed(territory, day);
+			if (recorded.isEmpty())
+			{
+				throw new AssetAbort(AssetAbort.Reason.NOT_RECORDED, "nothing recorded for territory " + territory + " on " + day);
+			}
+			final int permille = permilles.getAsInt();
+			if ((permille <= 0) || (permille > RecycleBound.CEILING_PERMILLE))
+			{
+				throw new AssetAbort(AssetAbort.Reason.ABOVE_SHARE, "RecyclePermille " + permille + " is outside 1-" + RecycleBound.CEILING_PERMILLE);
+			}
+			final long share = Math.multiplyExact(recorded.getAsLong(), (long) permille) / 1000;
+			if (amount > share)
+			{
+				throw new AssetAbort(AssetAbort.Reason.ABOVE_SHARE, amount + " is above the share " + share + " (" + permille + " per mille of " + recorded.getAsLong() + ")");
+			}
+			final Custody custody = execution.open(pool);
+			if (custody.kind() != Custody.Kind.POOL)
+			{
+				throw new AssetAbort(AssetAbort.Reason.INELIGIBLE, "custody " + pool + " is not a pool");
+			}
+			execution.notFrozen(custody);
+			execution.allowsHolding(custody);
+			execution.give(pool, pool, new Asset(Inventory.ADENA_ID, amount, null));
+			execution.legs().add(new Leg(Leg.AccountKind.SOURCE, pool, "SINK_RECYCLE", Inventory.ADENA_ID, null, null, amount, Leg.Direction.DEBIT));
+			execution.legs().add(new Leg(Leg.AccountKind.CUSTODY, pool, null, Inventory.ADENA_ID, null, null, amount, Leg.Direction.CREDIT));
+			execution.existence(Inventory.ADENA_ID, amount);
+			execution.facts().add(AssetFact.of("SinkRecycled", pool, "pool", pool, "territory", territory, "day", day.toString(), "amount", amount, "recorded", recorded.getAsLong(), "permille", permille));
+		}, pool);
 	}
 
 	/** Closes an empty custody for good (§3.1 {@code OPEN → CLOSED}). */
@@ -1819,6 +1998,11 @@ public final class AssetTx implements AutoCloseable
 		{
 			_service.adopt(message);
 		}
+		for (Runnable action : _afterCommit)
+		{
+			action.run();
+		}
+		_afterCommit.clear();
 	}
 
 	private void recordViolation(AssetAbort.Violation violation, AssetAbort abort)
@@ -2135,6 +2319,12 @@ public final class AssetTx implements AutoCloseable
 		 */
 		void take(int custody, Asset asset, boolean removing) throws SQLException, AssetAbort
 		{
+			take(custody, asset, removing, true);
+		}
+
+		/** As {@link #take(int, Asset, boolean)}; {@code ending} false keeps a removed object's lifecycle live (a raided share, §4.3). */
+		void take(int custody, Asset asset, boolean removing, boolean ending) throws SQLException, AssetAbort
+		{
 			_touched.add(custody);
 			if (asset.objectId() != null)
 			{
@@ -2145,7 +2335,10 @@ public final class AssetTx implements AutoCloseable
 				}
 				if (removing)
 				{
-					endLifecycle(asset.objectId(), asset.itemId()); // a sink takes its row: the object leaves existence (§11.35)
+					if (ending)
+					{
+						endLifecycle(asset.objectId(), asset.itemId()); // a sink takes its row: the object leaves existence (§11.35)
+					}
 					deleteObject(asset.objectId());
 				}
 				return;
@@ -2291,6 +2484,135 @@ public final class AssetTx implements AutoCloseable
 		}
 
 		/** An object leaves existence: its row and its metadata rows (§2.3), in the transaction. */
+		/** {@code raid}'s check (§4.3): share and rest are exactly the custody's contents, objects by id, stacks by quantity. */
+		void exactlyTheContents(int custody, List<Asset> share, List<Asset> rest) throws SQLException, AssetAbort
+		{
+			final Map<Integer, Long> stacks = new TreeMap<>();
+			final Map<Integer, Integer> objects = new TreeMap<>();
+			try (PreparedStatement rows = _connection.prepareStatement("SELECT object_id, item_id, count FROM items WHERE owner_id = -1 AND loc = 'ESCROW' AND loc_data = ?"))
+			{
+				rows.setInt(1, custody);
+				try (ResultSet result = rows.executeQuery())
+				{
+					while (result.next())
+					{
+						final ItemTemplate template = ItemData.getInstance().getTemplate(result.getInt(2));
+						if ((template != null) && !template.isStackable())
+						{
+							objects.put(result.getInt(1), result.getInt(2));
+						}
+						else
+						{
+							stacks.merge(result.getInt(2), result.getLong(3), Long::sum);
+						}
+					}
+				}
+			}
+			final Map<Integer, Long> claimedStacks = new TreeMap<>();
+			final Map<Integer, Integer> claimedObjects = new TreeMap<>();
+			final List<Asset> all = new ArrayList<>(share);
+			all.addAll(rest);
+			for (Asset asset : all)
+			{
+				if (asset.objectId() != null)
+				{
+					if ((asset.qty() != 1) || (claimedObjects.put(asset.objectId(), asset.itemId()) != null))
+					{
+						throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + asset.objectId() + " is named twice or not as one");
+					}
+				}
+				else
+				{
+					final ItemTemplate template = ItemData.getInstance().getTemplate(asset.itemId());
+					if ((template == null) || !template.isStackable())
+					{
+						throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "a non-stackable item " + asset.itemId() + " is named by quantity");
+					}
+					claimedStacks.merge(asset.itemId(), asset.qty(), Long::sum);
+				}
+			}
+			if (!stacks.equals(claimedStacks) || !objects.equals(claimedObjects))
+			{
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "share and rest are not exactly custody " + custody + "'s contents");
+			}
+		}
+
+		/** What a custody row of a whole object holds (§4.3 {@code raid}): the row, its attributes, elementals and variables. */
+		RaidShare.Snapshot snapshot(int objectId) throws SQLException, AssetAbort
+		{
+			int itemId;
+			long count;
+			int enchant;
+			int type1;
+			int type2;
+			int mana;
+			long time;
+			try (PreparedStatement read = _connection.prepareStatement("SELECT item_id, count, enchant_level, custom_type1, custom_type2, mana_left, time FROM items WHERE object_id = ? FOR UPDATE"))
+			{
+				read.setInt(1, objectId);
+				try (ResultSet result = read.executeQuery())
+				{
+					if (!result.next())
+					{
+						throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + objectId + " has no row");
+					}
+					itemId = result.getInt(1);
+					count = result.getLong(2);
+					enchant = result.getInt(3);
+					type1 = result.getInt(4);
+					type2 = result.getInt(5);
+					mana = result.getInt(6);
+					time = result.getLong(7);
+				}
+			}
+			int augmentation = -1;
+			try (PreparedStatement read = _connection.prepareStatement("SELECT augAttributes FROM item_attributes WHERE itemId = ?"))
+			{
+				read.setInt(1, objectId);
+				try (ResultSet result = read.executeQuery())
+				{
+					if (result.next())
+					{
+						augmentation = result.getInt(1);
+					}
+				}
+			}
+			final List<int[]> elementals = new ArrayList<>();
+			try (PreparedStatement read = _connection.prepareStatement("SELECT elemType, elemValue FROM item_elementals WHERE itemId = ?"))
+			{
+				read.setInt(1, objectId);
+				try (ResultSet result = read.executeQuery())
+				{
+					while (result.next())
+					{
+						final int type = result.getByte(1);
+						final int value = result.getInt(2);
+						if ((type != -1) && (value != -1))
+						{
+							elementals.add(new int[]
+							{
+								type,
+								value
+							});
+						}
+					}
+				}
+			}
+			final Map<String, String> variables = new LinkedHashMap<>();
+			try (PreparedStatement read = _connection.prepareStatement("SELECT var, val FROM item_variables WHERE id = ?"))
+			{
+				read.setInt(1, objectId);
+				try (ResultSet result = read.executeQuery())
+				{
+					while (result.next())
+					{
+						variables.put(result.getString(1), result.getString(2));
+					}
+				}
+			}
+			return new RaidShare.Snapshot(objectId, itemId, count, enchant, type1, type2, mana, time, augmentation, elementals.toArray(new int[0][]), variables);
+		}
+
 		/**
 		 * An amount of a non-stackable item in a custody is its whole objects there, lowest object ids first (§11.35,
 		 * ASSET-R07): each then moves, leaves or is sunk as itself, its id and lifecycle kept; any other asset as it is.

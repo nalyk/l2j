@@ -54,7 +54,7 @@ class AssetSchemaTest
 				tables.add(result.getString(1));
 			}
 		}
-		final Set<String> spec = Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery", "lc_asset_pending");
+		final Set<String> spec = Set.of("lc_custody", "lc_asset_op", "lc_ledger_posting", "lc_settlement_key", "lc_item_lifecycle", "lc_economy_bucket", "lc_economy_census", "lc_economy_counter", "lc_module_state", "lc_mail_delivery", "lc_asset_pending", "lc_asset_run");
 		assertTrue(tables.containsAll(spec), "missing: " + spec.stream().filter(t -> !tables.contains(t)).toList());
 	}
 
@@ -87,12 +87,18 @@ class AssetSchemaTest
 			statement.execute(custody("CONTRACT", "CLOSED", OP));
 
 			// At most one live lifecycle per object id (ASSET-INV08); an ended one, with its reason, makes room for the next.
+			// A lifecycle is a non-stackable item's, never merged or split (spec §2.2, §11.35, V019): it ends DESTROYED or
+			// VANISHED, naming the operation and the run it ended in only once it has ended.
 			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
 			assertThrows(SQLException.class, () -> statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))"));
 			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3) WHERE object_id = 268500001"), "an end without its reason");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'MERGED' WHERE object_id = 268500001"), "a merge without the stack it went into");
-			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET merged_into = lifecycle_id WHERE object_id = 268500001"), "a live lifecycle already merged into another");
-			statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'DESTROYED' WHERE object_id = 268500001");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'MERGED' WHERE object_id = 268500001"), "a merge, which no lifecycle has");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_op = " + OP + " WHERE object_id = 268500001"), "a live lifecycle with an ending operation");
+			assertThrows(SQLException.class, () -> statement.execute("UPDATE lc_item_lifecycle SET ended_run = 1 WHERE object_id = 268500001"), "a live lifecycle with the run it ended in");
+			statement.execute("INSERT INTO lc_asset_run (started_at) VALUES (NOW(3))");
+			statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'DESTROYED', ended_op = " + OP + ", ended_run = 1 WHERE object_id = 268500001");
+			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
+			statement.execute("UPDATE lc_item_lifecycle SET ended_at = NOW(3), end_reason = 'VANISHED' WHERE object_id = 268500001 AND ended_at IS NULL");
 			statement.execute("INSERT INTO lc_item_lifecycle (object_id, item_id, began_at) VALUES (268500001, 57, NOW(3))");
 
 			// A mail delivery belongs to an operation that committed, and names one message once. (That the message exists while the

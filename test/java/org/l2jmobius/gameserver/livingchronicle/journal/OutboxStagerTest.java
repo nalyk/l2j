@@ -182,8 +182,8 @@ class OutboxStagerTest
 	@Test
 	void everyAssetFactTypeOfTheSpecIsRegistered() throws SQLException
 	{
-		final Set<String> spec = Set.of("Asset.CustodyOpened", "Asset.EscrowFunded", "Asset.EscrowReleased", "Asset.FeeCharged", "Asset.TreasuryCommitted", "Asset.TreasuryReturned", "Asset.Crafted", "Asset.LootRouted", "Asset.ParchmentIssued", "Asset.SealIssued", "Asset.ManifestRaided", "Asset.CustodyMoved", "Asset.Exchanged", "Asset.DropRelocated", "Asset.SinkRecycled", "Asset.LifecycleTracked", "Asset.Refunded", "Asset.CustodyClosed", "Asset.CustodyFrozen", "Asset.AdminCorrection", "Asset.InvariantViolated", "Asset.ConservationBroken", "Asset.MonitorRebased", "Asset.MoveImbalance", "Asset.RecoveryCompleted");
-		assertEquals(25, spec.size());
-		assertEquals(25, count("SELECT COUNT(*) FROM lc_fact_type WHERE owner_module = 'ASSET' AND durability = 'DURABLE' AND delivery = 'OUTBOX' AND name IN ('" + String.join("','", spec) + "')"));
+		final Set<String> spec = Set.of("Asset.CustodyOpened", "Asset.EscrowFunded", "Asset.EscrowReleased", "Asset.FeeCharged", "Asset.TreasuryCommitted", "Asset.TreasuryReturned", "Asset.Crafted", "Asset.LootRouted", "Asset.ParchmentIssued", "Asset.SealIssued", "Asset.ManifestRaided", "Asset.CustodyMoved", "Asset.Exchanged", "Asset.DropRelocated", "Asset.SinkRecycled", "Asset.LifecycleTracked", "Asset.LifecycleEnded", "Asset.Refunded", "Asset.CustodyClosed", "Asset.CustodyFrozen", "Asset.AdminCorrection", "Asset.InvariantViolated", "Asset.ConservationBroken", "Asset.MonitorRebased", "Asset.MoveImbalance", "Asset.RecoveryCompleted");
+		assertEquals(26, spec.size());
+		assertEquals(26, count("SELECT COUNT(*) FROM lc_fact_type WHERE owner_module = 'ASSET' AND durability = 'DURABLE' AND delivery = 'OUTBOX' AND name IN ('" + String.join("','", spec) + "')"));
 	}
 }

@@ -37,7 +37,9 @@ import java.util.logging.Logger;
 import org.l2jmobius.commons.database.DatabaseFactory;
 import org.l2jmobius.gameserver.config.IdManagerConfig;
 import org.l2jmobius.gameserver.config.custom.WeddingConfig;
+import org.l2jmobius.gameserver.livingchronicle.LivingChronicle;
 import org.l2jmobius.gameserver.livingchronicle.asset.Census;
+import org.l2jmobius.gameserver.livingchronicle.asset.LifecycleWriter;
 
 /**
  * Manages database cleanup operations and retrieval of used IDs for ID allocation.
@@ -187,6 +189,8 @@ public class DatabaseIdManager
 				LOGGER.warning("DatabaseIdManager: Could not execute update query: " + query + " - " + e);
 			}
 		}
+		
+		LivingChronicle.lifecyclesAtStartup(); // CP-0034: before any id is handed out; a failure stops the start
 	}
 	
 	/**
@@ -292,6 +296,7 @@ public class DatabaseIdManager
 			LOGGER.warning("DatabaseIdManager: Extraction interrupted: " + e.getMessage());
 		}
 		
+		usedIds.addAll(LifecycleWriter.reservedAtStartup()); // CP-0034: a live lifecycle's id, whatever the scan found
 		return usedIds;
 	}
 }

@@ -187,6 +187,107 @@ public final class AssetTx implements AutoCloseable
 		}, from, to);
 	}
 
+	/**
+	 * The lifecycle writer's capture (§11.35, {@code track}): locks the object's lifecycle rows (all of them, so an
+	 * operation's begin of the same object waits). A live lifecycle is bound; one ended in this run means an operation's
+	 * sink took the object since the writer's check ({@code INSUFFICIENT}, nothing written); otherwise one is begun
+	 * ({@code began_op} null): within a run the id names this item only, so a destruction since the capture is ended by its
+	 * end, behind this capture in the queue.
+	 */
+	void track(LifecycleWriter.Offer capture, int run)
+	{
+		step(execution ->
+		{
+			final Connection connection = execution.connection();
+			long live = 0;
+			long latest = 0;
+			boolean latestEndedThisRun = false;
+			try (PreparedStatement rows = connection.prepareStatement("SELECT lifecycle_id, ended_at IS NULL, ended_run FROM lc_item_lifecycle WHERE object_id = ? FOR UPDATE"))
+			{
+				rows.setInt(1, capture.objectId());
+				try (ResultSet result = rows.executeQuery())
+				{
+					while (result.next())
+					{
+						final long id = result.getLong(1);
+						if (result.getBoolean(2))
+						{
+							live = id;
+						}
+						if (id > latest)
+						{
+							latest = id;
+							final int endedRun = result.getInt(3);
+							latestEndedThisRun = !result.wasNull() && (endedRun == run);
+						}
+					}
+				}
+			}
+			final boolean begun;
+			final long lifecycle;
+			if (live != 0)
+			{
+				lifecycle = live;
+				begun = false;
+			}
+			else if (latestEndedThisRun)
+			{
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + capture.objectId() + " was taken by an operation in this run");
+			}
+			else
+			{
+				try (PreparedStatement insert = connection.prepareStatement("INSERT INTO lc_item_lifecycle (object_id, item_id, began_op, began_at) VALUES (?, ?, NULL, NOW(3))", Statement.RETURN_GENERATED_KEYS))
+				{
+					insert.setInt(1, capture.objectId());
+					insert.setInt(2, capture.itemId());
+					insert.executeUpdate();
+					try (ResultSet keys = insert.getGeneratedKeys())
+					{
+						keys.next();
+						lifecycle = keys.getLong(1);
+					}
+				}
+				begun = true;
+			}
+			execution.facts().add(AssetFact.lifecycle("LifecycleTracked", "lifecycle", lifecycle, "object", capture.objectId(), "item", capture.itemId(), "owner", capture.ownerId(), "location", capture.location(), "captured_at", capture.capturedAt(), "process", capture.process(), "reference", capture.reference(), "begun", begun));
+		});
+	}
+
+	/** The lifecycle writer's end (§11.35): the live lifecycle of a destroyed object, if any, ends {@code DESTROYED}. */
+	void endDestroyed(int objectId, int run)
+	{
+		step(execution ->
+		{
+			final Connection connection = execution.connection();
+			long lifecycle = 0;
+			int itemId = 0;
+			try (PreparedStatement live = connection.prepareStatement("SELECT lifecycle_id, item_id FROM lc_item_lifecycle WHERE live_object_id = ? FOR UPDATE"))
+			{
+				live.setInt(1, objectId);
+				try (ResultSet result = live.executeQuery())
+				{
+					if (result.next())
+					{
+						lifecycle = result.getLong(1);
+						itemId = result.getInt(2);
+					}
+				}
+			}
+			if (lifecycle == 0)
+			{
+				throw new AssetAbort(AssetAbort.Reason.INSUFFICIENT, "object " + objectId + " has no live lifecycle");
+			}
+			try (PreparedStatement end = connection.prepareStatement("UPDATE lc_item_lifecycle SET ended_at = GREATEST(NOW(3), began_at), end_reason = 'DESTROYED', ended_op = ?, ended_run = ? WHERE lifecycle_id = ?"))
+			{
+				end.setBytes(1, _op.bytes());
+				end.setInt(2, run);
+				end.setLong(3, lifecycle);
+				end.executeUpdate();
+			}
+			execution.facts().add(AssetFact.lifecycle("LifecycleEnded", "lifecycle", lifecycle, "object", objectId, "item", itemId, "reason", "DESTROYED", "operation", _op.hex()));
+		});
+	}
+
 	/** Closes an empty custody for good (§3.1 {@code OPEN → CLOSED}). */
 	public void close(int custody)
 	{

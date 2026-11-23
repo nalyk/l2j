@@ -22,9 +22,11 @@ import org.l2jmobius.gameserver.livingchronicle.asset.AssetRecovery;
 import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
 import org.l2jmobius.gameserver.livingchronicle.asset.EconomyMonitor;
 import org.l2jmobius.gameserver.livingchronicle.asset.HoldingPolicy;
+import org.l2jmobius.gameserver.livingchronicle.asset.LifecycleWriter;
 import org.l2jmobius.gameserver.livingchronicle.asset.ServiceMail;
 import org.l2jmobius.gameserver.livingchronicle.clock.GameClock;
 import org.l2jmobius.gameserver.livingchronicle.journal.OutboxStager;
+import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.managers.MailManager;
 
 /**
@@ -110,6 +112,19 @@ public final class LivingChronicle
 		{
 			throw new IllegalStateException("Living Chronicle could not take the startup census (are the migrations applied?)", e);
 		}
+	}
+
+	/**
+	 * CP-0034, from {@code DatabaseIdManager.cleanDatabase} after its cleanup and before the id set is built: the lifecycles'
+	 * startup pass and the writer of this run (asset-service.md §11.35). In {@code truth} it returns at once.
+	 */
+	public static void lifecyclesAtStartup()
+	{
+		if (profile() == Profile.TRUTH)
+		{
+			return;
+		}
+		LifecycleWriter.atStartup(DatabaseFactory::getConnection, () -> IdManager.getInstance().getNextId(), stager());
 	}
 
 	/** Seam B, once Mobius's managers are up and before any login: recovery (asset-service.md §3.2, §7). */

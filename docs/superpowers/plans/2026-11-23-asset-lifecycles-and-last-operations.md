@@ -71,13 +71,13 @@ Test `test/.../asset/LifecycleTest.java`.
 `LifecycleWriter.destroyed(Item)` (O(1) offer); `LifecycleWriter.startup(Connection) -> int[]` (the live lifecycles' ids
 to reserve; throws on failure); `LifecycleWriter.isRunning()`.
 
-- [ ] Tests, each red first: a destroyed non-stackable keeps its id (a stackable's is released); a tracked item
+- [x] Tests, each red first: a destroyed non-stackable keeps its id (a stackable's is released); a tracked item
   destroyed ends `DESTROYED` with its fact; a capture after its object's destruction writes nothing; a capture before it
   is begun and then ended, its row deleted or not; a capture checked live then funded and sunk writes nothing; a fund
   racing the writer binds; a new unsaved item, a dropped item, an unloaded item are begun; an SQL-purged one is begun and
   ended `VANISHED` at the next start; the startup pass ends `VANISHED` (previous run) and
   reserves live ids even with the used-id scan failing; `truth` releases every id and the pass does nothing.
-- [ ] Implement; revert proofs; ledger CP-0034; commit.
+- [x] Implement; revert proofs; ledger CP-0034; commit. (`LifecycleTest`, 12; V020 registers `Asset.LifecycleEnded`.)
 
 ### Task 3: legs name lifecycles
 

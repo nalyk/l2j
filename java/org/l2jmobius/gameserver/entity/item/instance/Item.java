@@ -66,6 +66,7 @@ import org.l2jmobius.gameserver.entity.item.type.EtcItemType;
 import org.l2jmobius.gameserver.entity.item.type.ItemType;
 import org.l2jmobius.gameserver.geoengine.GeoEngine;
 import org.l2jmobius.gameserver.livingchronicle.asset.EconomyCounter;
+import org.l2jmobius.gameserver.livingchronicle.asset.LifecycleWriter;
 import org.l2jmobius.gameserver.managers.IdManager;
 import org.l2jmobius.gameserver.managers.ItemsOnGroundManager;
 import org.l2jmobius.gameserver.managers.MercTicketManager;
@@ -619,6 +620,10 @@ public class Item extends WorldObject
 	 */
 	public void releaseObjectIdWhenRowDeleted()
 	{
+		if (LifecycleWriter.keepsDestroyed(this)) // CP-0034: a non-stackable's id is kept until the next start, its destruction offered
+		{
+			return;
+		}
 		_dbLock.lock();
 		try
 		{

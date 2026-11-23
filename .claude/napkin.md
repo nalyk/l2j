@@ -99,6 +99,8 @@
    Do instead: first check the output for "hit your usage limit", then read the verdict only after the last `^codex$` line.
 3. **[2026-11-18] Python block replacements must match exactly once**
    Do instead: replace whole multi-line blocks and `assert s.count(old) == 1` before writing.
+   A table-row anchor `"| AT-ASSET-14 |"` also matches the last cell of the requirement row that names that test
+   (2026-11-23, twice): the edit landed in the wrong table. Anchor a row on its line start, `"\n| AT-ASSET-14 |"`.
 4. **[2026-11-19] A file list passed to `ssh "..."` must be one line**
    Do instead: build it with `git status --short | awk '{print $2}' | tr '\n' ' '`; a newline inside the remote command runs each path as a command.
    `$(ls a/*)` has the same newline problem: use `files=$(echo a/* b/*)`, and scp every edited file (specs and plans too)

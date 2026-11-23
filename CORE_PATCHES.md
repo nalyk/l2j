@@ -641,3 +641,29 @@ Upstream files keep the line endings they have upstream, CRLF in some and LF in 
   stream's next draw, so a draw added or removed shows: red with the zero-probability masterwork draw removed);
   `withAltGameCreationTheCallableRulesAreRetailsToo` (red as first written: 174 MP for retail's 165, no busy guard); `theRatesAreRetails`, `materialsAndProductAreRetails`, `refusalMatchesWhatRetailRefuses`,
   `consumeStatsTakesWhatRetailTakes` (red without `Craft`: they do not compile).
+
+## CP-0034 Lifecycles: no runtime reuse of a non-stackable's id
+
+- Files: `java/org/l2jmobius/gameserver/entity/item/instance/Item.java`,
+  `java/org/l2jmobius/gameserver/managers/DatabaseIdManager.java`
+- Reason: a lifecycle names a non-stackable item by its object id (asset-service.md §2.2, §11.35), and Mobius gives a
+  released id to the next item created (IdManager.java:158-177). A lifecycle cannot be ordered in memory against its
+  object's destruction without a lock on hot paths, which 02 §6 forbids; and upstream's used-id scan logs a failed query
+  and returns what it has (DatabaseIdManager.java:263-293).
+- Change: `Item.releaseObjectIdWhenRowDeleted`, which `ItemManager.destroyItem` calls under the item's monitor right
+  after count 0 and the removal from the world (its only caller, CP-0011), asks `LifecycleWriter.keepsDestroyed` first:
+  while Living Chronicle runs, a non-stackable's id is kept until the next start (neither released nor left for
+  `removeFromDb`) and its destruction offered to the lifecycle writer's bounded queue, with no lookup and no lock but the
+  queue's. `DatabaseIdManager.cleanDatabase` ends with `LivingChronicle.lifecyclesAtStartup` (in `truth` it returns at
+  once): the startup pass ends `VANISHED`, in the previous run, every live lifecycle whose object is in no row, writes the
+  run's `lc_asset_run` row and starts the run's writer; a failure stops the start. `getUsedIds` adds the live
+  lifecycles' ids the pass found, so none is handed out whatever the row scan found.
+- Invariant: while Living Chronicle runs, no id a live lifecycle names is ever handed out; a stackable's id, and every
+  id in `truth`, is released exactly as upstream.
+- Proof: `LifecycleTest.aDestroyedNonStackablesIdIsKeptWhileLivingChronicleRuns`,
+  `aTrackedItemThatIsDestroyedEndsDestroyedWithItsFact`, `aCaptureOfferedBeforeItsObjectsDestructionIsBegunThenEndedRowOrNoRow`,
+  `aCaptureIsRefusedForAStackableARetiredOrADestroyedItemAndOnAFullQueue` (red with the `Item` hook off: the id
+  released, no end, five tests); `theUsedIdsHoldEveryIdALiveLifecycleNamesWhateverTheRowScanFound` and
+  `theStartupCleanupRunsThePassWhileLivingChronicleRunsAndNothingInTruth` (red with the two `DatabaseIdManager` lines
+  off); with the `truth` gate off the shared `truth` boot stops ("the server must not start"); `IdReleaseTest`
+  (CP-0011's `truth` behaviour) and `PausedWorldTest` unchanged.

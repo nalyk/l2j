@@ -23,8 +23,8 @@ package org.l2jmobius.gameserver.managers;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -34,7 +34,7 @@ import org.l2jmobius.gameserver.entity.residences.ClanHallAuction;
 public class ClanHallAuctionManager
 {
 	protected static final Logger LOGGER = Logger.getLogger(ClanHallAuctionManager.class.getName());
-	private final List<ClanHallAuction> _auctions = new ArrayList<>();
+	private final List<ClanHallAuction> _auctions = new CopyOnWriteArrayList<>(); // CP-0031: read while timers close sales
 	
 	private static final String[] ITEM_INIT_DATA =
 	{
@@ -118,10 +118,12 @@ public class ClanHallAuctionManager
 	
 	public ClanHallAuction getAuction(int auctionId)
 	{
-		final int index = getAuctionIndex(auctionId);
-		if (index >= 0)
+		for (ClanHallAuction auction : _auctions) // CP-0031: one snapshot, not an index another thread may shift
 		{
-			return _auctions.get(index);
+			if ((auction != null) && (auction.getId() == auctionId))
+			{
+				return auction;
+			}
 		}
 		
 		return null;

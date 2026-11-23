@@ -347,12 +347,26 @@ class DropSeamTest
 		{
 			before.add(object.getObjectId());
 		}
-		final Item item = _victim.dropItemAt(_killer, 57, 10, _victim.getX(), _victim.getY(), _victim.getZ(), 777_777);
+		final Item item = _victim.dropItemAt(_killer, 57, 10, _victim.getX(), _victim.getY(), _victim.getZ(), 777_777, true);
 		assertEquals(null, item, "no drop");
 		for (WorldObject object : List.copyOf(World.getVisibleObjects()))
 		{
 			assertTrue(!(object instanceof Item dropped) || before.contains(dropped.getObjectId()) || !dropped.isSpawned(), "nothing spawned in instance 0");
 		}
+	}
+
+	@Test
+	void aRetailDropIntoAVanishedInstanceIsPublishedAsUpstreamDoes()
+	{
+		// the guard is the held kill's alone: retail's own drop (Npc.dropItem, Item.dropMe, a player's drop) publishes
+		// as upstream does, even when its instance went meanwhile
+		final Item item = _victim.dropItemAt(_killer, 57, 10, _victim.getX(), _victim.getY(), _victim.getZ(), 777_777, false);
+		assertTrue((item != null) && item.isSpawned(), "published, as upstream publishes it");
+		item.decayMe();
+		final Item mine = org.l2jmobius.gameserver.managers.ItemManager.createItem(org.l2jmobius.gameserver.entity.item.enums.ItemProcessType.NONE, 57, 5, _killer, null);
+		mine.dropMeFrom(_killer, _killer.getX(), _killer.getY(), _killer.getZ(), 777_777, false, _killer.getX(), _killer.getY(), _killer.getZ());
+		assertTrue(mine.isSpawned(), "dropMe's own path is upstream's");
+		mine.decayMe();
 	}
 
 	@Test

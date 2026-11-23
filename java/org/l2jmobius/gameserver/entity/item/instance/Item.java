@@ -1858,11 +1858,11 @@ public class Item extends WorldObject
 	{
 		if (dropper != null)
 		{
-			dropMeFrom(dropper, dropper.getX(), dropper.getY(), dropper.getZ(), dropper.getInstanceId(), locX, locY, locZ);
+			dropMeFrom(dropper, dropper.getX(), dropper.getY(), dropper.getZ(), dropper.getInstanceId(), false, locX, locY, locZ);
 		}
 		else
 		{
-			dropMeFrom(null, 0, 0, 0, 0, locX, locY, locZ);
+			dropMeFrom(null, 0, 0, 0, 0, false, locX, locY, locZ);
 		}
 	}
 	
@@ -1874,11 +1874,13 @@ public class Item extends WorldObject
 	 * @param fromY the place the drop is validated from
 	 * @param fromZ the place the drop is validated from
 	 * @param instanceId the instance it falls in
+	 * @param requireInstance whether an item that cannot enter {@code instanceId} (gone meanwhile) is left unpublished
+	 *            rather than dropped in the world outside, as upstream's drop does: the drop seam's held kills only
 	 * @param locX the destination
 	 * @param locY the destination
 	 * @param locZ the destination
 	 */
-	public void dropMeFrom(Creature dropper, int fromX, int fromY, int fromZ, int instanceId, int locX, int locY, int locZ)
+	public void dropMeFrom(Creature dropper, int fromX, int fromY, int fromZ, int instanceId, boolean requireInstance, int locX, int locY, int locZ)
 	{
 		int x = locX;
 		int y = locY;
@@ -1895,9 +1897,9 @@ public class Item extends WorldObject
 		if (dropper != null)
 		{
 			setInstanceId(instanceId); // Inherit instancezone when dropped in visible world.
-			if (getInstanceId() != instanceId)
+			if (requireInstance && (getInstanceId() != instanceId))
 			{
-				return; // CP-0032: its instance is gone (the setter ignores one that does not exist): never the world outside
+				return; // CP-0032: a held kill's instance is gone (the setter ignores one that does not exist): never the world outside
 			}
 		}
 		else

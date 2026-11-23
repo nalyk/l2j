@@ -1923,7 +1923,7 @@ public class Npc extends Creature
 	 */
 	public Item dropItem(Creature creature, int itemId, long itemCount)
 	{
-		return dropItemAt(creature, itemId, itemCount, getX(), getY(), getZ(), getInstanceId());
+		return dropItemAt(creature, itemId, itemCount, getX(), getY(), getZ(), getInstanceId(), false);
 	}
 	
 	/**
@@ -1936,9 +1936,11 @@ public class Npc extends Creature
 	 * @param y the place's y
 	 * @param z the place's z
 	 * @param instanceId the place's instance
-	 * @return the dropped item
+	 * @param requireInstance whether a drop that cannot enter the instance is destroyed rather than dropped in the world
+	 *            outside, as upstream's drop does (the drop seam's held kills only)
+	 * @return the dropped item, or null
 	 */
-	public Item dropItemAt(Creature creature, int itemId, long itemCount, int x, int y, int z, int instanceId)
+	public Item dropItemAt(Creature creature, int itemId, long itemCount, int x, int y, int z, int instanceId, boolean requireInstance)
 	{
 		Item item = null;
 		for (int i = 0; i < itemCount; i++)
@@ -1965,8 +1967,8 @@ public class Npc extends Creature
 			final int newY = (y + Rnd.get((RANDOM_ITEM_DROP_LIMIT * 2) + 1)) - RANDOM_ITEM_DROP_LIMIT;
 			final int newZ = z + 20;
 			
-			item.dropMeFrom(this, x, y, z, instanceId, newX, newY, newZ); // from the place, as dropMe from where this NPC is
-			if (!item.isSpawned())
+			item.dropMeFrom(this, x, y, z, instanceId, requireInstance, newX, newY, newZ); // from the place, as dropMe from where this NPC is
+			if (requireInstance && !item.isSpawned())
 			{
 				ItemManager.destroyItem(ItemProcessType.LOOT, item, creature != null ? creature.asPlayer() : null, this); // its instance is gone
 				return null;

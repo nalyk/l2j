@@ -137,7 +137,7 @@ public final class DropSeam
 	/** Mobius's own drop (Npc.dropItemAt, CP-0032), at the kill's place rather than where the monster is now. */
 	private static void drop(Pending pending, ItemHolder holder)
 	{
-		pending.kill().npc().dropItemAt(pending.kill().owner(), holder.getId(), holder.getCount(), pending.x(), pending.y(), pending.z(), pending.instanceId());
+		pending.kill().npc().dropItemAt(pending.kill().owner(), holder.getId(), holder.getCount(), pending.x(), pending.y(), pending.z(), pending.instanceId(), true);
 	}
 
 	/**

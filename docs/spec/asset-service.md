@@ -791,7 +791,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     may have written it), refused with its deposit given back when the row is absent, and refused with the deposit kept
     when it cannot be read (a refund of a written row would pay twice; the restart decides); a confirmed sale is
     scheduled to end, and its task is cancelled when the sale is deleted, after which nothing ends, cancels or bids on it
-    any more; a sale closes only once its bids' rows are deleted, so a failed deletion (§11.28) leaves it open, nothing
+    any more (the manager's listing a copy-on-write list, since timers now close sales while game threads read it);
+    a sale closes only once its bids' rows are deleted, so a failed deletion (§11.28) leaves it open, nothing
     paid, the seller told the cancel failed (upstream's Auctioneer said it succeeded) and an end retried; an auction without bids is deleted as a cancelled one is, its
     row before its listing, under the confirmations' lock.
 32. **A whole-stack destruction races an addition into the stack.** `transferItem` grows a target stack
@@ -819,7 +820,8 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
     before any router runs and keeps it while held (02 §6: no unbounded queue), so an unknown outcome always has room;
     with no slot free no router runs and retail drops the kill. A held kill whose instance is gone when it resolves
     drops nothing, as retail destroys an instance's ground items with it; whenever the instance went, an item that did
-    not enter it once assigned is not published and is destroyed at once. A JVM death loses the kills held, the stated
+    not enter it once assigned is not published and is destroyed at once. That guard is the held kill's alone: retail's
+    own drops publish as upstream does. A JVM death loses the kills held, the stated
     limit of a kill's drops before its commit (pact.md §4.5). A position outside its list, or null, is ignored. Every epoch keeps its own kill
     counter for the server's life. Each kill gets a key, `kill/<epoch>/<seq>`, the epoch
     given at install (the journal's, fact-journal.md §2) and the sequence counted from 1 in memory, from which each
@@ -879,6 +881,13 @@ Facts about Mobius the design must answer; each is the reason for a rule above o
 - Amendment round 31 (Codex), NO SIGN-OFF: the instance's existence was checked before the item's instance was set, so
   an instance destroyed in between still let the item fall into instance 0 (1). Fixed (still revision 15): the item's
   own instance after assignment decides; one that did not enter it is not published and is destroyed.
+- Amendment round 32 (Codex), NO SIGN-OFF: that guard sat in `dropMeFrom`, which `dropMe` uses too, so an ordinary
+  player's drop into an instance vanishing meanwhile was left unpublished, out of its inventory and out of the world
+  (1). Fixed (still revision 15): the guard applies only where the seam asks for it (`requireInstance`); retail's
+  drops publish as upstream does.
+  With it, a gate found that the clan-hall listing, an `ArrayList` read without a lock, threw
+  `ConcurrentModificationException` while a timer closed a sale (CP-0031's timers made that routine): it is a
+  copy-on-write list now.
 - Revision 14 (amendment, signed off in round 25): the two retail questions revision 13 left open are answered as core patches.
   A clan hall's sale takes the deposit retail's sale page states (§11.29, CP-0029), so a completed sale no longer
   creates the lease from nothing and the lease credit is a source bounded by that deposit; an ended event's items are

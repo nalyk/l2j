@@ -389,6 +389,23 @@ class ClanHallDepositTest
 	}
 
 	@Test
+	void readingTheSalesWhileOneCloses() throws Exception
+	{
+		// a sale now closes on a timer thread while game threads read the list (the Auctioneer's pages): reading must
+		// never fail (upstream's ArrayList threw ConcurrentModificationException)
+		final Clan seller = clan(1_000_000);
+		final ClanHallAuction auction = new ClanHallAuction(HALL, seller, 3_600_000, 10_000, "Deposit Hall");
+		assertEquals(CONFIRMED, auction.confirmAuction());
+		final java.util.Iterator<ClanHallAuction> reading = ClanHallAuctionManager.getInstance().getAuctions().iterator();
+		reading.next();
+		auction.cancelAuction(); // closes meanwhile
+		while (reading.hasNext())
+		{
+			reading.next();
+		}
+	}
+
+	@Test
 	void aConfirmedSaleEndsOnItsDate() throws Exception
 	{
 		final Clan seller = clan(1_000_000);
